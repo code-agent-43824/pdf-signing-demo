@@ -34,7 +34,9 @@ router.get('/api/form', (_req, res) => {
 router.post('/api/sign/prepare', async (req, res) => {
   try {
     const signer = req.body?.signer || {};
-    const prepared = await createPreparedPdf({ sourcePath: formPdfPath, signer });
+    const pdfBase64 = req.body?.pdfBase64;
+    const sourceBuffer = pdfBase64 ? Buffer.from(pdfBase64, 'base64') : undefined;
+    const prepared = await createPreparedPdf({ sourcePath: formPdfPath, sourceBuffer, signer });
     const sessionId = sessions.create(prepared);
     res.json({
       ok: true,

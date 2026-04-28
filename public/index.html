@@ -33,6 +33,14 @@
           <h2>Исходный PDF-документ</h2>
           <span id="docMeta" class="muted">Загрузка…</span>
         </div>
+        <div class="upload-row">
+          <label class="upload-label">
+            <input id="pdfUpload" type="file" accept="application/pdf" hidden />
+            <span>Загрузить свой PDF</span>
+          </label>
+          <button id="useDefaultPdf" class="secondary" type="button">Использовать тестовый PDF</button>
+          <span id="uploadState" class="muted">Сейчас используется тестовый PDF с сервера.</span>
+        </div>
         <iframe id="sourcePdf" title="Исходный PDF" class="pdf-frame"></iframe>
       </section>
 

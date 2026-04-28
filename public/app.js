@@ -1,6 +1,10 @@
 const state = {
   certificates: [],
   pluginReady: false,
+  defaultPdfUrl: null,
+  uploadedPdfBase64: null,
+  uploadedPdfName: null,
+  uploadedPdfObjectUrl: null,
 };
 
 function setStatus(message) {
@@ -11,11 +15,21 @@ function setPluginState(message) {
   document.getElementById('pluginState').textContent = message;
 }
 
+function setUploadState(message) {
+  document.getElementById('uploadState').textContent = message;
+}
+
+function showPdf(url, metaText) {
+  document.getElementById('sourcePdf').src = url;
+  document.getElementById('docMeta').textContent = metaText;
+}
+
 async function boot() {
   const response = await fetch('./api/form');
   const data = await response.json();
-  document.getElementById('sourcePdf').src = data.pdfUrl;
-  document.getElementById('docMeta').textContent = `${Math.round(data.size / 1024)} KB`;
+  state.defaultPdfUrl = data.pdfUrl;
+  showPdf(data.pdfUrl, `${Math.round(data.size / 1024)} KB`);
+  setUploadState('Сейчас используется тестовый PDF с сервера.');
   await initCryptoPro();
 }
 
@@ -173,6 +187,19 @@ async function signPreparedContent(selectedCertificate, contentToSignBase64) {
   );
 }
 
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result || '');
+      const base64 = result.includes(',') ? result.split(',')[1] : result;
+      resolve(base64);
+    };
+    reader.onerror = () => reject(reader.error || new Error('Не удалось прочитать файл.'));
+    reader.readAsDataURL(file);
+  });
+}
+
 async function prepareAndSign() {
   if (!state.pluginReady) {
     throw new Error('CryptoPro plugin не готов.');
@@ -185,6 +212,7 @@ async function prepareAndSign() {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
+      pdfBase64: state.uploadedPdfBase64,
       signer: {
         subjectName: selectedCertificate.subjectName,
         issuerName: selectedCertificate.issuerName,
@@ -225,6 +253,44 @@ async function prepareAndSign() {
   downloadLink.classList.remove('hidden');
   setStatus('Готово: подписанный PDF собран и доступен для скачивания.');
 }
+
+document.getElementById('pdfUpload').addEventListener('change', async (event) => {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  if (file.type !== 'application/pdf') {
+    setStatus('Ошибка: нужен именно PDF-файл.');
+    event.target.value = '';
+    return;
+  }
+
+  try {
+    if (state.uploadedPdfObjectUrl) URL.revokeObjectURL(state.uploadedPdfObjectUrl);
+    state.uploadedPdfBase64 = await fileToBase64(file);
+    state.uploadedPdfName = file.name;
+    state.uploadedPdfObjectUrl = URL.createObjectURL(file);
+    showPdf(state.uploadedPdfObjectUrl, `${file.name} · ${Math.round(file.size / 1024)} KB`);
+    setUploadState(`Загружен пользовательский PDF: ${file.name}`);
+    setStatus('Пользовательский PDF загружен. Теперь можно подписывать именно его.');
+  } catch (error) {
+    setStatus(`Ошибка загрузки PDF: ${error.message}`);
+  }
+});
+
+document.getElementById('useDefaultPdf').addEventListener('click', async () => {
+  if (state.uploadedPdfObjectUrl) {
+    URL.revokeObjectURL(state.uploadedPdfObjectUrl);
+  }
+  state.uploadedPdfBase64 = null;
+  state.uploadedPdfName = null;
+  state.uploadedPdfObjectUrl = null;
+  const response = await fetch('./api/form');
+  const data = await response.json();
+  state.defaultPdfUrl = data.pdfUrl;
+  showPdf(data.pdfUrl, `${Math.round(data.size / 1024)} KB`);
+  setUploadState('Сейчас используется тестовый PDF с сервера.');
+  setStatus('Возвратился к тестовому PDF с сервера.');
+  document.getElementById('pdfUpload').value = '';
+});
 
 document.getElementById('signButton').addEventListener('click', async () => {
   const button = document.getElementById('signButton');

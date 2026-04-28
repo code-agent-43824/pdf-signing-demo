@@ -136,8 +136,8 @@ async function applyVisibleSignatureAppearance({ pdfDoc, widgetRect, metadata })
   widgetDict.set(PDFName.of('AP'), pdfDoc.context.obj({ N: apRef }));
 }
 
-async function createPreparedPdf({ sourcePath, signatureLength = DEFAULT_SIGNATURE_LENGTH, signer = {} }) {
-  const source = fs.readFileSync(sourcePath);
+async function createPreparedPdf({ sourcePath, sourceBuffer, signatureLength = DEFAULT_SIGNATURE_LENGTH, signer = {} }) {
+  const source = sourceBuffer || fs.readFileSync(sourcePath);
   const pdfDoc = await PDFDocument.load(source);
   const metadata = buildSignatureMetadata(signer);
   const firstPage = pdfDoc.getPages()[0];

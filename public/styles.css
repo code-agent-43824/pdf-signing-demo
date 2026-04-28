@@ -86,6 +86,27 @@ h1, h2, h3 { margin: 0; }
   align-items: baseline;
   margin-bottom: 16px;
 }
+.upload-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.upload-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: #eef3ff;
+  color: var(--primary-dark);
+  font-weight: 700;
+  cursor: pointer;
+}
+.upload-label:hover {
+  background: #e2ebff;
+}
 .muted { color: var(--muted); }
 .pdf-frame {
   width: 100%;
