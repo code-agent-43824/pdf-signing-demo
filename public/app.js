@@ -56,14 +56,19 @@ async function enumerateCertificates() {
     for (let index = 1; index <= count; index += 1) {
       const certificate = await certificates.Item(index);
       const subjectName = await getProp(certificate, 'SubjectName', 'SubjectName');
+      const issuerName = await getProp(certificate, 'IssuerName', 'IssuerName');
       const thumbprint = await getProp(certificate, 'Thumbprint', 'Thumbprint');
+      const serialNumber = await getProp(certificate, 'SerialNumber', 'SerialNumber');
       const validToDate = await getProp(certificate, 'ValidToDate', 'ValidToDate');
       const publicKey = await certificate.PublicKey();
       const algorithm = await publicKey.Algorithm;
       const friendlyName = await getProp(algorithm, 'FriendlyName', 'FriendlyName');
       result.push({
         label: subjectName,
+        subjectName,
+        issuerName,
         thumbprint,
+        serialNumber,
         validToDate,
         algorithm: friendlyName,
         certificate,
@@ -173,14 +178,26 @@ async function prepareAndSign() {
     throw new Error('CryptoPro plugin не готов.');
   }
 
+  const selectedCertificate = await openCertificateDialog(state.certificates);
+
   setStatus('Подготавливаю PDF под PAdES…');
-  const prepareResponse = await fetch('./api/sign/prepare', { method: 'POST' });
+  const prepareResponse = await fetch('./api/sign/prepare', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      signer: {
+        subjectName: selectedCertificate.subjectName,
+        issuerName: selectedCertificate.issuerName,
+        thumbprint: selectedCertificate.thumbprint,
+        serialNumber: selectedCertificate.serialNumber,
+      },
+    }),
+  });
   const prepareData = await prepareResponse.json();
   if (!prepareResponse.ok || !prepareData.ok) {
     throw new Error(prepareData.message || 'Не удалось подготовить PDF.');
   }
 
-  const selectedCertificate = await openCertificateDialog(state.certificates);
   setStatus(`Выбран сертификат. Прошу CryptoPro подписать хеш: ${selectedCertificate.label}`);
   const cmsSignatureBase64 = await signPreparedContent(selectedCertificate, prepareData.contentToSignBase64);
 

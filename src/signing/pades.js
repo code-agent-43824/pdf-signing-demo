@@ -12,15 +12,53 @@ function removeTrailingNewLine(buffer) {
   return buffer;
 }
 
-async function createPreparedPdf({ sourcePath, signatureLength = DEFAULT_SIGNATURE_LENGTH }) {
+function normalizeValue(value, fallback = '') {
+  const normalized = String(value || '').replace(/\s+/g, ' ').trim();
+  return normalized || fallback;
+}
+
+function splitDistinguishedName(value) {
+  return String(value || '')
+    .split(/,(?=(?:[^\\]|\\.)*$)/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function extractDnField(dn, fieldName) {
+  const upper = `${fieldName}=`.toUpperCase();
+  const parts = splitDistinguishedName(dn);
+  const match = parts.find((part) => part.toUpperCase().startsWith(upper));
+  return match ? match.slice(fieldName.length + 1).trim() : '';
+}
+
+function buildSignatureMetadata(signer = {}) {
+  const name = normalizeValue(
+    extractDnField(signer.subjectName, 'CN') || signer.subjectName,
+    'Kirill',
+  );
+  const issuer = normalizeValue(
+    extractDnField(signer.issuerName, 'CN') || signer.issuerName,
+    'не указан',
+  );
+  const certId = normalizeValue(signer.thumbprint || signer.serialNumber, 'не указан');
+
+  return {
+    name,
+    reason: `Выдан: ${issuer}`,
+    contactInfo: `Cert ID: ${certId}`,
+  };
+}
+
+async function createPreparedPdf({ sourcePath, signatureLength = DEFAULT_SIGNATURE_LENGTH, signer = {} }) {
   const source = fs.readFileSync(sourcePath);
   const pdfDoc = await PDFDocument.load(source);
+  const metadata = buildSignatureMetadata(signer);
 
   pdflibAddPlaceholder({
     pdfDoc,
-    reason: 'Подписание формуляра',
-    contactInfo: 'watson@openclaw.local',
-    name: 'Kirill',
+    reason: metadata.reason,
+    contactInfo: metadata.contactInfo,
+    name: metadata.name,
     location: 'Web UI',
     signatureLength,
     subFilter: SUBFILTER_ETSI_CADES_DETACHED,
