@@ -1,0 +1,16 @@
+[Unit]
+Description=PDF Signing Demo Node.js app
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/openclaw/.openclaw/workspace/repos/pdf-signing-demo
+Environment=NODE_ENV=production
+Environment=PORT=3010
+Environment=BASE_PATH=/pdf-signing/
+ExecStart=/usr/bin/node src/server.js
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=default.target
