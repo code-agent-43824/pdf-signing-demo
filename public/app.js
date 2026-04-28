@@ -1,8 +1,6 @@
 const state = {
   certificates: [],
   pluginReady: false,
-  cryptopro: null,
-  helper: null,
 };
 
 function setStatus(message) {
@@ -13,6 +11,19 @@ function setPluginState(message) {
   document.getElementById('pluginState').textContent = message;
 }
 
+function bytesFromBase64(base64) {
+  return Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
+}
+
+function base64FromBytes(bytes) {
+  let binary = '';
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
 async function boot() {
   const response = await fetch('./api/form');
   const data = await response.json();
@@ -21,28 +32,79 @@ async function boot() {
   await initCryptoPro();
 }
 
-async function initCryptoPro() {
+async function createObject(name) {
+  if (!window.cadesplugin) {
+    throw new Error('cadesplugin не загружен');
+  }
+  if (window.cadesplugin.CreateObjectAsync) {
+    return window.cadesplugin.CreateObjectAsync(name);
+  }
+  return window.cadesplugin.CreateObject(name);
+}
+
+async function getProp(object, asyncGetterName, syncGetterName) {
+  if (typeof object[asyncGetterName] === 'function') return object[asyncGetterName]();
+  if (syncGetterName in object) return object[syncGetterName];
+  throw new Error(`Property ${asyncGetterName}/${syncGetterName} not available`);
+}
+
+async function setProp(object, asyncSetterName, syncSetterName, value) {
+  if (typeof object[asyncSetterName] === 'function') return object[asyncSetterName](value);
+  object[syncSetterName] = value;
+}
+
+async function enumerateCertificates() {
+  const store = await createObject('CAdESCOM.Store');
+  await store.Open(
+    window.cadesplugin.CADESCOM_CURRENT_USER_STORE,
+    window.cadesplugin.CAPICOM_MY_STORE,
+    window.cadesplugin.CAPICOM_STORE_OPEN_MAXIMUM_ALLOWED,
+  );
+
   try {
-    if (!window.cadesplugin || !window.cryptopro) {
-      throw new Error('CryptoPro plugin API script not loaded');
+    const certificates = await getProp(store, 'Certificates', 'Certificates');
+    const count = await getProp(certificates, 'Count', 'Count');
+    const result = [];
+
+    for (let index = 1; index <= count; index += 1) {
+      const certificate = await certificates.Item(index);
+      const subjectName = await getProp(certificate, 'SubjectName', 'SubjectName');
+      const thumbprint = await getProp(certificate, 'Thumbprint', 'Thumbprint');
+      const validToDate = await getProp(certificate, 'ValidToDate', 'ValidToDate');
+      const publicKey = await certificate.PublicKey();
+      const algorithm = await publicKey.Algorithm;
+      const friendlyName = await getProp(algorithm, 'FriendlyName', 'FriendlyName');
+      result.push({
+        label: subjectName,
+        thumbprint,
+        validToDate,
+        algorithm: friendlyName,
+        certificate,
+      });
     }
 
-    const plugin = await window.cryptopro.getPlugin(window);
-    const helper = await window.cryptopro.createHelper(plugin);
-    const cryptokeys = await window.cryptopro.createCryptoKeys(helper);
-    const certificates = await cryptokeys.getKeysByExtendedKeyUsages(['1.2.643.2.2.34.6', '1.3.6.1.5.5.7.3.2']).catch(() => []);
+    return result;
+  } finally {
+    await store.Close();
+  }
+}
 
+async function initCryptoPro() {
+  try {
+    if (!window.cadesplugin) {
+      throw new Error('Скрипт cadesplugin_api.js не загрузился');
+    }
+
+    await Promise.resolve(window.cadesplugin);
+    const certificates = await enumerateCertificates();
     state.pluginReady = true;
-    state.cryptopro = window.cryptopro;
-    state.helper = helper;
-    state.cryptokeys = cryptokeys;
-    state.certificates = certificates || [];
-
-    setPluginState(`CryptoPro готов, сертификатов найдено: ${state.certificates.length}`);
-    setStatus('Можно готовить документ и выбирать сертификат для подписи.');
+    state.certificates = certificates;
+    setPluginState(`CryptoPro готов, сертификатов найдено: ${certificates.length}`);
+    setStatus('Расширение и plugin доступны. Можно готовить документ и выбирать сертификат.');
   } catch (error) {
     setPluginState('CryptoPro недоступен');
-    setStatus(`Не удалось инициализировать CryptoPro: ${error.message}`);
+    const details = window.cadesplugin?.getLastError ? window.cadesplugin.getLastError(error) : error.message;
+    setStatus(`Не удалось инициализировать CryptoPro: ${details}`);
   }
 }
 
@@ -62,7 +124,7 @@ function openCertificateDialog(certificates) {
     certificates.forEach((certificate, index) => {
       const option = document.createElement('option');
       option.value = String(index);
-      option.textContent = certificate.name || certificate.id || `Сертификат ${index + 1}`;
+      option.textContent = `${certificate.label} · ${certificate.algorithm} · до ${certificate.validToDate}`;
       select.appendChild(option);
     });
 
@@ -81,20 +143,43 @@ function openCertificateDialog(certificates) {
   });
 }
 
-function detectHashAlgorithm(certificateName = '') {
-  const name = String(certificateName).toLowerCase();
-  if (name.includes('512')) return 'GOST R 34.11-2012-512';
-  if (name.includes('2001')) return 'GOST R 34.11-94';
-  return 'GOST R 34.11-2012-256';
+function detectHashAlgorithmConstant(certificate) {
+  const name = `${certificate.algorithm} ${certificate.label}`.toLowerCase();
+  if (name.includes('2012') && name.includes('512')) {
+    return window.cadesplugin.CADESCOM_HASH_ALGORITHM_CP_GOST_3411_2012_512;
+  }
+  if (name.includes('2012') && name.includes('256')) {
+    return window.cadesplugin.CADESCOM_HASH_ALGORITHM_CP_GOST_3411_2012_256;
+  }
+  return window.cadesplugin.CADESCOM_HASH_ALGORITHM_CP_GOST_3411;
 }
 
 async function signPreparedContent(selectedCertificate, contentToSignBase64) {
-  const buffer = Uint8Array.from(atob(contentToSignBase64), (char) => char.charCodeAt(0)).buffer;
-  const subtle = await state.cryptopro.createSubtleCrypto(state.helper);
-  const hashAlgorithm = detectHashAlgorithm(selectedCertificate.name);
-  const digest = await subtle.digest(hashAlgorithm, buffer);
-  const cmsSignature = await subtle.sign('CADES_BES', selectedCertificate, digest);
-  return btoa(String.fromCharCode(...new Uint8Array(cmsSignature)));
+  const contentBytes = bytesFromBase64(contentToSignBase64);
+  const digestBuffer = await crypto.subtle.digest('SHA-256', contentBytes);
+  const digestHex = Array.from(new Uint8Array(digestBuffer))
+    .map((value) => value.toString(16).padStart(2, '0'))
+    .join('')
+    .toUpperCase();
+
+  const oHashedData = await createObject('CAdESCOM.HashedData');
+  await setProp(
+    oHashedData,
+    'propset_Algorithm',
+    'Algorithm',
+    detectHashAlgorithmConstant(selectedCertificate),
+  );
+  await oHashedData.SetHashValue(digestHex);
+
+  const oSigner = await createObject('CAdESCOM.CPSigner');
+  await setProp(oSigner, 'propset_Certificate', 'Certificate', selectedCertificate.certificate);
+
+  const oSignedData = await createObject('CAdESCOM.CadesSignedData');
+  return oSignedData.SignHash(
+    oHashedData,
+    oSigner,
+    window.cadesplugin.CADESCOM_CADES_BES,
+  );
 }
 
 async function prepareAndSign() {
@@ -110,7 +195,7 @@ async function prepareAndSign() {
   }
 
   const selectedCertificate = await openCertificateDialog(state.certificates);
-  setStatus(`Считаю хеш и прошу CryptoPro подписать его сертификатом: ${selectedCertificate.name}`);
+  setStatus(`Выбран сертификат. Прошу CryptoPro подписать хеш: ${selectedCertificate.label}`);
   const cmsSignatureBase64 = await signPreparedContent(selectedCertificate, prepareData.contentToSignBase64);
 
   setStatus('Встраиваю CMS-подпись обратно в PDF…');
@@ -144,7 +229,8 @@ document.getElementById('signButton').addEventListener('click', async () => {
   try {
     await prepareAndSign();
   } catch (error) {
-    setStatus(`Ошибка: ${error.message}`);
+    const details = window.cadesplugin?.getLastError ? window.cadesplugin.getLastError(error) : error.message;
+    setStatus(`Ошибка: ${details}`);
   } finally {
     button.disabled = false;
   }
