@@ -11,22 +11,23 @@ const assetsDir = path.join(publicDir, 'assets');
 const formPdfPath = path.join(assetsDir, FORM_PDF_NAME);
 
 app.use(express.json({ limit: '2mb' }));
-app.use(BASE_PATH, express.static(publicDir, { extensions: ['html'] }));
 
 app.get('/health', (_req, res) => {
   res.json({ ok: true, service: 'pdf-signing-demo' });
 });
 
-app.get('/api/form', (_req, res) => {
+const router = express.Router();
+
+router.get('/api/form', (_req, res) => {
   const stats = fs.statSync(formPdfPath);
   res.json({
     title: 'Формуляр на подпись',
-    pdfUrl: `${BASE_PATH.replace(/\/$/, '')}/assets/${FORM_PDF_NAME}`,
+    pdfUrl: `./assets/${FORM_PDF_NAME}`,
     size: stats.size,
   });
 });
 
-app.post('/api/sign/prepare', (_req, res) => {
+router.post('/api/sign/prepare', (_req, res) => {
   res.status(501).json({
     ok: false,
     stage: 'prepare',
@@ -34,13 +35,16 @@ app.post('/api/sign/prepare', (_req, res) => {
   });
 });
 
-app.post('/api/sign/complete', (_req, res) => {
+router.post('/api/sign/complete', (_req, res) => {
   res.status(501).json({
     ok: false,
     stage: 'complete',
     message: 'Signature embedding pipeline will be implemented next.',
   });
 });
+
+router.use(express.static(publicDir, { extensions: ['html'] }));
+app.use(BASE_PATH, router);
 
 app.listen(PORT, () => {
   console.log(`pdf-signing-demo listening on http://127.0.0.1:${PORT}${BASE_PATH}`);
