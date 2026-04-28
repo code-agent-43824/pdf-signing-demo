@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Выдача формуляров — PDF Signing Demo</title>
     <link rel="stylesheet" href="./styles.css" />
+    <script src="https://www.cryptopro.ru/sites/default/files/products/cades/cadesplugin_api.js"></script>
+    <script src="./vendor/cryptopro.min.js"></script>
   </head>
   <body>
     <main class="page">
@@ -13,11 +15,19 @@
           <p class="eyebrow">Демо-контур</p>
           <h1>Выдача формуляров</h1>
           <p class="lead">
-            Сервер показывает PDF-формуляр и готовит сценарий последующей подписи через CryptoPro Browser Plugin.
+            Сервер показывает PDF-формуляр, подготавливает его под PAdES и ждёт CMS detached подпись от CryptoPro Browser Plugin.
           </p>
         </div>
         <button id="signButton" class="primary">Подписать формуляр</button>
       </header>
+
+      <section class="panel status-panel">
+        <div class="panel-head">
+          <h2>Статус подписи</h2>
+          <span id="pluginState" class="muted">Проверка CryptoPro…</span>
+        </div>
+        <div id="statusLog" class="status-log">Ожидание действий.</div>
+      </section>
 
       <section class="panel">
         <div class="panel-head">
@@ -35,8 +45,24 @@
         <div id="signedState" class="empty-state">
           Пока нет подписанного документа.
         </div>
+        <iframe id="signedPdf" title="Подписанный PDF" class="pdf-frame hidden"></iframe>
+        <a id="downloadLink" class="download hidden" download="signed-formular.pdf">Скачать подписанный PDF</a>
       </section>
     </main>
+
+    <template id="certificateDialogTemplate">
+      <div class="dialog-backdrop">
+        <div class="dialog-card">
+          <h3>Выбор сертификата</h3>
+          <p class="muted">Страница не выбирает сертификат автоматически — выбери его сам.</p>
+          <select id="certificateSelect" class="certificate-select"></select>
+          <div class="dialog-actions">
+            <button id="cancelCertificate" class="secondary">Отмена</button>
+            <button id="confirmCertificate" class="primary">Подписать этим сертификатом</button>
+          </div>
+        </div>
+      </div>
+    </template>
 
     <script src="./app.js"></script>
   </body>

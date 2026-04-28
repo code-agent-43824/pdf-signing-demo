@@ -18,6 +18,10 @@
   },
   "homepage": "https://github.com/code-agent-43824/pdf-signing-demo#readme",
   "dependencies": {
+    "@qiwitech/cryptopro": "^0.1.2",
+    "@signpdf/placeholder-pdf-lib": "^3.3.0",
+    "@signpdf/signpdf": "^3.3.0",
+    "@signpdf/utils": "^3.3.0",
     "express": "^5.2.1",
     "pdf-lib": "^1.17.1"
   }

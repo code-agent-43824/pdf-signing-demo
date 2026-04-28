@@ -38,6 +38,7 @@ body {
   padding: 22px;
 }
 .panel-secondary { min-height: 180px; }
+.status-panel { margin-top: 24px; }
 .eyebrow {
   margin: 0 0 8px;
   color: var(--primary);
@@ -46,24 +47,38 @@ body {
   font-size: 12px;
   font-weight: 700;
 }
-h1, h2 { margin: 0; }
+h1, h2, h3 { margin: 0; }
 .lead {
   margin: 10px 0 0;
   color: var(--muted);
   max-width: 680px;
   line-height: 1.5;
 }
-.primary {
+.primary, .secondary, .download {
   border: 0;
   border-radius: 12px;
-  background: var(--primary);
-  color: white;
   padding: 14px 18px;
   font-size: 15px;
   font-weight: 700;
+}
+.primary {
+  background: var(--primary);
+  color: white;
   cursor: pointer;
 }
 .primary:hover { background: var(--primary-dark); }
+.secondary {
+  background: #eef3ff;
+  color: var(--primary-dark);
+  cursor: pointer;
+}
+.download {
+  display: inline-block;
+  margin-top: 16px;
+  text-decoration: none;
+  background: #e7f8ef;
+  color: #19653f;
+}
 .panel-head {
   display: flex;
   justify-content: space-between;
@@ -79,16 +94,47 @@ h1, h2 { margin: 0; }
   border-radius: 14px;
   background: #eef2f9;
 }
-.empty-state {
+.empty-state, .status-log {
   display: grid;
   place-items: center;
-  min-height: 120px;
+  min-height: 90px;
   border: 1px dashed var(--line);
   border-radius: 14px;
   color: var(--muted);
   background: #fafcff;
+  padding: 18px;
+  text-align: center;
 }
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+.dialog-card {
+  width: min(560px, 100%);
+  background: white;
+  border-radius: 18px;
+  padding: 22px;
+  box-shadow: 0 30px 80px rgba(15, 23, 42, 0.22);
+}
+.certificate-select {
+  width: 100%;
+  margin-top: 16px;
+  margin-bottom: 16px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+.hidden { display: none; }
 @media (max-width: 720px) {
-  .hero, .panel-head { flex-direction: column; align-items: stretch; }
+  .hero, .panel-head, .dialog-actions { flex-direction: column; align-items: stretch; }
   .pdf-frame { min-height: 60vh; }
 }
