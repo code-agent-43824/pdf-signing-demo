@@ -18,6 +18,7 @@
   },
   "homepage": "https://github.com/code-agent-43824/pdf-signing-demo#readme",
   "dependencies": {
+    "@pdf-lib/fontkit": "^1.1.1",
     "@qiwitech/cryptopro": "^0.1.2",
     "@signpdf/placeholder-pdf-lib": "^3.3.0",
     "@signpdf/signpdf": "^3.3.0",
