@@ -83,7 +83,7 @@ function embedCmsSignature({ preparedPdf, byteRange, cmsBase64, placeholderLengt
   return Buffer.concat([
     preparedPdf.slice(0, byteRange[1]),
     Buffer.from(`<${signatureHex}>`),
-    preparedPdf.slice(byteRange[1]),
+    preparedPdf.slice(byteRange[2]),
   ]);
 }
 

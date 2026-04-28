@@ -11,19 +11,6 @@ function setPluginState(message) {
   document.getElementById('pluginState').textContent = message;
 }
 
-function bytesFromBase64(base64) {
-  return Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
-}
-
-function base64FromBytes(bytes) {
-  let binary = '';
-  const chunk = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunk) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
-  }
-  return btoa(binary);
-}
-
 async function boot() {
   const response = await fetch('./api/form');
   const data = await response.json();
@@ -155,13 +142,6 @@ function detectHashAlgorithmConstant(certificate) {
 }
 
 async function signPreparedContent(selectedCertificate, contentToSignBase64) {
-  const contentBytes = bytesFromBase64(contentToSignBase64);
-  const digestBuffer = await crypto.subtle.digest('SHA-256', contentBytes);
-  const digestHex = Array.from(new Uint8Array(digestBuffer))
-    .map((value) => value.toString(16).padStart(2, '0'))
-    .join('')
-    .toUpperCase();
-
   const oHashedData = await createObject('CAdESCOM.HashedData');
   await setProp(
     oHashedData,
@@ -169,7 +149,13 @@ async function signPreparedContent(selectedCertificate, contentToSignBase64) {
     'Algorithm',
     detectHashAlgorithmConstant(selectedCertificate),
   );
-  await oHashedData.SetHashValue(digestHex);
+  await setProp(
+    oHashedData,
+    'propset_DataEncoding',
+    'DataEncoding',
+    window.cadesplugin.CADESCOM_BASE64_TO_BINARY,
+  );
+  await oHashedData.Hash(contentToSignBase64);
 
   const oSigner = await createObject('CAdESCOM.CPSigner');
   await setProp(oSigner, 'propset_Certificate', 'Certificate', selectedCertificate.certificate);
