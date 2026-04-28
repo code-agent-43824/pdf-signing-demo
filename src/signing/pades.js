@@ -1,6 +1,8 @@
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
+const { execFileSync } = require('child_process');
 const fontkit = require('@pdf-lib/fontkit');
 const { PDFDocument, PDFName, PDFArray, PDFNumber } = require('pdf-lib');
 const { pdflibAddPlaceholder } = require('@signpdf/placeholder-pdf-lib');
@@ -11,6 +13,7 @@ const FALLBACK_FONT_PATH = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf';
 const STAMP_MARGIN = 24;
 const STAMP_WIDTH = 210;
 const STAMP_HEIGHT = 82;
+const MULTISIGN_SCRIPT_PATH = path.join(__dirname, '..', '..', 'scripts', 'prepare-multisign.py');
 
 function removeTrailingNewLine(buffer) {
   if (buffer[buffer.length - 1] === 0x0a) return buffer.subarray(0, buffer.length - 1);
@@ -136,8 +139,41 @@ async function applyVisibleSignatureAppearance({ pdfDoc, widgetRect, metadata })
   widgetDict.set(PDFName.of('AP'), pdfDoc.context.obj({ N: apRef }));
 }
 
+function hasExistingSignature(source) {
+  return /\/ByteRange\s*\[/.test(source.toString('latin1'));
+}
+
+function createPreparedPdfIncremental({ source, signer }) {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pdf-signing-multisign-'));
+  const inputPath = path.join(tempDir, 'input.pdf');
+  const outputPath = path.join(tempDir, 'prepared.pdf');
+
+  try {
+    fs.writeFileSync(inputPath, source);
+    const stdout = execFileSync('python3', [MULTISIGN_SCRIPT_PATH, inputPath, JSON.stringify(signer || {}), outputPath], {
+      encoding: 'utf8',
+      maxBuffer: 20 * 1024 * 1024,
+    });
+    const payload = JSON.parse(stdout.trim());
+    const preparedPdf = fs.readFileSync(outputPath);
+    return {
+      preparedPdf,
+      contentToSign: Buffer.from(payload.contentToSignBase64, 'base64'),
+      byteRange: payload.byteRange,
+      placeholderLength: payload.placeholderLength,
+    };
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+}
+
 async function createPreparedPdf({ sourcePath, sourceBuffer, signatureLength = DEFAULT_SIGNATURE_LENGTH, signer = {} }) {
   const source = sourceBuffer || fs.readFileSync(sourcePath);
+
+  if (hasExistingSignature(source)) {
+    return createPreparedPdfIncremental({ source, signer });
+  }
+
   const pdfDoc = await PDFDocument.load(source);
   const metadata = buildSignatureMetadata(signer);
   const firstPage = pdfDoc.getPages()[0];
