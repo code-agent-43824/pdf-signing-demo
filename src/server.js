@@ -31,10 +31,9 @@ router.get('/api/form', (_req, res) => {
   });
 });
 
-router.post('/api/sign/prepare', async (req, res) => {
+router.post('/api/sign/prepare', async (_req, res) => {
   try {
-    const signer = req.body?.signer || {};
-    const prepared = await createPreparedPdf({ sourcePath: formPdfPath, signer });
+    const prepared = await createPreparedPdf({ sourcePath: formPdfPath });
     const sessionId = sessions.create(prepared);
     res.json({
       ok: true,

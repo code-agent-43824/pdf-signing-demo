@@ -1,138 +1,30 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const fontkit = require('@pdf-lib/fontkit');
-const { PDFDocument, rgb } = require('pdf-lib');
+const { PDFDocument } = require('pdf-lib');
 const { pdflibAddPlaceholder } = require('@signpdf/placeholder-pdf-lib');
 const { SUBFILTER_ETSI_CADES_DETACHED, findByteRange } = require('@signpdf/utils');
 
 const DEFAULT_SIGNATURE_LENGTH = 16000;
-const STAMP_MARGIN = 24;
-const STAMP_WIDTH = 230;
-const STAMP_HEIGHT = 112;
-const FALLBACK_FONT_PATH = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf';
 
 function removeTrailingNewLine(buffer) {
   if (buffer[buffer.length - 1] === 0x0a) return buffer.subarray(0, buffer.length - 1);
   return buffer;
 }
 
-function sanitizeStampValue(value, fallback = '—') {
-  const clean = String(value || '').replace(/\s+/g, ' ').trim();
-  return clean || fallback;
-}
-
-function splitDistinguishedName(value) {
-  return String(value || '')
-    .split(/,(?=(?:[^\\]|\\.)*$)/)
-    .map((part) => part.trim())
-    .filter(Boolean);
-}
-
-function extractDnField(dn, fieldName) {
-  const upper = `${fieldName}=`.toUpperCase();
-  const parts = splitDistinguishedName(dn);
-  const match = parts.find((part) => part.toUpperCase().startsWith(upper));
-  return match ? match.slice(fieldName.length + 1).trim() : '';
-}
-
-function wrapText(text, maxChars) {
-  const words = sanitizeStampValue(text).split(' ');
-  const lines = [];
-  let current = '';
-
-  for (const word of words) {
-    const candidate = current ? `${current} ${word}` : word;
-    if (candidate.length <= maxChars) {
-      current = candidate;
-      continue;
-    }
-    if (current) lines.push(current);
-    current = word;
-  }
-
-  if (current) lines.push(current);
-  return lines;
-}
-
-async function drawVisibleStamp({ pdfDoc, signer = {} }) {
-  pdfDoc.registerFontkit(fontkit);
-  const fontBytes = fs.readFileSync(FALLBACK_FONT_PATH);
-  const font = await pdfDoc.embedFont(fontBytes, { subset: true });
-  const page = pdfDoc.getPages()[0];
-  const { width } = page.getSize();
-  const stampX = width - STAMP_WIDTH - STAMP_MARGIN;
-  const stampY = STAMP_MARGIN;
-  const signerName = sanitizeStampValue(extractDnField(signer.subjectName, 'CN') || signer.displayName || signer.subjectName);
-  const issuerName = sanitizeStampValue(extractDnField(signer.issuerName, 'CN') || signer.issuerName);
-  const certificateId = sanitizeStampValue(signer.thumbprint || signer.serialNumber || signer.certificateId);
-
-  page.drawRectangle({
-    x: stampX,
-    y: stampY,
-    width: STAMP_WIDTH,
-    height: STAMP_HEIGHT,
-    color: rgb(0.97, 0.98, 1),
-    borderColor: rgb(0.18, 0.36, 0.78),
-    borderWidth: 1,
-    opacity: 0.96,
-  });
-
-  page.drawText('Электронная подпись', {
-    x: stampX + 10,
-    y: stampY + STAMP_HEIGHT - 16,
-    size: 10,
-    font,
-    color: rgb(0.1, 0.2, 0.45),
-  });
-
-  const lines = [
-    ['Подписант:', wrapText(signerName, 26)],
-    ['Выдан:', wrapText(issuerName, 26)],
-    ['ID:', wrapText(certificateId, 26)],
-  ];
-
-  let cursorY = stampY + STAMP_HEIGHT - 30;
-  for (const [label, values] of lines) {
-    page.drawText(label, {
-      x: stampX + 10,
-      y: cursorY,
-      size: 7,
-      font,
-      color: rgb(0.24, 0.28, 0.35),
-    });
-    cursorY -= 9;
-    for (const line of values.slice(0, label === 'ID:' ? 2 : 2)) {
-      page.drawText(line, {
-        x: stampX + 10,
-        y: cursorY,
-        size: 8,
-        font,
-        color: rgb(0.08, 0.08, 0.08),
-      });
-      cursorY -= 9;
-    }
-  }
-
-  return {
-    widgetRect: [stampX, stampY, stampX + STAMP_WIDTH, stampY + STAMP_HEIGHT],
-  };
-}
-
-async function createPreparedPdf({ sourcePath, signatureLength = DEFAULT_SIGNATURE_LENGTH, signer = {} }) {
+async function createPreparedPdf({ sourcePath, signatureLength = DEFAULT_SIGNATURE_LENGTH }) {
   const source = fs.readFileSync(sourcePath);
   const pdfDoc = await PDFDocument.load(source);
-  const { widgetRect } = await drawVisibleStamp({ pdfDoc, signer });
 
   pdflibAddPlaceholder({
     pdfDoc,
     reason: 'Подписание формуляра',
     contactInfo: 'watson@openclaw.local',
-    name: sanitizeStampValue(extractDnField(signer.subjectName, 'CN') || signer.displayName || signer.subjectName || 'Kirill'),
+    name: 'Kirill',
     location: 'Web UI',
     signatureLength,
     subFilter: SUBFILTER_ETSI_CADES_DETACHED,
-    widgetRect,
+    widgetRect: [56, 430, 276, 520],
     appName: 'pdf-signing-demo',
   });
 
