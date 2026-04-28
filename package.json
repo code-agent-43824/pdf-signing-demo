@@ -1,0 +1,24 @@
+{
+  "name": "pdf-signing-demo",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/code-agent-43824/pdf-signing-demo.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/code-agent-43824/pdf-signing-demo/issues"
+  },
+  "homepage": "https://github.com/code-agent-43824/pdf-signing-demo#readme",
+  "dependencies": {
+    "express": "^5.2.1",
+    "pdf-lib": "^1.17.1"
+  }
+}

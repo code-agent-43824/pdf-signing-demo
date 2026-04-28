@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Выдача формуляров — PDF Signing Demo</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="page">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">Демо-контур</p>
+          <h1>Выдача формуляров</h1>
+          <p class="lead">
+            Сервер показывает PDF-формуляр и готовит сценарий последующей подписи через CryptoPro Browser Plugin.
+          </p>
+        </div>
+        <button id="signButton" class="primary">Подписать формуляр</button>
+      </header>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>Исходный PDF-документ</h2>
+          <span id="docMeta" class="muted">Загрузка…</span>
+        </div>
+        <iframe id="sourcePdf" title="Исходный PDF" class="pdf-frame"></iframe>
+      </section>
+
+      <section class="panel panel-secondary">
+        <div class="panel-head">
+          <h2>Подписанный PDF-документ</h2>
+          <span class="muted">Появится после встраивания подписи</span>
+        </div>
+        <div id="signedState" class="empty-state">
+          Пока нет подписанного документа.
+        </div>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>
