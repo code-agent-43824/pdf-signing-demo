@@ -1,11 +1,16 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { PDFDocument } = require('pdf-lib');
+const fontkit = require('@pdf-lib/fontkit');
+const { PDFDocument, PDFName, PDFArray, PDFNumber } = require('pdf-lib');
 const { pdflibAddPlaceholder } = require('@signpdf/placeholder-pdf-lib');
 const { SUBFILTER_ETSI_CADES_DETACHED, findByteRange } = require('@signpdf/utils');
 
 const DEFAULT_SIGNATURE_LENGTH = 16000;
+const FALLBACK_FONT_PATH = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf';
+const STAMP_MARGIN = 24;
+const STAMP_WIDTH = 210;
+const STAMP_HEIGHT = 82;
 
 function removeTrailingNewLine(buffer) {
   if (buffer[buffer.length - 1] === 0x0a) return buffer.subarray(0, buffer.length - 1);
@@ -44,15 +49,105 @@ function buildSignatureMetadata(signer = {}) {
 
   return {
     name,
+    issuer,
+    certId,
     reason: `Выдан: ${issuer}`,
     contactInfo: `Cert ID: ${certId}`,
   };
+}
+
+function wrapText(value, maxLength = 26) {
+  const words = normalizeValue(value, '—').split(' ');
+  const lines = [];
+  let current = '';
+
+  for (const word of words) {
+    const candidate = current ? `${current} ${word}` : word;
+    if (candidate.length <= maxLength) {
+      current = candidate;
+    } else {
+      if (current) lines.push(current);
+      current = word;
+    }
+  }
+
+  if (current) lines.push(current);
+  return lines;
+}
+
+function createAppearanceStream({ pdfDoc, widgetRect, metadata }) {
+  pdfDoc.registerFontkit(fontkit);
+  const fontBytes = fs.readFileSync(FALLBACK_FONT_PATH);
+  return pdfDoc.embedFont(fontBytes, { subset: true }).then((font) => {
+    const width = widgetRect[2] - widgetRect[0];
+    const height = widgetRect[3] - widgetRect[1];
+    const lines = [
+      { text: 'Электронная подпись', size: 10, x: 8, y: height - 16 },
+      { text: `Подписант: ${metadata.name}`, size: 7, x: 8, y: height - 30 },
+      ...wrapText(metadata.name, 28).slice(1, 2).map((text, idx) => ({ text, size: 7, x: 8, y: height - 39 - idx * 8 })),
+      { text: `Выдан: ${metadata.issuer}`, size: 7, x: 8, y: height - 49 },
+      ...wrapText(metadata.issuer, 30).slice(1, 2).map((text, idx) => ({ text, size: 7, x: 8, y: height - 58 - idx * 8 })),
+      { text: `ID: ${metadata.certId}`, size: 7, x: 8, y: 10 },
+    ];
+
+    const textOps = lines.map(({ text, size, x, y }) => {
+      const encoded = font.encodeText(text).toString();
+      return `BT /F0 ${size} Tf 0.10 0.18 0.40 rg 1 0 0 1 ${x} ${y} Tm ${encoded} Tj ET`;
+    }).join('\n');
+
+    const content = [
+      'q',
+      '0.18 0.36 0.78 RG',
+      '0.97 0.98 1 rg',
+      '1 w',
+      `0.5 0.5 ${Math.max(width - 1, 1)} ${Math.max(height - 1, 1)} re B`,
+      textOps,
+      'Q',
+    ].join('\n');
+
+    const resources = pdfDoc.context.obj({
+      Font: {
+        F0: font.ref,
+      },
+    });
+
+    const apStream = pdfDoc.context.flateStream(content, {
+      Type: 'XObject',
+      Subtype: 'Form',
+      FormType: 1,
+      BBox: [0, 0, width, height],
+      Matrix: [1, 0, 0, 1, 0, 0],
+      Resources: resources,
+    });
+
+    return pdfDoc.context.register(apStream);
+  });
+}
+
+async function applyVisibleSignatureAppearance({ pdfDoc, widgetRect, metadata }) {
+  const acroForm = pdfDoc.catalog.lookup(PDFName.of('AcroForm'));
+  const fields = acroForm.lookup(PDFName.of('Fields'), PDFArray);
+  const widgetRef = fields.get(fields.size() - 1);
+  const widgetDict = pdfDoc.context.lookup(widgetRef);
+  const rect = PDFArray.withContext(pdfDoc.context);
+  widgetRect.forEach((value) => rect.push(PDFNumber.of(value)));
+  widgetDict.set(PDFName.of('Rect'), rect);
+  const apRef = await createAppearanceStream({ pdfDoc, widgetRect, metadata });
+  widgetDict.set(PDFName.of('AP'), pdfDoc.context.obj({ N: apRef }));
 }
 
 async function createPreparedPdf({ sourcePath, signatureLength = DEFAULT_SIGNATURE_LENGTH, signer = {} }) {
   const source = fs.readFileSync(sourcePath);
   const pdfDoc = await PDFDocument.load(source);
   const metadata = buildSignatureMetadata(signer);
+  const firstPage = pdfDoc.getPages()[0];
+  const { width } = firstPage.getSize();
+  const widgetRect = [
+    width - STAMP_WIDTH - STAMP_MARGIN,
+    STAMP_MARGIN,
+    width - STAMP_MARGIN,
+    STAMP_MARGIN + STAMP_HEIGHT,
+  ];
 
   pdflibAddPlaceholder({
     pdfDoc,
@@ -62,9 +157,11 @@ async function createPreparedPdf({ sourcePath, signatureLength = DEFAULT_SIGNATU
     location: 'Web UI',
     signatureLength,
     subFilter: SUBFILTER_ETSI_CADES_DETACHED,
-    widgetRect: [56, 430, 276, 520],
+    widgetRect,
     appName: 'pdf-signing-demo',
   });
+
+  await applyVisibleSignatureAppearance({ pdfDoc, widgetRect, metadata });
 
   let pdf = Buffer.from(await pdfDoc.save({ useObjectStreams: false }));
   pdf = removeTrailingNewLine(pdf);
