@@ -137,7 +137,7 @@ def render_stamp_image(metadata):
     draw.line((28, 56, width - 28, 56), fill=accent_color, width=3)
 
     title_font = ImageFont.truetype(TITLE_FONT, 30)
-    label_font = ImageFont.truetype(TITLE_FONT, 18)
+    label_font = ImageFont.truetype(TITLE_FONT, 27)
     value_font = ImageFont.truetype(BODY_FONT, 27)
 
     content_left = 24
@@ -157,7 +157,7 @@ def render_stamp_image(metadata):
     for label, raw_value, break_anywhere in rows:
         label_text = f'{label}:'
         draw.text((content_left, y), label_text, font=label_font, fill=text_color)
-        y += 18
+        y += 24
         lines = wrap_text_lines(draw, raw_value, value_font, max(content_right - content_left, 40), max_lines=2, break_anywhere=break_anywhere)
         draw.text((content_left, y - 2), lines[0], font=value_font, fill=text_color)
         if len(lines) > 1:
