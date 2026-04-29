@@ -6,9 +6,10 @@ from datetime import datetime, timezone
 from io import BytesIO
 from pathlib import Path
 
+from PIL import Image, ImageDraw, ImageFont
 from pyhanko import stamp
 from pyhanko.pdf_utils import layout, text
-from pyhanko.pdf_utils.font import opentype
+from pyhanko.pdf_utils.images import PdfImage
 from pyhanko.pdf_utils.incremental_writer import IncrementalPdfFileWriter
 from pyhanko.sign import fields
 from pyhanko.sign.fields import enumerate_sig_fields
@@ -22,11 +23,14 @@ STAMP_ROW_GAP = 10
 MAX_SIGNATURES = 4
 MAX_STAMPS_PER_ROW = 3
 BYTES_RESERVED = 16000
-FONT = '/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf'
-APPEARANCE_LAYOUT = layout.SimpleBoxLayoutRule(
-    x_align=layout.AxisAlignment.ALIGN_MIN,
+TITLE_FONT = '/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf'
+BODY_FONT = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
+IMAGE_SCALE = 4
+BACKGROUND_LAYOUT = layout.SimpleBoxLayoutRule(
+    x_align=layout.AxisAlignment.ALIGN_MID,
     y_align=layout.AxisAlignment.ALIGN_MID,
-    margins=layout.Margins(left=7, right=7, top=8, bottom=7),
+    margins=layout.Margins(left=0, right=0, top=0, bottom=0),
+    inner_content_scaling=layout.InnerScaling.NO_SCALING,
 )
 
 
@@ -81,6 +85,70 @@ def compute_box(writer, existing_count):
     return int(left), int(bottom), int(right), int(top)
 
 
+def fit_text(draw, value, font, max_width):
+    original = str(value or '').strip()
+    value = original
+    if not value:
+        return ''
+    while value and draw.textlength(value, font=font) > max_width:
+        value = value[:-1].rstrip()
+    return value if value == original else f'{value}…'
+
+
+def render_stamp_image(metadata):
+    width = STAMP_WIDTH * IMAGE_SCALE
+    height = STAMP_HEIGHT * IMAGE_SCALE
+    image = Image.new('RGBA', (width, height), '#F5F8FF')
+    draw = ImageDraw.Draw(image)
+
+    border_color = '#3F68B8'
+    text_color = '#1A2842'
+    accent_color = '#6E87BC'
+
+    draw.rounded_rectangle((0, 0, width - 1, height - 1), radius=18, outline=border_color, width=4, fill='#F5F8FF')
+    draw.line((28, 56, width - 28, 56), fill=accent_color, width=3)
+
+    title_font = ImageFont.truetype(TITLE_FONT, 22)
+    label_font = ImageFont.truetype(TITLE_FONT, 16)
+    value_font = ImageFont.truetype(BODY_FONT, 16)
+
+    content_left = 28
+    content_right = width - 28
+    y = 18
+    draw.text((content_left, y), 'Электронная подпись', font=title_font, fill=text_color)
+    y += 48
+
+    rows = [
+        ('ФИО', metadata['appearance_name']),
+        ('УЦ', metadata['appearance_issuer']),
+        ('ID', metadata['appearance_cert_id']),
+    ]
+    for label, raw_value in rows:
+        label_text = f'{label}:'
+        label_width = draw.textlength(label_text, font=label_font)
+        value = fit_text(draw, raw_value, value_font, max(content_right - content_left - label_width - 12, 40))
+        draw.text((content_left, y), label_text, font=label_font, fill=text_color)
+        draw.text((content_left + label_width + 12, y), value, font=value_font, fill=text_color)
+        y += 22
+
+    return image
+
+
+def build_stamp_style(metadata):
+    stamp_image = PdfImage(
+        render_stamp_image(metadata),
+        box=layout.BoxConstraints(width=STAMP_WIDTH, height=STAMP_HEIGHT),
+    )
+    return stamp.TextStampStyle(
+        border_width=0,
+        background=stamp_image,
+        background_layout=BACKGROUND_LAYOUT,
+        background_opacity=1,
+        stamp_text='',
+        text_box_style=text.TextBoxStyle(font_size=1, leading=1),
+    )
+
+
 def main():
     if len(sys.argv) != 4:
         print('usage: prepare-pyhanko.py <input.pdf> <signer.json> <output.pdf>', file=sys.stderr)
@@ -105,18 +173,7 @@ def main():
         coroutine = emb.write_cms(field_name, writer)
         next(coroutine)
 
-        style = stamp.TextStampStyle(
-            border_width=1,
-            border_color=(0.24, 0.42, 0.74),
-            stamp_text='Подпись\nФИО: %(signer)s\nУЦ: %(issuer)s\nID: %(cert_id)s',
-            text_box_style=text.TextBoxStyle(
-                font=opentype.GlyphAccumulatorFactory(FONT),
-                font_size=5.6,
-                leading=6,
-                text_color=(0.10, 0.14, 0.22),
-            ),
-            inner_content_layout=APPEARANCE_LAYOUT,
-        )
+        style = build_stamp_style(metadata)
 
         sig_obj = pdf_byterange.SignatureObject(
             subfilter=fields.SigSeedSubFilter.PADES,
@@ -133,11 +190,8 @@ def main():
                 appearance_setup=cms_embedder.SigAppearanceSetup(
                     style=style,
                     timestamp=datetime.now(timezone.utc),
-                    name=metadata['appearance_name'],
-                    text_params={
-                        'issuer': metadata['appearance_issuer'],
-                        'cert_id': metadata['appearance_cert_id'],
-                    },
+                    name=None,
+                    text_params={},
                 ),
             )
         )
