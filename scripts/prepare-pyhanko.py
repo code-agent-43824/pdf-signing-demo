@@ -17,9 +17,9 @@ from pyhanko.sign.signers import cms_embedder, pdf_byterange
 
 STAMP_MARGIN = 24
 STAMP_WIDTH = 176
-STAMP_HEIGHT = 82
+STAMP_HEIGHT = 78
 STAMP_GAP = 5
-STAMP_ROW_GAP = 10
+STAMP_ROW_GAP = 8
 MAX_SIGNATURES = 4
 MAX_STAMPS_PER_ROW = 3
 BYTES_RESERVED = 16000
@@ -55,13 +55,16 @@ def build_metadata(signer):
     name = normalize(extract_dn_field(signer.get('subjectName'), 'CN') or signer.get('subjectName'), 'Подписант')
     issuer = normalize(extract_dn_field(signer.get('issuerName'), 'CN') or signer.get('issuerName'), 'не указан')
     cert_id = normalize(signer.get('thumbprint') or signer.get('serialNumber'), 'не указан')
+    valid_to = normalize(signer.get('validToDate'), 'не указан')
     return {
         'name': name,
         'issuer': issuer,
         'cert_id': cert_id,
+        'valid_to': valid_to,
         'appearance_name': name,
         'appearance_issuer': issuer,
         'appearance_cert_id': cert_id,
+        'appearance_valid_to': valid_to,
         'reason': f'Выдан: {issuer}',
         'contact_info': f'Cert ID: {cert_id}',
     }
@@ -133,33 +136,34 @@ def render_stamp_image(metadata):
     draw.rounded_rectangle((0, 0, width - 1, height - 1), radius=18, outline=border_color, width=4, fill='#F5F8FF')
     draw.line((28, 56, width - 28, 56), fill=accent_color, width=3)
 
-    title_font = ImageFont.truetype(TITLE_FONT, 22)
-    label_font = ImageFont.truetype(TITLE_FONT, 15)
-    value_font = ImageFont.truetype(BODY_FONT, 17)
+    title_font = ImageFont.truetype(TITLE_FONT, 20)
+    label_font = ImageFont.truetype(TITLE_FONT, 13)
+    value_font = ImageFont.truetype(BODY_FONT, 18)
 
-    content_left = 28
-    content_right = width - 28
-    y = 16
-    draw.text((content_left, y), 'Электронная подпись', font=title_font, fill=text_color)
-    y += 42
+    content_left = 24
+    content_right = width - 24
+    y = 12
+    draw.text((content_left, y), 'Документ подписан', font=title_font, fill=text_color)
+    y += 21
+    draw.text((content_left, y), 'электронной подписью', font=title_font, fill=text_color)
+    y += 29
 
     rows = [
-        ('ФИО', metadata['appearance_name'], False),
-        ('УЦ', metadata['appearance_issuer'], False),
-        ('ID', metadata['appearance_cert_id'], True),
+        ('ID сертификата', metadata['appearance_cert_id'], True),
+        ('ФИО владельца', metadata['appearance_name'], False),
+        ('Кем выдан', metadata['appearance_issuer'], False),
+        ('Срок действия', metadata['appearance_valid_to'], False),
     ]
     for label, raw_value, break_anywhere in rows:
         label_text = f'{label}:'
-        label_width = draw.textlength(label_text, font=label_font)
-        value_x = content_left + label_width + 10
-        max_width = max(content_right - value_x, 40)
-        lines = wrap_text_lines(draw, raw_value, value_font, max_width, max_lines=2, break_anywhere=break_anywhere)
         draw.text((content_left, y), label_text, font=label_font, fill=text_color)
-        draw.text((value_x, y - 1), lines[0], font=value_font, fill=text_color)
+        y += 13
+        lines = wrap_text_lines(draw, raw_value, value_font, max(content_right - content_left, 40), max_lines=2, break_anywhere=break_anywhere)
+        draw.text((content_left, y - 1), lines[0], font=value_font, fill=text_color)
         if len(lines) > 1:
-            y += 16
-            draw.text((value_x, y - 1), lines[1], font=value_font, fill=text_color)
-        y += 20
+            y += 15
+            draw.text((content_left, y - 1), lines[1], font=value_font, fill=text_color)
+        y += 16
 
     return image
 

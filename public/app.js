@@ -219,6 +219,7 @@ async function prepareAndSign() {
         issuerName: selectedCertificate.issuerName,
         thumbprint: selectedCertificate.thumbprint,
         serialNumber: selectedCertificate.serialNumber,
+        validToDate: selectedCertificate.validToDate,
       },
     }),
   });
