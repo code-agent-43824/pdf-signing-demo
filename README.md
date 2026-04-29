@@ -16,6 +16,12 @@ npm install
 node src/server.js
 ```
 
+Дополнительно для server-side подготовки PDF нужны Python-зависимости:
+
+- `pyHanko`
+- `pypdf`
+- `reportlab`
+
 Переменные окружения:
 
 - `PORT` — порт сервера (по умолчанию `3010`)
