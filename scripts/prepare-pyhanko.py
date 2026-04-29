@@ -17,7 +17,7 @@ from pyhanko.sign.signers import cms_embedder, pdf_byterange
 
 STAMP_MARGIN = 24
 STAMP_WIDTH = 176
-STAMP_HEIGHT = 78
+STAMP_HEIGHT = 108
 STAMP_GAP = 5
 STAMP_ROW_GAP = 8
 MAX_SIGNATURES = 4
@@ -136,17 +136,17 @@ def render_stamp_image(metadata):
     draw.rounded_rectangle((0, 0, width - 1, height - 1), radius=18, outline=border_color, width=4, fill='#F5F8FF')
     draw.line((28, 56, width - 28, 56), fill=accent_color, width=3)
 
-    title_font = ImageFont.truetype(TITLE_FONT, 20)
-    label_font = ImageFont.truetype(TITLE_FONT, 13)
-    value_font = ImageFont.truetype(BODY_FONT, 18)
+    title_font = ImageFont.truetype(TITLE_FONT, 30)
+    label_font = ImageFont.truetype(TITLE_FONT, 18)
+    value_font = ImageFont.truetype(BODY_FONT, 27)
 
     content_left = 24
     content_right = width - 24
     y = 12
     draw.text((content_left, y), 'Документ подписан', font=title_font, fill=text_color)
-    y += 21
+    y += 30
     draw.text((content_left, y), 'электронной подписью', font=title_font, fill=text_color)
-    y += 29
+    y += 40
 
     rows = [
         ('ID сертификата', metadata['appearance_cert_id'], True),
@@ -157,13 +157,13 @@ def render_stamp_image(metadata):
     for label, raw_value, break_anywhere in rows:
         label_text = f'{label}:'
         draw.text((content_left, y), label_text, font=label_font, fill=text_color)
-        y += 13
+        y += 18
         lines = wrap_text_lines(draw, raw_value, value_font, max(content_right - content_left, 40), max_lines=2, break_anywhere=break_anywhere)
-        draw.text((content_left, y - 1), lines[0], font=value_font, fill=text_color)
+        draw.text((content_left, y - 2), lines[0], font=value_font, fill=text_color)
         if len(lines) > 1:
-            y += 15
-            draw.text((content_left, y - 1), lines[1], font=value_font, fill=text_color)
-        y += 16
+            y += 24
+            draw.text((content_left, y - 2), lines[1], font=value_font, fill=text_color)
+        y += 20
 
     return image
 
