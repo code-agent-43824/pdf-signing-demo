@@ -54,6 +54,11 @@ async function setProp(object, asyncSetterName, syncSetterName, value) {
   object[syncSetterName] = value;
 }
 
+function isCertificateDateValid(validToDate) {
+  const parsed = new Date(validToDate);
+  return !Number.isNaN(parsed.getTime()) && parsed.getTime() > Date.now();
+}
+
 async function enumerateCertificates() {
   const store = await createObject('CAdESCOM.Store');
   await store.Open(
@@ -74,6 +79,9 @@ async function enumerateCertificates() {
       const thumbprint = await getProp(certificate, 'Thumbprint', 'Thumbprint');
       const serialNumber = await getProp(certificate, 'SerialNumber', 'SerialNumber');
       const validToDate = await getProp(certificate, 'ValidToDate', 'ValidToDate');
+      if (!isCertificateDateValid(validToDate)) {
+        continue;
+      }
       const publicKey = await certificate.PublicKey();
       const algorithm = await publicKey.Algorithm;
       const friendlyName = await getProp(algorithm, 'FriendlyName', 'FriendlyName');
@@ -105,7 +113,7 @@ async function initCryptoPro() {
     const certificates = await enumerateCertificates();
     state.pluginReady = true;
     state.certificates = certificates;
-    setPluginState(`CryptoPro готов, сертификатов найдено: ${certificates.length}`);
+    setPluginState(`CryptoPro готов, доступных непpосроченных сертификатов: ${certificates.length}`);
     setStatus('Расширение и plugin доступны. Можно готовить документ и выбирать сертификат.');
   } catch (error) {
     setPluginState('CryptoPro недоступен');
