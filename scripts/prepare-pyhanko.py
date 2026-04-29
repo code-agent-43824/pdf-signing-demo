@@ -154,7 +154,7 @@ def apply_visual_stamp(source_bytes, box, metadata):
     overlay_page = PdfReader(overlay).pages[0]
     page.merge_page(overlay_page)
     writer = PdfWriter()
-    writer.append_pages_from_reader(reader)
+    writer.clone_document_from_reader(reader)
     output = BytesIO()
     writer.write(output)
     return output.getvalue()
