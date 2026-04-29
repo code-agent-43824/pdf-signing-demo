@@ -69,6 +69,16 @@ def ensure_fonts_registered():
         pdfmetrics.registerFont(TTFont(REPORTLAB_FONT_BOLD, FONT_BOLD))
 
 
+def fit_text(text_value, font_name, font_size, max_width):
+    value = str(text_value or '').strip()
+    if not value:
+        return ''
+    while value and pdfmetrics.stringWidth(value, font_name, font_size) > max_width:
+        value = value[:-1].rstrip()
+    return value if value == str(text_value or '').strip() else f'{value}…'
+
+
+
 def wrap_text(value, font_name, font_size, max_width, max_lines=1):
     words = str(value or '').split()
     if not words:
@@ -80,16 +90,14 @@ def wrap_text(value, font_name, font_size, max_width, max_lines=1):
         if pdfmetrics.stringWidth(candidate, font_name, font_size) <= max_width:
             current = candidate
         else:
-            lines.append(current)
+            lines.append(fit_text(current, font_name, font_size, max_width))
             current = word
-    lines.append(current)
+    lines.append(fit_text(current, font_name, font_size, max_width))
     if len(lines) <= max_lines:
         return lines
     kept = lines[:max_lines]
     tail = ' '.join(lines[max_lines - 1:])
-    while tail and pdfmetrics.stringWidth(f'{tail}…', font_name, font_size) > max_width:
-        tail = tail[:-1]
-    kept[-1] = f'{tail.rstrip()}…'
+    kept[-1] = fit_text(tail, font_name, font_size, max_width)
     return kept
 
 
@@ -118,25 +126,27 @@ def apply_visual_stamp(source_bytes, box, metadata):
     stamp_canvas.setFont(REPORTLAB_FONT_BOLD, 8)
     stamp_canvas.drawString(inner_x, inner_top - 2, TITLE_TEXT)
 
-    text_y = inner_top - 16
-    line_gap = 11
+    text_y = inner_top - 15
+    value_indent = 4
+    label_gap = 8
+    value_line_gap = 8
+    section_gap = 10
     line_specs = [
-        ('Подписант: ', metadata['name']),
-        ('Выдан: ', metadata['issuer']),
-        ('ID: ', metadata['cert_id']),
+        ('Подписант:', metadata['name'], 2),
+        ('Выдан:', metadata['issuer'], 1),
+        ('ID:', metadata['cert_id'], 1),
     ]
 
-    for label, value in line_specs:
-        label_width = pdfmetrics.stringWidth(label, REPORTLAB_FONT_BOLD, 7)
-        value_lines = wrap_text(value, REPORTLAB_FONT_REGULAR, 7, max(usable_width - label_width, 32), max_lines=2 if label.startswith('Подписант') else 1)
+    for label, value, max_lines in line_specs:
         stamp_canvas.setFont(REPORTLAB_FONT_BOLD, 7)
         stamp_canvas.drawString(inner_x, text_y, label)
+        text_y -= label_gap
+        value_lines = wrap_text(value, REPORTLAB_FONT_REGULAR, 7, max(usable_width - value_indent, 32), max_lines=max_lines)
         stamp_canvas.setFont(REPORTLAB_FONT_REGULAR, 7)
-        stamp_canvas.drawString(inner_x + label_width, text_y, value_lines[0])
-        if len(value_lines) > 1:
-            text_y -= 8
-            stamp_canvas.drawString(inner_x + label_width, text_y, value_lines[1])
-        text_y -= line_gap
+        for value_line in value_lines:
+            stamp_canvas.drawString(inner_x + value_indent, text_y, value_line)
+            text_y -= value_line_gap
+        text_y -= max(section_gap - value_line_gap, 0)
 
     stamp_canvas.save()
     overlay.seek(0)
