@@ -200,34 +200,6 @@ function fileToBase64(file) {
   });
 }
 
-async function blobToBase64(blob) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = String(reader.result || '');
-      const base64 = result.includes(',') ? result.split(',')[1] : result;
-      resolve(base64);
-    };
-    reader.onerror = () => reject(reader.error || new Error('Не удалось прочитать blob.'));
-    reader.readAsDataURL(blob);
-  });
-}
-
-async function rememberSignedPdf(signedPdfUrl, downloadName) {
-  const response = await fetch(signedPdfUrl);
-  if (!response.ok) {
-    throw new Error('Не удалось перечитать подписанный PDF для следующей подписи.');
-  }
-  const blob = await response.blob();
-  state.uploadedPdfBase64 = await blobToBase64(blob);
-  state.uploadedPdfName = downloadName || 'signed-formular.pdf';
-  if (state.uploadedPdfObjectUrl) {
-    URL.revokeObjectURL(state.uploadedPdfObjectUrl);
-  }
-  state.uploadedPdfObjectUrl = URL.createObjectURL(blob);
-  showPdf(state.uploadedPdfObjectUrl, `${state.uploadedPdfName} · ${Math.round(blob.size / 1024)} KB`);
-  setUploadState(`Текущий документ переключён на уже подписанную версию: ${state.uploadedPdfName}`);
-}
 
 async function prepareAndSign() {
   if (!state.pluginReady) {
@@ -280,8 +252,7 @@ async function prepareAndSign() {
   signedState.classList.add('hidden');
   downloadLink.href = completeData.signedPdfUrl;
   downloadLink.classList.remove('hidden');
-  await rememberSignedPdf(completeData.signedPdfUrl, completeData.downloadName);
-  setStatus('Готово: подписанный PDF собран, показан и автоматически выбран как источник для следующей подписи.');
+  setStatus('Готово: подписанный PDF собран и показан отдельно. Исходный документ в левом окне не менялся.');
 }
 
 document.getElementById('pdfUpload').addEventListener('change', async (event) => {

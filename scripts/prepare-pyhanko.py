@@ -2,14 +2,13 @@
 import json
 import re
 import sys
-import unicodedata
 from datetime import datetime, timezone
 from io import BytesIO
 from pathlib import Path
 
 from pyhanko import stamp
 from pyhanko.pdf_utils import layout, text
-from pyhanko.pdf_utils.font.basic import SimpleFontEngineFactory
+from pyhanko.pdf_utils.font import opentype
 from pyhanko.pdf_utils.incremental_writer import IncrementalPdfFileWriter
 from pyhanko.sign import fields
 from pyhanko.sign.fields import enumerate_sig_fields
@@ -17,15 +16,15 @@ from pyhanko.sign.signers import cms_embedder, pdf_byterange
 
 STAMP_MARGIN = 24
 STAMP_WIDTH = 190
-STAMP_HEIGHT = 64
+STAMP_HEIGHT = 82
 STAMP_GAP = 10
 MAX_SIGNATURES = 4
 BYTES_RESERVED = 16000
-APPEARANCE_FONT = SimpleFontEngineFactory('Helvetica', 0.52)
+FONT = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
 APPEARANCE_LAYOUT = layout.SimpleBoxLayoutRule(
     x_align=layout.AxisAlignment.ALIGN_MIN,
     y_align=layout.AxisAlignment.ALIGN_MID,
-    margins=layout.Margins(left=8, right=8, top=7, bottom=7),
+    margins=layout.Margins(left=8, right=8, top=8, bottom=8),
 )
 
 
@@ -46,41 +45,22 @@ def extract_dn_field(dn, field_name):
     return ''
 
 
-CYRILLIC_TO_LATIN = str.maketrans({
-    'А': 'A', 'Б': 'B', 'В': 'V', 'Г': 'G', 'Д': 'D', 'Е': 'E', 'Ё': 'E', 'Ж': 'Zh', 'З': 'Z', 'И': 'I',
-    'Й': 'Y', 'К': 'K', 'Л': 'L', 'М': 'M', 'Н': 'N', 'О': 'O', 'П': 'P', 'Р': 'R', 'С': 'S', 'Т': 'T',
-    'У': 'U', 'Ф': 'F', 'Х': 'Kh', 'Ц': 'Ts', 'Ч': 'Ch', 'Ш': 'Sh', 'Щ': 'Sch', 'Ъ': '', 'Ы': 'Y',
-    'Ь': '', 'Э': 'E', 'Ю': 'Yu', 'Я': 'Ya',
-    'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'e', 'ж': 'zh', 'з': 'z', 'и': 'i',
-    'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm', 'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r', 'с': 's', 'т': 't',
-    'у': 'u', 'ф': 'f', 'х': 'kh', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh', 'щ': 'sch', 'ъ': '', 'ы': 'y',
-    'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya',
-})
-
-
-def to_appearance_text(value, fallback=''):
-    normalized = normalize(value, fallback).translate(CYRILLIC_TO_LATIN)
-    ascii_text = unicodedata.normalize('NFKD', normalized).encode('ascii', 'ignore').decode('ascii')
-    ascii_text = re.sub(r'\s+', ' ', ascii_text).strip(' ,;:-')
-    return ascii_text or fallback
-
-
 def ellipsize(value, limit):
     value = str(value or '')
     return value if len(value) <= limit else f"{value[:limit - 1]}…"
 
 
 def build_metadata(signer):
-    name = normalize(extract_dn_field(signer.get('subjectName'), 'CN') or signer.get('subjectName'), 'Kirill')
+    name = normalize(extract_dn_field(signer.get('subjectName'), 'CN') or signer.get('subjectName'), 'Подписант')
     issuer = normalize(extract_dn_field(signer.get('issuerName'), 'CN') or signer.get('issuerName'), 'не указан')
     cert_id = normalize(signer.get('thumbprint') or signer.get('serialNumber'), 'не указан')
     return {
         'name': name,
         'issuer': issuer,
         'cert_id': cert_id,
-        'appearance_name': ellipsize(to_appearance_text(name, 'Signer'), 26),
-        'appearance_issuer': ellipsize(to_appearance_text(issuer, 'Issuer'), 24),
-        'appearance_cert_id': ellipsize(to_appearance_text(cert_id, 'n/a'), 20),
+        'appearance_name': ellipsize(name, 24),
+        'appearance_issuer': ellipsize(issuer, 22),
+        'appearance_cert_id': ellipsize(cert_id, 24),
         'reason': f'Выдан: {issuer}',
         'contact_info': f'Cert ID: {cert_id}',
     }
@@ -122,9 +102,9 @@ def main():
         style = stamp.TextStampStyle(
             border_width=1,
             border_color=(0.22, 0.44, 0.80),
-            stamp_text='SIGNED ELECTRONICALLY\nSigner: %(signer)s\nIssuer: %(issuer)s\nCert: %(cert_id)s',
+            stamp_text='ПОДПИСАНО ЭЛЕКТРОННО\nПодписант: %(signer)s\nВыдан: %(issuer)s\nID: %(cert_id)s',
             text_box_style=text.TextBoxStyle(
-                font=APPEARANCE_FONT,
+                font=opentype.GlyphAccumulatorFactory(FONT),
                 font_size=7,
                 leading=9,
                 text_color=(0.10, 0.16, 0.28),
