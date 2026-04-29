@@ -15,16 +15,18 @@ from pyhanko.sign.fields import enumerate_sig_fields
 from pyhanko.sign.signers import cms_embedder, pdf_byterange
 
 STAMP_MARGIN = 24
-STAMP_WIDTH = 190
-STAMP_HEIGHT = 82
-STAMP_GAP = 10
+STAMP_WIDTH = 170
+STAMP_HEIGHT = 72
+STAMP_GAP = 8
+STAMP_ROW_GAP = 10
 MAX_SIGNATURES = 4
+MAX_STAMPS_PER_ROW = 3
 BYTES_RESERVED = 16000
 FONT = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
 APPEARANCE_LAYOUT = layout.SimpleBoxLayoutRule(
     x_align=layout.AxisAlignment.ALIGN_MIN,
     y_align=layout.AxisAlignment.ALIGN_MID,
-    margins=layout.Margins(left=8, right=8, top=8, bottom=8),
+    margins=layout.Margins(left=7, right=7, top=7, bottom=7),
 )
 
 
@@ -58,9 +60,9 @@ def build_metadata(signer):
         'name': name,
         'issuer': issuer,
         'cert_id': cert_id,
-        'appearance_name': ellipsize(name, 24),
-        'appearance_issuer': ellipsize(issuer, 22),
-        'appearance_cert_id': ellipsize(cert_id, 24),
+        'appearance_name': ellipsize(name, 20),
+        'appearance_issuer': ellipsize(issuer, 18),
+        'appearance_cert_id': ellipsize(cert_id, 20),
         'reason': f'Выдан: {issuer}',
         'contact_info': f'Cert ID: {cert_id}',
     }
@@ -70,9 +72,13 @@ def compute_box(writer, existing_count):
     page = writer.root['/Pages']['/Kids'][0].get_object()
     media = page['/MediaBox']
     width = float(media[2]) - float(media[0])
-    right = width - STAMP_MARGIN - (STAMP_WIDTH + STAMP_GAP) * existing_count
+    column = existing_count % MAX_STAMPS_PER_ROW
+    row = existing_count // MAX_STAMPS_PER_ROW
+    right = width - STAMP_MARGIN - (STAMP_WIDTH + STAMP_GAP) * column
     left = right - STAMP_WIDTH
-    return int(left), STAMP_MARGIN, int(right), STAMP_MARGIN + STAMP_HEIGHT
+    bottom = STAMP_MARGIN + (STAMP_HEIGHT + STAMP_ROW_GAP) * row
+    top = bottom + STAMP_HEIGHT
+    return int(left), int(bottom), int(right), int(top)
 
 
 def main():
@@ -102,11 +108,11 @@ def main():
         style = stamp.TextStampStyle(
             border_width=1,
             border_color=(0.22, 0.44, 0.80),
-            stamp_text='ПОДПИСАНО ЭЛЕКТРОННО\nПодписант: %(signer)s\nВыдан: %(issuer)s\nID: %(cert_id)s',
+            stamp_text='ПОДПИСАНО\nФИО: %(signer)s\nУЦ: %(issuer)s\nID: %(cert_id)s',
             text_box_style=text.TextBoxStyle(
                 font=opentype.GlyphAccumulatorFactory(FONT),
-                font_size=7,
-                leading=9,
+                font_size=6.5,
+                leading=8,
                 text_color=(0.10, 0.16, 0.28),
             ),
             inner_content_layout=APPEARANCE_LAYOUT,
