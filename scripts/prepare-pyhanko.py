@@ -15,9 +15,9 @@ from pyhanko.sign.fields import enumerate_sig_fields
 from pyhanko.sign.signers import cms_embedder, pdf_byterange
 
 STAMP_MARGIN = 24
-STAMP_WIDTH = 170
-STAMP_HEIGHT = 72
-STAMP_GAP = 8
+STAMP_WIDTH = 174
+STAMP_HEIGHT = 76
+STAMP_GAP = 6
 STAMP_ROW_GAP = 10
 MAX_SIGNATURES = 4
 MAX_STAMPS_PER_ROW = 3
@@ -26,7 +26,7 @@ FONT = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
 APPEARANCE_LAYOUT = layout.SimpleBoxLayoutRule(
     x_align=layout.AxisAlignment.ALIGN_MIN,
     y_align=layout.AxisAlignment.ALIGN_MID,
-    margins=layout.Margins(left=7, right=7, top=7, bottom=7),
+    margins=layout.Margins(left=8, right=8, top=8, bottom=8),
 )
 
 
@@ -60,9 +60,9 @@ def build_metadata(signer):
         'name': name,
         'issuer': issuer,
         'cert_id': cert_id,
-        'appearance_name': ellipsize(name, 20),
-        'appearance_issuer': ellipsize(issuer, 18),
-        'appearance_cert_id': ellipsize(cert_id, 20),
+        'appearance_name': ellipsize(name, 21),
+        'appearance_issuer': ellipsize(issuer, 19),
+        'appearance_cert_id': ellipsize(cert_id, 22),
         'reason': f'Выдан: {issuer}',
         'contact_info': f'Cert ID: {cert_id}',
     }
@@ -107,13 +107,13 @@ def main():
 
         style = stamp.TextStampStyle(
             border_width=1,
-            border_color=(0.22, 0.44, 0.80),
-            stamp_text='ПОДПИСАНО\nФИО: %(signer)s\nУЦ: %(issuer)s\nID: %(cert_id)s',
+            border_color=(0.25, 0.46, 0.82),
+            stamp_text='ЭЛЕКТРОННАЯ ПОДПИСЬ\nФИО: %(signer)s\nУЦ: %(issuer)s\nID: %(cert_id)s',
             text_box_style=text.TextBoxStyle(
                 font=opentype.GlyphAccumulatorFactory(FONT),
-                font_size=6.5,
+                font_size=6.2,
                 leading=8,
-                text_color=(0.10, 0.16, 0.28),
+                text_color=(0.09, 0.15, 0.26),
             ),
             inner_content_layout=APPEARANCE_LAYOUT,
         )
