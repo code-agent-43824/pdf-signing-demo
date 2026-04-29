@@ -17,7 +17,7 @@ from pyhanko.sign.signers import cms_embedder, pdf_byterange
 
 STAMP_MARGIN = 24
 STAMP_WIDTH = 176
-STAMP_HEIGHT = 72
+STAMP_HEIGHT = 82
 STAMP_GAP = 5
 STAMP_ROW_GAP = 10
 MAX_SIGNATURES = 4
@@ -51,11 +51,6 @@ def extract_dn_field(dn, field_name):
     return ''
 
 
-def ellipsize(value, limit):
-    value = str(value or '')
-    return value if len(value) <= limit else f"{value[:limit - 1]}…"
-
-
 def build_metadata(signer):
     name = normalize(extract_dn_field(signer.get('subjectName'), 'CN') or signer.get('subjectName'), 'Подписант')
     issuer = normalize(extract_dn_field(signer.get('issuerName'), 'CN') or signer.get('issuerName'), 'не указан')
@@ -64,9 +59,9 @@ def build_metadata(signer):
         'name': name,
         'issuer': issuer,
         'cert_id': cert_id,
-        'appearance_name': ellipsize(name, 18),
-        'appearance_issuer': ellipsize(issuer, 15),
-        'appearance_cert_id': ellipsize(cert_id, 18),
+        'appearance_name': name,
+        'appearance_issuer': issuer,
+        'appearance_cert_id': cert_id,
         'reason': f'Выдан: {issuer}',
         'contact_info': f'Cert ID: {cert_id}',
     }
@@ -95,6 +90,36 @@ def fit_text(draw, value, font, max_width):
     return value if value == original else f'{value}…'
 
 
+def wrap_text_lines(draw, value, font, max_width, max_lines=2, break_anywhere=False):
+    value = str(value or '').strip()
+    if not value:
+        return ['']
+
+    units = list(value) if break_anywhere else value.split()
+    lines = []
+    current = ''
+    index = 0
+
+    while index < len(units):
+        unit = units[index]
+        candidate = f'{current}{unit}' if break_anywhere else f'{current} {unit}'.strip()
+        if not current or draw.textlength(candidate, font=font) <= max_width:
+            current = candidate
+            index += 1
+            continue
+        lines.append(current)
+        current = ''
+        if len(lines) >= max_lines - 1:
+            break
+
+    if index < len(units):
+        remainder = ''.join(units[index:]) if break_anywhere else ' '.join(units[index:])
+        current = f'{current}{remainder}' if break_anywhere else f'{current} {remainder}'.strip()
+
+    lines.append(fit_text(draw, current, font, max_width))
+    return [line for line in lines[:max_lines] if line]
+
+
 def render_stamp_image(metadata):
     width = STAMP_WIDTH * IMAGE_SCALE
     height = STAMP_HEIGHT * IMAGE_SCALE
@@ -109,27 +134,32 @@ def render_stamp_image(metadata):
     draw.line((28, 56, width - 28, 56), fill=accent_color, width=3)
 
     title_font = ImageFont.truetype(TITLE_FONT, 22)
-    label_font = ImageFont.truetype(TITLE_FONT, 16)
-    value_font = ImageFont.truetype(BODY_FONT, 16)
+    label_font = ImageFont.truetype(TITLE_FONT, 15)
+    value_font = ImageFont.truetype(BODY_FONT, 17)
 
     content_left = 28
     content_right = width - 28
-    y = 18
+    y = 16
     draw.text((content_left, y), 'Электронная подпись', font=title_font, fill=text_color)
-    y += 48
+    y += 42
 
     rows = [
-        ('ФИО', metadata['appearance_name']),
-        ('УЦ', metadata['appearance_issuer']),
-        ('ID', metadata['appearance_cert_id']),
+        ('ФИО', metadata['appearance_name'], False),
+        ('УЦ', metadata['appearance_issuer'], False),
+        ('ID', metadata['appearance_cert_id'], True),
     ]
-    for label, raw_value in rows:
+    for label, raw_value, break_anywhere in rows:
         label_text = f'{label}:'
         label_width = draw.textlength(label_text, font=label_font)
-        value = fit_text(draw, raw_value, value_font, max(content_right - content_left - label_width - 12, 40))
+        value_x = content_left + label_width + 10
+        max_width = max(content_right - value_x, 40)
+        lines = wrap_text_lines(draw, raw_value, value_font, max_width, max_lines=2, break_anywhere=break_anywhere)
         draw.text((content_left, y), label_text, font=label_font, fill=text_color)
-        draw.text((content_left + label_width + 12, y), value, font=value_font, fill=text_color)
-        y += 22
+        draw.text((value_x, y - 1), lines[0], font=value_font, fill=text_color)
+        if len(lines) > 1:
+            y += 16
+            draw.text((value_x, y - 1), lines[1], font=value_font, fill=text_color)
+        y += 20
 
     return image
 
