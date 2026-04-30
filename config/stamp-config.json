@@ -1,0 +1,106 @@
+{
+  "appearance": {
+    "width": 176,
+    "height": 108,
+    "imageScale": 4,
+    "backgroundColor": "#F5F8FF",
+    "borderColor": "#3F68B8",
+    "borderWidth": 4,
+    "borderRadius": 18,
+    "textColor": "#1A2842",
+    "separator": {
+      "enabled": true,
+      "y": 56,
+      "left": 28,
+      "right": 28,
+      "color": "#6E87BC",
+      "width": 3
+    },
+    "fonts": {
+      "title": {
+        "path": "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf",
+        "size": 30
+      },
+      "label": {
+        "path": "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf",
+        "size": 27
+      },
+      "value": {
+        "path": "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "size": 27
+      }
+    },
+    "layout": {
+      "contentLeft": 24,
+      "contentRight": 24,
+      "startY": 12,
+      "titleLineHeight": 30,
+      "afterTitleGap": 40,
+      "rowLabelGap": 24,
+      "rowExtraGap": 20,
+      "valueLineHeight": 24,
+      "defaultMaxLines": 2
+    }
+  },
+  "content": {
+    "title": [
+      "Документ подписан",
+      "электронной подписью"
+    ],
+    "rows": [
+      {
+        "label": "ID сертификата",
+        "value": "{signer.cert_id}",
+        "breakAnywhere": true,
+        "maxLines": 2
+      },
+      {
+        "label": "ФИО владельца",
+        "value": "{signer.name}",
+        "maxLines": 2
+      },
+      {
+        "label": "Кем выдан",
+        "value": "{signer.issuer}",
+        "maxLines": 2
+      },
+      {
+        "label": "Срок действия",
+        "value": "{signer.valid_to}",
+        "maxLines": 2
+      }
+    ]
+  },
+  "signatureObject": {
+    "name": "{signer.name}",
+    "reason": "Выдан: {signer.issuer}",
+    "contactInfo": "Cert ID: {signer.cert_id}",
+    "location": "Web UI",
+    "bytesReserved": 16000,
+    "subfilter": "PADES"
+  },
+  "placements": {
+    "rules": [
+      {
+        "name": "default-grid",
+        "pages": {
+          "mode": "single",
+          "page": 1,
+          "widgetPageMode": "first"
+        },
+        "placement": {
+          "mode": "grid",
+          "anchor": "bottom-right",
+          "offsetX": 24,
+          "offsetY": 24,
+          "columns": 3,
+          "stepX": -181,
+          "stepY": 116
+        }
+      }
+    ]
+  },
+  "limits": {
+    "maxSignatures": 4
+  }
+}
