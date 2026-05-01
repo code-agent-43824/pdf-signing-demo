@@ -11,6 +11,9 @@ const publicDir = path.join(__dirname, '..', 'public');
 const assetsDir = path.join(publicDir, 'assets');
 const generatedDir = path.join(publicDir, 'generated');
 const formPdfPath = path.join(assetsDir, FORM_PDF_NAME);
+const stampConfigPath = process.env.STAMP_CONFIG_PATH
+  ? path.resolve(process.env.STAMP_CONFIG_PATH)
+  : path.join(__dirname, '..', 'config', 'stamp-config.json');
 const sessions = createSessionStore({ generatedDir });
 
 fs.mkdirSync(generatedDir, { recursive: true });
@@ -20,7 +23,45 @@ app.get('/health', (_req, res) => {
   res.json({ ok: true, service: 'pdf-signing-demo' });
 });
 
+function readStampConfig() {
+  return fs.readFileSync(stampConfigPath, 'utf8');
+}
+
+function parseStampConfig(raw) {
+  const parsed = JSON.parse(raw);
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('Stamp config must be a JSON object.');
+  }
+  return parsed;
+}
+
 const router = express.Router();
+
+router.get('/api/stamp-config', (_req, res) => {
+  try {
+    const raw = readStampConfig();
+    const config = parseStampConfig(raw);
+    res.json({ ok: true, config, configPath: stampConfigPath });
+  } catch (error) {
+    res.status(500).json({ ok: false, message: error.message });
+  }
+});
+
+router.post('/api/stamp-config', (req, res) => {
+  try {
+    const config = req.body?.config;
+    if (!config || typeof config !== 'object' || Array.isArray(config)) {
+      return res.status(400).json({ ok: false, message: 'config must be a JSON object.' });
+    }
+
+    const serialized = `${JSON.stringify(config, null, 2)}\n`;
+    parseStampConfig(serialized);
+    fs.writeFileSync(stampConfigPath, serialized, 'utf8');
+    return res.json({ ok: true, configPath: stampConfigPath });
+  } catch (error) {
+    return res.status(500).json({ ok: false, message: error.message });
+  }
+});
 
 router.get('/api/form', (_req, res) => {
   const stats = fs.statSync(formPdfPath);

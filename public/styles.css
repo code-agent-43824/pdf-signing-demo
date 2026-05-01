@@ -33,6 +33,11 @@ body {
   gap: 16px;
   align-items: center;
 }
+.hero-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
 .panel {
   margin-top: 24px;
   padding: 22px;
@@ -141,6 +146,26 @@ h1, h2, h3 { margin: 0; }
   padding: 22px;
   box-shadow: 0 30px 80px rgba(15, 23, 42, 0.22);
 }
+.dialog-card-wide {
+  width: min(980px, 100%);
+}
+.dialog-head {
+  margin-bottom: 12px;
+}
+.dialog-subtitle {
+  margin: 6px 0 0;
+}
+.config-editor {
+  width: 100%;
+  min-height: min(70vh, 720px);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 16px;
+  font: 13px/1.5 "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  resize: vertical;
+  background: #fbfcff;
+  color: var(--ink);
+}
 .certificate-select {
   width: 100%;
   margin-top: 16px;
@@ -156,6 +181,6 @@ h1, h2, h3 { margin: 0; }
 }
 .hidden { display: none; }
 @media (max-width: 720px) {
-  .hero, .panel-head, .dialog-actions { flex-direction: column; align-items: stretch; }
+  .hero, .panel-head, .dialog-actions, .hero-actions { flex-direction: column; align-items: stretch; }
   .pdf-frame { min-height: 60vh; }
 }

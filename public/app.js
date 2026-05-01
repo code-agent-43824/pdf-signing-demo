@@ -5,6 +5,8 @@ const state = {
   uploadedPdfBase64: null,
   uploadedPdfName: null,
   uploadedPdfObjectUrl: null,
+  stampConfig: null,
+  stampConfigPath: null,
 };
 
 function setStatus(message) {
@@ -19,16 +21,29 @@ function setUploadState(message) {
   document.getElementById('uploadState').textContent = message;
 }
 
+async function fetchStampConfig() {
+  const response = await fetch('./api/stamp-config');
+  const data = await response.json();
+  if (!response.ok || !data.ok) {
+    throw new Error(data.message || 'Не удалось загрузить конфиг штампа.');
+  }
+  state.stampConfig = data.config;
+  state.stampConfigPath = data.configPath;
+  return data;
+}
+
 function showPdf(url, metaText) {
   document.getElementById('sourcePdf').src = url;
   document.getElementById('docMeta').textContent = metaText;
 }
 
 async function boot() {
-  const response = await fetch('./api/form');
-  const data = await response.json();
-  state.defaultPdfUrl = data.pdfUrl;
-  showPdf(data.pdfUrl, `${Math.round(data.size / 1024)} KB`);
+  const [formResponse, _stampConfig] = await Promise.all([
+    fetch('./api/form').then((response) => response.json()),
+    fetchStampConfig(),
+  ]);
+  state.defaultPdfUrl = formResponse.pdfUrl;
+  showPdf(formResponse.pdfUrl, `${Math.round(formResponse.size / 1024)} KB`);
   setUploadState('Сейчас используется тестовый PDF с сервера.');
   await initCryptoPro();
 }
@@ -154,6 +169,60 @@ function openCertificateDialog(certificates) {
     });
 
     document.body.appendChild(backdrop);
+  });
+}
+
+function openStampSettingsDialog() {
+  return new Promise((resolve, reject) => {
+    const fragment = document.getElementById('stampSettingsDialogTemplate').content.cloneNode(true);
+    const backdrop = fragment.querySelector('.dialog-backdrop');
+    const editor = fragment.querySelector('#stampConfigEditor');
+    const configPath = fragment.querySelector('#stampConfigPath');
+    const save = fragment.querySelector('#saveStampSettings');
+    const cancel = fragment.querySelector('#cancelStampSettings');
+
+    editor.value = JSON.stringify(state.stampConfig || {}, null, 2);
+    configPath.textContent = state.stampConfigPath || '';
+
+    const close = () => backdrop.remove();
+
+    cancel.addEventListener('click', () => {
+      close();
+      reject(new Error('Настройка штампа отменена.'));
+    });
+
+    backdrop.addEventListener('click', (event) => {
+      if (event.target === backdrop) {
+        close();
+        reject(new Error('Настройка штампа отменена.'));
+      }
+    });
+
+    save.addEventListener('click', async () => {
+      save.disabled = true;
+      try {
+        const parsed = JSON.parse(editor.value);
+        const response = await fetch('./api/stamp-config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ config: parsed }),
+        });
+        const data = await response.json();
+        if (!response.ok || !data.ok) {
+          throw new Error(data.message || 'Не удалось сохранить конфиг штампа.');
+        }
+        state.stampConfig = parsed;
+        state.stampConfigPath = data.configPath || state.stampConfigPath;
+        close();
+        resolve();
+      } catch (error) {
+        save.disabled = false;
+        setStatus(`Ошибка настройки штампа: ${error.message}`);
+      }
+    });
+
+    document.body.appendChild(backdrop);
+    editor.focus();
   });
 }
 
@@ -310,6 +379,22 @@ document.getElementById('signButton').addEventListener('click', async () => {
   } catch (error) {
     const details = window.cadesplugin?.getLastError ? window.cadesplugin.getLastError(error) : error.message;
     setStatus(`Ошибка: ${details}`);
+  } finally {
+    button.disabled = false;
+  }
+});
+
+document.getElementById('stampSettingsButton').addEventListener('click', async () => {
+  const button = document.getElementById('stampSettingsButton');
+  button.disabled = true;
+  try {
+    await fetchStampConfig();
+    await openStampSettingsDialog();
+    setStatus('Конфиг штампа сохранён. Следующая подготовка PDF возьмёт новые параметры.');
+  } catch (error) {
+    if (!String(error.message || '').includes('отменена')) {
+      setStatus(`Ошибка: ${error.message}`);
+    }
   } finally {
     button.disabled = false;
   }

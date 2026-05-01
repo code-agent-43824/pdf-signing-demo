@@ -17,7 +17,10 @@
             Сервер показывает PDF-формуляр, подготавливает его под PAdES и ждёт CMS detached подпись от CryptoPro Browser Plugin.
           </p>
         </div>
-        <button id="signButton" class="primary">Подписать формуляр</button>
+        <div class="hero-actions">
+          <button id="stampSettingsButton" class="secondary" type="button">Настроить штампы</button>
+          <button id="signButton" class="primary">Подписать формуляр</button>
+        </div>
       </header>
 
       <section class="panel status-panel">
@@ -66,6 +69,25 @@
           <div class="dialog-actions">
             <button id="cancelCertificate" class="secondary">Отмена</button>
             <button id="confirmCertificate" class="primary">Подписать этим сертификатом</button>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <template id="stampSettingsDialogTemplate">
+      <div class="dialog-backdrop">
+        <div class="dialog-card dialog-card-wide">
+          <div class="panel-head dialog-head">
+            <div>
+              <h3>Настройка штампов</h3>
+              <p class="muted dialog-subtitle">Можно отредактировать весь JSON-конфиг штампа, размещения и метаданных подписи.</p>
+            </div>
+            <span id="stampConfigPath" class="muted"></span>
+          </div>
+          <textarea id="stampConfigEditor" class="config-editor" spellcheck="false"></textarea>
+          <div class="dialog-actions">
+            <button id="cancelStampSettings" class="secondary" type="button">Закрыть</button>
+            <button id="saveStampSettings" class="primary" type="button">Сохранить конфиг</button>
           </div>
         </div>
       </div>
