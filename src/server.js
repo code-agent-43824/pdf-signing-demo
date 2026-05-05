@@ -15,6 +15,12 @@ const stampConfigPath = process.env.STAMP_CONFIG_PATH
   ? path.resolve(process.env.STAMP_CONFIG_PATH)
   : path.join(__dirname, '..', 'config', 'stamp-config.json');
 const sessions = createSessionStore({ generatedDir });
+const FONT_DIRS = [
+  '/usr/share/fonts',
+  '/usr/local/share/fonts',
+  path.join(process.env.HOME || '', '.fonts'),
+  path.join(process.env.HOME || '', '.local', 'share', 'fonts'),
+].filter(Boolean);
 
 fs.mkdirSync(generatedDir, { recursive: true });
 app.use(express.json({ limit: '20mb' }));
@@ -35,6 +41,34 @@ function parseStampConfig(raw) {
   return parsed;
 }
 
+function collectFontFiles(dirPath, result = []) {
+  if (!dirPath || !fs.existsSync(dirPath)) {
+    return result;
+  }
+
+  for (const entry of fs.readdirSync(dirPath, { withFileTypes: true })) {
+    const fullPath = path.join(dirPath, entry.name);
+    if (entry.isDirectory()) {
+      collectFontFiles(fullPath, result);
+      continue;
+    }
+    if (/\.(ttf|otf|ttc)$/i.test(entry.name)) {
+      result.push(fullPath);
+    }
+  }
+
+  return result;
+}
+
+function listAvailableFonts() {
+  return Array.from(new Set(FONT_DIRS.flatMap((dir) => collectFontFiles(dir))))
+    .sort((left, right) => left.localeCompare(right, 'ru'))
+    .map((fontPath) => ({
+      path: fontPath,
+      label: path.basename(fontPath).replace(/\.(ttf|otf|ttc)$/i, ''),
+    }));
+}
+
 const router = express.Router();
 
 router.get('/api/stamp-config', (_req, res) => {
@@ -42,6 +76,14 @@ router.get('/api/stamp-config', (_req, res) => {
     const raw = readStampConfig();
     const config = parseStampConfig(raw);
     res.json({ ok: true, config, configPath: stampConfigPath });
+  } catch (error) {
+    res.status(500).json({ ok: false, message: error.message });
+  }
+});
+
+router.get('/api/fonts', (_req, res) => {
+  try {
+    res.json({ ok: true, fonts: listAvailableFonts() });
   } catch (error) {
     res.status(500).json({ ok: false, message: error.message });
   }

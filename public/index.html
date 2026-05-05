@@ -80,11 +80,289 @@
           <div class="panel-head dialog-head">
             <div>
               <h3>Настройка штампов</h3>
-              <p class="muted dialog-subtitle">Можно отредактировать весь JSON-конфиг штампа, размещения и метаданных подписи.</p>
+              <p class="muted dialog-subtitle">На основной вкладке — визуальные настройки, на второй — полный JSON-конфиг без ограничений.</p>
             </div>
             <span id="stampConfigPath" class="muted"></span>
           </div>
-          <textarea id="stampConfigEditor" class="config-editor" spellcheck="false"></textarea>
+          <div class="settings-tabs" role="tablist" aria-label="Вкладки настроек штампа">
+            <button id="stampTabVisual" class="settings-tab is-active" type="button" role="tab" aria-selected="true">Основная</button>
+            <button id="stampTabJson" class="settings-tab" type="button" role="tab" aria-selected="false">JSON</button>
+          </div>
+          <div id="stampVisualPanel" class="settings-panel" role="tabpanel">
+            <div class="settings-grid">
+              <section class="settings-section">
+                <h4>Внешний вид</h4>
+                <div class="form-grid form-grid-compact">
+                  <label class="field">
+                    <span>Ширина</span>
+                    <input id="appearanceWidth" type="number" min="80" max="1200" step="1" />
+                  </label>
+                  <label class="field">
+                    <span>Высота</span>
+                    <input id="appearanceHeight" type="number" min="40" max="1200" step="1" />
+                  </label>
+                  <label class="field">
+                    <span>Масштаб</span>
+                    <div class="range-with-value">
+                      <input id="appearanceImageScale" type="range" min="1" max="8" step="1" />
+                      <output id="appearanceImageScaleValue"></output>
+                    </div>
+                  </label>
+                  <label class="field">
+                    <span>Толщина рамки</span>
+                    <div class="range-with-value">
+                      <input id="appearanceBorderWidth" type="range" min="0" max="16" step="1" />
+                      <output id="appearanceBorderWidthValue"></output>
+                    </div>
+                  </label>
+                  <label class="field">
+                    <span>Скругление</span>
+                    <div class="range-with-value">
+                      <input id="appearanceBorderRadius" type="range" min="0" max="48" step="1" />
+                      <output id="appearanceBorderRadiusValue"></output>
+                    </div>
+                  </label>
+                  <label class="field">
+                    <span>Фон</span>
+                    <div class="color-field">
+                      <input id="appearanceBackgroundColor" type="color" />
+                      <input id="appearanceBackgroundColorText" type="text" />
+                    </div>
+                  </label>
+                  <label class="field">
+                    <span>Цвет рамки</span>
+                    <div class="color-field">
+                      <input id="appearanceBorderColor" type="color" />
+                      <input id="appearanceBorderColorText" type="text" />
+                    </div>
+                  </label>
+                  <label class="field">
+                    <span>Цвет текста</span>
+                    <div class="color-field">
+                      <input id="appearanceTextColor" type="color" />
+                      <input id="appearanceTextColorText" type="text" />
+                    </div>
+                  </label>
+                </div>
+              </section>
+
+              <section class="settings-section">
+                <h4>Разделитель</h4>
+                <div class="form-grid form-grid-compact">
+                  <label class="field field-checkbox">
+                    <input id="separatorEnabled" type="checkbox" />
+                    <span>Показывать разделитель</span>
+                  </label>
+                  <label class="field">
+                    <span>Позиция Y</span>
+                    <input id="separatorY" type="number" min="0" max="1200" step="1" />
+                  </label>
+                  <label class="field">
+                    <span>Отступ слева</span>
+                    <input id="separatorLeft" type="number" min="0" max="1200" step="1" />
+                  </label>
+                  <label class="field">
+                    <span>Отступ справа</span>
+                    <input id="separatorRight" type="number" min="0" max="1200" step="1" />
+                  </label>
+                  <label class="field">
+                    <span>Толщина</span>
+                    <div class="range-with-value">
+                      <input id="separatorWidth" type="range" min="1" max="12" step="1" />
+                      <output id="separatorWidthValue"></output>
+                    </div>
+                  </label>
+                  <label class="field">
+                    <span>Цвет</span>
+                    <div class="color-field">
+                      <input id="separatorColor" type="color" />
+                      <input id="separatorColorText" type="text" />
+                    </div>
+                  </label>
+                </div>
+              </section>
+
+              <section class="settings-section">
+                <h4>Шрифты</h4>
+                <div class="fonts-grid">
+                  <div class="font-card">
+                    <h5>Заголовок</h5>
+                    <label class="field">
+                      <span>Шрифт</span>
+                      <select id="fontTitlePath"></select>
+                    </label>
+                    <label class="field">
+                      <span>Размер</span>
+                      <div class="range-with-value">
+                        <input id="fontTitleSize" type="range" min="8" max="72" step="1" />
+                        <output id="fontTitleSizeValue"></output>
+                      </div>
+                    </label>
+                  </div>
+                  <div class="font-card">
+                    <h5>Подписи полей</h5>
+                    <label class="field">
+                      <span>Шрифт</span>
+                      <select id="fontLabelPath"></select>
+                    </label>
+                    <label class="field">
+                      <span>Размер</span>
+                      <div class="range-with-value">
+                        <input id="fontLabelSize" type="range" min="8" max="72" step="1" />
+                        <output id="fontLabelSizeValue"></output>
+                      </div>
+                    </label>
+                  </div>
+                  <div class="font-card">
+                    <h5>Значения</h5>
+                    <label class="field">
+                      <span>Шрифт</span>
+                      <select id="fontValuePath"></select>
+                    </label>
+                    <label class="field">
+                      <span>Размер</span>
+                      <div class="range-with-value">
+                        <input id="fontValueSize" type="range" min="8" max="72" step="1" />
+                        <output id="fontValueSizeValue"></output>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+              </section>
+
+              <section class="settings-section">
+                <h4>Текст и строки</h4>
+                <label class="field">
+                  <span>Заголовок штампа (по строке на строку)</span>
+                  <textarea id="contentTitle" rows="3"></textarea>
+                </label>
+                <div class="panel-head rows-head">
+                  <h5>Строки штампа</h5>
+                  <button id="addStampRow" class="secondary" type="button">Добавить строку</button>
+                </div>
+                <div id="stampRowsEditor" class="rows-editor"></div>
+              </section>
+
+              <section class="settings-section">
+                <h4>Метаданные подписи</h4>
+                <div class="form-grid">
+                  <label class="field">
+                    <span>Name</span>
+                    <input id="signatureName" type="text" />
+                  </label>
+                  <label class="field">
+                    <span>Reason</span>
+                    <input id="signatureReason" type="text" />
+                  </label>
+                  <label class="field">
+                    <span>Contact info</span>
+                    <input id="signatureContactInfo" type="text" />
+                  </label>
+                  <label class="field">
+                    <span>Location</span>
+                    <input id="signatureLocation" type="text" />
+                  </label>
+                  <label class="field">
+                    <span>Резерв байт под подпись</span>
+                    <input id="signatureBytesReserved" type="number" min="4096" max="262144" step="256" />
+                  </label>
+                  <label class="field">
+                    <span>Subfilter</span>
+                    <select id="signatureSubfilter">
+                      <option value="PADES">PADES</option>
+                      <option value="adbe.pkcs7.detached">adbe.pkcs7.detached</option>
+                    </select>
+                  </label>
+                </div>
+              </section>
+
+              <section class="settings-section">
+                <h4>Размещение</h4>
+                <div class="form-grid">
+                  <label class="field">
+                    <span>Название правила</span>
+                    <input id="placementRuleName" type="text" />
+                  </label>
+                  <label class="field">
+                    <span>Режим страниц</span>
+                    <select id="placementPagesMode">
+                      <option value="single">single</option>
+                      <option value="all">all</option>
+                    </select>
+                  </label>
+                  <label class="field">
+                    <span>Номер страницы</span>
+                    <input id="placementPage" type="number" min="1" max="9999" step="1" />
+                  </label>
+                  <label class="field">
+                    <span>Режим widgetPage</span>
+                    <select id="placementWidgetPageMode">
+                      <option value="first">first</option>
+                      <option value="same">same</option>
+                      <option value="last">last</option>
+                    </select>
+                  </label>
+                  <label class="field">
+                    <span>Режим размещения</span>
+                    <select id="placementMode">
+                      <option value="grid">grid</option>
+                    </select>
+                  </label>
+                  <label class="field">
+                    <span>Якорь</span>
+                    <select id="placementAnchor">
+                      <option value="bottom-right">bottom-right</option>
+                      <option value="bottom-left">bottom-left</option>
+                      <option value="top-right">top-right</option>
+                      <option value="top-left">top-left</option>
+                    </select>
+                  </label>
+                  <label class="field">
+                    <span>Offset X</span>
+                    <input id="placementOffsetX" type="number" min="-2000" max="2000" step="1" />
+                  </label>
+                  <label class="field">
+                    <span>Offset Y</span>
+                    <input id="placementOffsetY" type="number" min="-2000" max="2000" step="1" />
+                  </label>
+                  <label class="field">
+                    <span>Колонки</span>
+                    <input id="placementColumns" type="number" min="1" max="20" step="1" />
+                  </label>
+                  <label class="field">
+                    <span>Шаг X</span>
+                    <input id="placementStepX" type="number" min="-2000" max="2000" step="1" />
+                  </label>
+                  <label class="field">
+                    <span>Шаг Y</span>
+                    <input id="placementStepY" type="number" min="-2000" max="2000" step="1" />
+                  </label>
+                  <label class="field">
+                    <span>Макс. подписей</span>
+                    <input id="limitsMaxSignatures" type="number" min="1" max="100" step="1" />
+                  </label>
+                </div>
+              </section>
+
+              <section class="settings-section">
+                <h4>Внутренние отступы и сетка</h4>
+                <div class="form-grid form-grid-compact">
+                  <label class="field"><span>contentLeft</span><input id="layoutContentLeft" type="number" min="0" max="1200" step="1" /></label>
+                  <label class="field"><span>contentRight</span><input id="layoutContentRight" type="number" min="0" max="1200" step="1" /></label>
+                  <label class="field"><span>startY</span><input id="layoutStartY" type="number" min="0" max="1200" step="1" /></label>
+                  <label class="field"><span>titleLineHeight</span><input id="layoutTitleLineHeight" type="number" min="0" max="1200" step="1" /></label>
+                  <label class="field"><span>afterTitleGap</span><input id="layoutAfterTitleGap" type="number" min="0" max="1200" step="1" /></label>
+                  <label class="field"><span>rowLabelGap</span><input id="layoutRowLabelGap" type="number" min="0" max="1200" step="1" /></label>
+                  <label class="field"><span>rowExtraGap</span><input id="layoutRowExtraGap" type="number" min="0" max="1200" step="1" /></label>
+                  <label class="field"><span>valueLineHeight</span><input id="layoutValueLineHeight" type="number" min="0" max="1200" step="1" /></label>
+                  <label class="field"><span>defaultMaxLines</span><input id="layoutDefaultMaxLines" type="number" min="1" max="20" step="1" /></label>
+                </div>
+              </section>
+            </div>
+          </div>
+          <div id="stampJsonPanel" class="settings-panel hidden" role="tabpanel">
+            <textarea id="stampConfigEditor" class="config-editor" spellcheck="false"></textarea>
+          </div>
           <div class="dialog-actions">
             <button id="cancelStampSettings" class="secondary" type="button">Закрыть</button>
             <button id="saveStampSettings" class="primary" type="button">Сохранить конфиг</button>
