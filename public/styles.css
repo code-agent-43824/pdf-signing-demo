@@ -340,11 +340,32 @@ h1, h2, h3 { margin: 0; }
   align-items: center;
   gap: 10px;
 }
+.field-checkbox-compact {
+  align-self: start;
+}
 .field-checkbox input {
   width: auto;
 }
 .field-checkbox span {
   color: var(--ink);
+}
+.settings-help {
+  margin: -4px 0 14px;
+}
+.section-head-tight {
+  align-items: start;
+}
+.settings-section-muted {
+  background: #f8faff;
+}
+.settings-section fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+.settings-section fieldset[disabled] {
+  opacity: 0.58;
 }
 .range-with-value {
   display: grid;
@@ -386,6 +407,11 @@ h1, h2, h3 { margin: 0; }
   display: grid;
   gap: 12px;
 }
+.row-value-grid {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: 10px;
+}
 .row-card {
   border: 1px solid var(--line);
   border-radius: 14px;
@@ -407,6 +433,36 @@ h1, h2, h3 { margin: 0; }
 .row-card-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.signature-overrides-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.signature-override-card {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+}
+.signature-override-card.is-disabled .signature-override-body {
+  opacity: 0.58;
+}
+.signature-override-head {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.signature-override-title {
+  font-size: 14px;
+  font-weight: 700;
+}
+.signature-override-body {
+  display: grid;
   gap: 12px;
 }
 .config-editor {
@@ -442,6 +498,8 @@ h1, h2, h3 { margin: 0; }
   .form-grid,
   .form-grid-compact,
   .fonts-grid,
+  .row-value-grid,
+  .signature-overrides-grid,
   .row-card-grid,
   .preview-layout,
   .stamp-settings-layout { grid-template-columns: 1fr; }

@@ -246,40 +246,8 @@
                   </section>
 
                   <section class="settings-section">
-                    <h4>Метаданные подписи</h4>
-                    <div class="form-grid">
-                      <label class="field">
-                        <span>Name</span>
-                        <input id="signatureName" type="text" />
-                      </label>
-                      <label class="field">
-                        <span>Reason</span>
-                        <input id="signatureReason" type="text" />
-                      </label>
-                      <label class="field">
-                        <span>Contact info</span>
-                        <input id="signatureContactInfo" type="text" />
-                      </label>
-                      <label class="field">
-                        <span>Location</span>
-                        <input id="signatureLocation" type="text" />
-                      </label>
-                      <label class="field">
-                        <span>Резерв байт под подпись</span>
-                        <input id="signatureBytesReserved" type="number" min="4096" max="262144" step="256" />
-                      </label>
-                      <label class="field">
-                        <span>Subfilter</span>
-                        <select id="signatureSubfilter">
-                          <option value="PADES">PADES</option>
-                          <option value="adbe.pkcs7.detached">adbe.pkcs7.detached</option>
-                        </select>
-                      </label>
-                    </div>
-                  </section>
-
-                  <section class="settings-section">
                     <h4>Размещение</h4>
+                    <p class="muted settings-help">Сейчас 2-я, 3-я и 4-я подписи по умолчанию вычисляются автоматически из общей сетки: anchor + offset + columns + stepX/stepY.</p>
                     <div class="form-grid">
                       <label class="field">
                         <span>Название правила</span>
@@ -347,6 +315,16 @@
                   </section>
 
                   <section class="settings-section">
+                    <div class="panel-head section-head-tight">
+                      <div>
+                        <h4>Индивидуальные позиции подписей 1–4</h4>
+                        <p class="muted dialog-subtitle">Если включить override, для выбранной подписи будет использована своя позиция вместо общей сетки.</p>
+                      </div>
+                    </div>
+                    <div id="signatureOverridesEditor" class="signature-overrides-grid"></div>
+                  </section>
+
+                  <section class="settings-section">
                     <h4>Внутренние отступы и сетка</h4>
                     <div class="form-grid form-grid-compact">
                       <label class="field"><span>contentLeft</span><input id="layoutContentLeft" type="number" min="0" max="1200" step="1" /></label>
@@ -359,6 +337,50 @@
                       <label class="field"><span>valueLineHeight</span><input id="layoutValueLineHeight" type="number" min="0" max="1200" step="1" /></label>
                       <label class="field"><span>defaultMaxLines</span><input id="layoutDefaultMaxLines" type="number" min="1" max="20" step="1" /></label>
                     </div>
+                  </section>
+
+                  <section class="settings-section settings-section-muted">
+                    <div class="panel-head section-head-tight">
+                      <div>
+                        <h4>Метаданные подписи</h4>
+                        <p class="muted dialog-subtitle">Технический блок. По умолчанию заблокирован, чтобы его случайно не испортили.</p>
+                      </div>
+                      <label class="field field-checkbox field-checkbox-compact">
+                        <input id="signatureMetadataEnabled" type="checkbox" />
+                        <span>Разблокировать</span>
+                      </label>
+                    </div>
+                    <fieldset id="signatureMetadataFieldset" disabled>
+                      <div class="form-grid">
+                        <label class="field">
+                          <span>Name</span>
+                          <input id="signatureName" type="text" />
+                        </label>
+                        <label class="field">
+                          <span>Reason</span>
+                          <input id="signatureReason" type="text" />
+                        </label>
+                        <label class="field">
+                          <span>Contact info</span>
+                          <input id="signatureContactInfo" type="text" />
+                        </label>
+                        <label class="field">
+                          <span>Location</span>
+                          <input id="signatureLocation" type="text" />
+                        </label>
+                        <label class="field">
+                          <span>Резерв байт под подпись</span>
+                          <input id="signatureBytesReserved" type="number" min="4096" max="262144" step="256" />
+                        </label>
+                        <label class="field">
+                          <span>Subfilter</span>
+                          <select id="signatureSubfilter">
+                            <option value="PADES">PADES</option>
+                            <option value="adbe.pkcs7.detached">adbe.pkcs7.detached</option>
+                          </select>
+                        </label>
+                      </div>
+                    </fieldset>
                   </section>
                 </div>
               </div>

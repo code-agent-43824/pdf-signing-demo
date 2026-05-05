@@ -10,6 +10,17 @@ const state = {
   availableFonts: [],
 };
 
+const TEMPLATE_TOKEN_OPTIONS = [
+  { value: '{signer.cert_id}', label: 'ID сертификата' },
+  { value: '{signer.name}', label: 'ФИО владельца' },
+  { value: '{signer.issuer}', label: 'Кем выдан' },
+  { value: '{signer.valid_to}', label: 'Срок действия' },
+  { value: '{signer.subject_dn}', label: 'Subject DN' },
+  { value: '{signer.issuer_dn}', label: 'Issuer DN' },
+  { value: '{signer.thumbprint}', label: 'Thumbprint' },
+  { value: '{signer.serial_number}', label: 'Serial number' },
+];
+
 function setStatus(message) {
   document.getElementById('statusLog').textContent = message;
 }
@@ -266,11 +277,89 @@ function fillFontSelect(select, currentPath) {
   }
 }
 
+function renderTokenOptions(selectedValue) {
+  const normalized = String(selectedValue || '');
+  const known = TEMPLATE_TOKEN_OPTIONS.some((option) => option.value === normalized);
+  const current = known ? normalized : '__custom__';
+  return [
+    `<option value="__custom__" ${current === '__custom__' ? 'selected' : ''}>Свое значение…</option>`,
+    ...TEMPLATE_TOKEN_OPTIONS.map((option) => `<option value="${escapeHtml(option.value)}" ${current === option.value ? 'selected' : ''}>${escapeHtml(option.label)}</option>`),
+  ].join('');
+}
+
+function getDefaultPlacementRule(config) {
+  const rules = config?.placements?.rules || [];
+  return rules.find((rule) => !rule.match || Object.keys(rule.match).length === 0) || rules[0] || {};
+}
+
+function getSignatureOverrideRule(config, signatureIndex) {
+  const rules = config?.placements?.rules || [];
+  return rules.find((rule) => Number(rule?.match?.signatureIndex) === signatureIndex) || null;
+}
+
+function renderSignatureOverrides(root, config) {
+  const container = root.querySelector('#signatureOverridesEditor');
+  container.innerHTML = '';
+  const defaultRule = getDefaultPlacementRule(config);
+
+  for (let signatureIndex = 1; signatureIndex <= 4; signatureIndex += 1) {
+    const overrideRule = getSignatureOverrideRule(config, signatureIndex);
+    const placement = overrideRule?.placement || {};
+    const enabled = Boolean(overrideRule);
+    const anchor = placement.anchor || defaultRule?.placement?.anchor || 'bottom-right';
+    const offsetX = Number(placement.offsetX ?? defaultRule?.placement?.offsetX ?? 24);
+    const offsetY = Number(placement.offsetY ?? defaultRule?.placement?.offsetY ?? 24);
+
+    const card = document.createElement('div');
+    card.className = `signature-override-card ${enabled ? '' : 'is-disabled'}`.trim();
+    card.innerHTML = `
+      <div class="signature-override-head">
+        <div>
+          <div class="signature-override-title">Подпись ${signatureIndex}</div>
+          <div class="muted">Override поверх общей сетки</div>
+        </div>
+        <label class="field field-checkbox field-checkbox-compact">
+          <input type="checkbox" data-override-enabled="${signatureIndex}" ${enabled ? 'checked' : ''} />
+          <span>Своя позиция</span>
+        </label>
+      </div>
+      <div class="signature-override-body">
+        <div class="form-grid">
+          <label class="field">
+            <span>Якорь</span>
+            <select data-override-anchor="${signatureIndex}" ${enabled ? '' : 'disabled'}>
+              <option value="bottom-right" ${anchor === 'bottom-right' ? 'selected' : ''}>bottom-right</option>
+              <option value="bottom-left" ${anchor === 'bottom-left' ? 'selected' : ''}>bottom-left</option>
+              <option value="top-right" ${anchor === 'top-right' ? 'selected' : ''}>top-right</option>
+              <option value="top-left" ${anchor === 'top-left' ? 'selected' : ''}>top-left</option>
+              <option value="bottom-center" ${anchor === 'bottom-center' ? 'selected' : ''}>bottom-center</option>
+              <option value="top-center" ${anchor === 'top-center' ? 'selected' : ''}>top-center</option>
+              <option value="center" ${anchor === 'center' ? 'selected' : ''}>center</option>
+              <option value="middle-left" ${anchor === 'middle-left' ? 'selected' : ''}>middle-left</option>
+              <option value="middle-right" ${anchor === 'middle-right' ? 'selected' : ''}>middle-right</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Offset X</span>
+            <input data-override-offset-x="${signatureIndex}" type="number" min="-2000" max="2000" step="1" value="${offsetX}" ${enabled ? '' : 'disabled'} />
+          </label>
+          <label class="field">
+            <span>Offset Y</span>
+            <input data-override-offset-y="${signatureIndex}" type="number" min="-2000" max="2000" step="1" value="${offsetY}" ${enabled ? '' : 'disabled'} />
+          </label>
+        </div>
+      </div>
+    `;
+    container.appendChild(card);
+  }
+}
+
 function renderStampRows(root, rows) {
   const container = root.querySelector('#stampRowsEditor');
   container.innerHTML = '';
 
   rows.forEach((row, index) => {
+    const value = String(row.value || '');
     const card = document.createElement('div');
     card.className = 'row-card';
     card.innerHTML = `
@@ -285,7 +374,10 @@ function renderStampRows(root, rows) {
         </label>
         <label class="field">
           <span>Value</span>
-          <input type="text" data-field="value" value="${escapeHtml(row.value || '')}" />
+          <div class="row-value-grid">
+            <select data-field="valueTemplate">${renderTokenOptions(value)}</select>
+            <input type="text" data-field="value" value="${escapeHtml(value)}" />
+          </div>
         </label>
         <label class="field">
           <span>Max lines</span>
@@ -338,7 +430,7 @@ function updateStampPreview(root, config) {
     return;
   }
 
-  const rule = draft.placements.rules[0] || { pages: {}, placement: {} };
+  const rule = getDefaultPlacementRule(draft) || { pages: {}, placement: {} };
   const appearance = draft.appearance || {};
   const layout = appearance.layout || {};
   const separator = appearance.separator || {};
@@ -420,7 +512,7 @@ function updateStampPreview(root, config) {
 
 function populateVisualForm(root, config) {
   const draft = ensureStampConfigShape(config);
-  const rule = draft.placements.rules[0];
+  const rule = getDefaultPlacementRule(draft);
 
   root.querySelector('#appearanceWidth').value = Number(draft.appearance.width || 176);
   root.querySelector('#appearanceHeight').value = Number(draft.appearance.height || 108);
@@ -457,6 +549,7 @@ function populateVisualForm(root, config) {
 
   root.querySelector('#contentTitle').value = (draft.content.title || []).join('\n');
   renderStampRows(root, draft.content.rows || []);
+  renderSignatureOverrides(root, draft);
 
   root.querySelector('#signatureName').value = draft.signatureObject.name || '';
   root.querySelector('#signatureReason').value = draft.signatureObject.reason || '';
@@ -464,6 +557,8 @@ function populateVisualForm(root, config) {
   root.querySelector('#signatureLocation').value = draft.signatureObject.location || '';
   root.querySelector('#signatureBytesReserved').value = Number(draft.signatureObject.bytesReserved || 16000);
   root.querySelector('#signatureSubfilter').value = draft.signatureObject.subfilter || 'PADES';
+  root.querySelector('#signatureMetadataEnabled').checked = false;
+  root.querySelector('#signatureMetadataFieldset').disabled = true;
 
   root.querySelector('#placementRuleName').value = rule.name || '';
   root.querySelector('#placementPagesMode').value = rule.pages.mode || 'single';
@@ -517,6 +612,26 @@ function collectStampRows(root) {
   }));
 }
 
+function collectSignatureOverrides(root, baseRule) {
+  const overrides = [];
+  for (let signatureIndex = 1; signatureIndex <= 4; signatureIndex += 1) {
+    const enabled = root.querySelector(`[data-override-enabled="${signatureIndex}"]`)?.checked;
+    if (!enabled) continue;
+    overrides.push({
+      name: `signature-${signatureIndex}-override`,
+      match: { signatureIndex },
+      pages: cloneConfig(baseRule.pages || {}),
+      placement: {
+        mode: 'anchored',
+        anchor: root.querySelector(`[data-override-anchor="${signatureIndex}"]`).value,
+        offsetX: Number(root.querySelector(`[data-override-offset-x="${signatureIndex}"]`).value || 0),
+        offsetY: Number(root.querySelector(`[data-override-offset-y="${signatureIndex}"]`).value || 0),
+      },
+    });
+  }
+  return overrides;
+}
+
 function readVisualForm(root) {
   const draft = ensureStampConfigShape(state.stampConfig);
   draft.appearance.width = Number(root.querySelector('#appearanceWidth').value);
@@ -565,7 +680,7 @@ function readVisualForm(root) {
   draft.signatureObject.bytesReserved = Number(root.querySelector('#signatureBytesReserved').value);
   draft.signatureObject.subfilter = root.querySelector('#signatureSubfilter').value;
 
-  const rule = draft.placements.rules[0];
+  const rule = cloneConfig(getDefaultPlacementRule(draft));
   rule.name = root.querySelector('#placementRuleName').value.trim();
   rule.pages.mode = root.querySelector('#placementPagesMode').value;
   rule.pages.page = Number(root.querySelector('#placementPage').value);
@@ -578,6 +693,18 @@ function readVisualForm(root) {
   rule.placement.stepX = Number(root.querySelector('#placementStepX').value);
   rule.placement.stepY = Number(root.querySelector('#placementStepY').value);
   draft.limits.maxSignatures = Number(root.querySelector('#limitsMaxSignatures').value);
+
+  const preservedRules = (draft.placements.rules || []).filter((candidate) => {
+    if (!candidate || candidate === rule) return false;
+    if (!candidate.match || Object.keys(candidate.match).length === 0) return false;
+    const signatureIndex = Number(candidate?.match?.signatureIndex);
+    return !(signatureIndex >= 1 && signatureIndex <= 4);
+  });
+  draft.placements.rules = [
+    ...collectSignatureOverrides(root, rule),
+    rule,
+    ...preservedRules,
+  ];
 
   return draft;
 }
@@ -641,6 +768,44 @@ function wireStampSettingsForm(root) {
     nextConfig.content.rows.splice(index, 1);
     state.stampConfig = nextConfig;
     populateVisualForm(root, state.stampConfig);
+  });
+
+  root.querySelector('#stampRowsEditor').addEventListener('change', (event) => {
+    const select = event.target.closest('[data-field="valueTemplate"]');
+    if (!select) return;
+    const card = select.closest('.row-card');
+    const input = card?.querySelector('[data-field="value"]');
+    if (!input) return;
+    if (select.value !== '__custom__') {
+      input.value = select.value;
+    }
+    refreshPreview();
+  });
+
+  root.querySelector('#stampRowsEditor').addEventListener('input', (event) => {
+    const input = event.target.closest('[data-field="value"]');
+    if (!input) return;
+    const select = input.closest('.row-value-grid')?.querySelector('[data-field="valueTemplate"]');
+    if (!select) return;
+    const matched = TEMPLATE_TOKEN_OPTIONS.find((option) => option.value === input.value.trim());
+    select.value = matched ? matched.value : '__custom__';
+  });
+
+  root.querySelector('#signatureOverridesEditor').addEventListener('change', (event) => {
+    const toggle = event.target.closest('[data-override-enabled]');
+    if (!toggle) return;
+    const signatureIndex = toggle.getAttribute('data-override-enabled');
+    const card = toggle.closest('.signature-override-card');
+    const controls = card?.querySelectorAll(`[data-override-anchor="${signatureIndex}"], [data-override-offset-x="${signatureIndex}"], [data-override-offset-y="${signatureIndex}"]`);
+    card?.classList.toggle('is-disabled', !toggle.checked);
+    controls?.forEach((control) => {
+      control.disabled = !toggle.checked;
+    });
+    refreshPreview();
+  });
+
+  root.querySelector('#signatureMetadataEnabled').addEventListener('change', (event) => {
+    root.querySelector('#signatureMetadataFieldset').disabled = !event.target.checked;
   });
 
   root.querySelector('#stampVisualPanel').addEventListener('input', refreshPreview);
