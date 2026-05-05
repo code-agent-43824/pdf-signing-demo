@@ -1,6 +1,11 @@
 const state = {
   certificates: [],
   pluginReady: false,
+  activeCryptoStack: 'cryptopro',
+  cryptoProviders: {
+    cryptopro: { ready: false, certificates: [], client: null },
+    rutoken: { ready: false, certificates: [], client: null },
+  },
   defaultPdfUrl: null,
   uploadedPdfBase64: null,
   uploadedPdfName: null,
@@ -8,6 +13,11 @@ const state = {
   stampConfig: null,
   stampConfigPath: null,
   availableFonts: [],
+};
+
+const CRYPTO_STACK_LABELS = {
+  cryptopro: 'CryptoPro',
+  rutoken: 'Рутокен',
 };
 
 const TEMPLATE_TOKEN_OPTIONS = [
@@ -27,6 +37,20 @@ function setStatus(message) {
 
 function setPluginState(message) {
   document.getElementById('pluginState').textContent = message;
+}
+
+function getCryptoStackLabel(mode = state.activeCryptoStack) {
+  return CRYPTO_STACK_LABELS[mode] || mode;
+}
+
+function getActiveProviderState() {
+  return state.cryptoProviders[state.activeCryptoStack];
+}
+
+function syncActiveProviderState() {
+  const provider = getActiveProviderState();
+  state.pluginReady = Boolean(provider?.ready);
+  state.certificates = provider?.certificates || [];
 }
 
 function setUploadState(message) {
@@ -68,7 +92,7 @@ async function boot() {
   state.defaultPdfUrl = formResponse.pdfUrl;
   showPdf(formResponse.pdfUrl, `${Math.round(formResponse.size / 1024)} KB`);
   setUploadState('Сейчас используется тестовый PDF с сервера.');
-  await initCryptoPro();
+  await initActiveCryptoStack({ force: true });
 }
 
 async function createObject(name) {
@@ -142,6 +166,7 @@ async function enumerateCertificates() {
 }
 
 async function initCryptoPro() {
+  const provider = state.cryptoProviders.cryptopro;
   try {
     if (!window.cadesplugin) {
       throw new Error('Скрипт cadesplugin_api.js не загрузился');
@@ -149,15 +174,255 @@ async function initCryptoPro() {
 
     await Promise.resolve(window.cadesplugin);
     const certificates = await enumerateCertificates();
-    state.pluginReady = true;
-    state.certificates = certificates;
-    setPluginState(`CryptoPro готов, доступных непpосроченных сертификатов: ${certificates.length}`);
-    setStatus('Расширение и plugin доступны. Можно готовить документ и выбирать сертификат.');
+    provider.ready = true;
+    provider.certificates = certificates;
+    provider.client = window.cadesplugin;
+    if (state.activeCryptoStack === 'cryptopro') {
+      syncActiveProviderState();
+      setPluginState(`CryptoPro готов, доступных непpросроченных сертификатов: ${certificates.length}`);
+      setStatus('Расширение и plugin доступны. Можно готовить документ и выбирать сертификат.');
+    }
   } catch (error) {
-    setPluginState('CryptoPro недоступен');
-    const details = window.cadesplugin?.getLastError ? window.cadesplugin.getLastError(error) : error.message;
-    setStatus(`Не удалось инициализировать CryptoPro: ${details}`);
+    provider.ready = false;
+    provider.certificates = [];
+    provider.client = null;
+    if (state.activeCryptoStack === 'cryptopro') {
+      syncActiveProviderState();
+      setPluginState('CryptoPro недоступен');
+      const details = window.cadesplugin?.getLastError ? window.cadesplugin.getLastError(error) : error.message;
+      setStatus(`Не удалось инициализировать CryptoPro: ${details}`);
+    }
   }
+}
+
+function isBrowserWithRutokenExtension() {
+  return Boolean(window.chrome || typeof InstallTrigger !== 'undefined');
+}
+
+function normalizeRutokenDn(value) {
+  if (!value) return '';
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) {
+    return value.map((item) => normalizeRutokenDn(item)).filter(Boolean).join(', ');
+  }
+  if (typeof value === 'object') {
+    const preferred = value.commonName || value.CN || value.title || value.name;
+    if (preferred) return String(preferred);
+    return Object.entries(value)
+      .filter(([, item]) => item !== undefined && item !== null && item !== '')
+      .map(([key, item]) => `${key}=${item}`)
+      .join(', ');
+  }
+  return String(value);
+}
+
+function parseRutokenDate(value) {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return new Date(value * 1000);
+  }
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed;
+    }
+  }
+  return null;
+}
+
+function base64ToHex(base64) {
+  const bytes = atob(base64);
+  return Array.from(bytes, (char) => char.charCodeAt(0).toString(16).padStart(2, '0')).join('');
+}
+
+function normalizeCmsBase64(value) {
+  return String(value || '')
+    .replace(/-----BEGIN [^-]+-----/g, '')
+    .replace(/-----END [^-]+-----/g, '')
+    .replace(/\s+/g, '');
+}
+
+function detectRutokenHashAlgorithmConstant(certificate, plugin) {
+  const name = `${certificate.algorithm || ''} ${certificate.label || ''}`.toLowerCase();
+  if (name.includes('2012') && name.includes('512')) {
+    return plugin.HASH_TYPE_GOST3411_12_512;
+  }
+  if (name.includes('2012') && name.includes('256')) {
+    return plugin.HASH_TYPE_GOST3411_12_256;
+  }
+  if (name.includes('sha-512') || name.includes('sha512')) {
+    return plugin.HASH_TYPE_SHA512;
+  }
+  if (name.includes('sha-384') || name.includes('sha384')) {
+    return plugin.HASH_TYPE_SHA384;
+  }
+  if (name.includes('sha-256') || name.includes('sha256') || name.includes('rsa')) {
+    return plugin.HASH_TYPE_SHA256;
+  }
+  return plugin.HASH_TYPE_GOST3411_94;
+}
+
+function isRutokenRsaCertificate(certificate) {
+  const name = `${certificate.algorithm || ''} ${certificate.label || ''}`.toLowerCase();
+  return name.includes('rsa');
+}
+
+function getRutokenErrorMessage(error, plugin = state.cryptoProviders.rutoken.client) {
+  if (!error) return 'Неизвестная ошибка.';
+  if (typeof error === 'string') return error;
+  if (error.message && Number.isNaN(Number(error.message))) return error.message;
+  if (plugin?.errorCodes && error?.message) {
+    const code = Number(error.message);
+    const matched = Object.entries(plugin.errorCodes).find(([, value]) => Number(value) === code);
+    if (matched) {
+      return `${matched[0]} (${error.message})`;
+    }
+  }
+  return error.message || String(error);
+}
+
+async function enumerateRutokenCertificates(plugin) {
+  const deviceIds = await plugin.enumerateDevices({ mode: plugin.ENUMERATE_DEVICES_LIST });
+  const result = [];
+
+  for (const deviceId of deviceIds || []) {
+    let tokenLabel = `Устройство ${deviceId}`;
+    try {
+      tokenLabel = await plugin.getDeviceInfo(deviceId, plugin.TOKEN_INFO_LABEL);
+    } catch (_error) {
+      // ignore label lookup failure
+    }
+
+    const certIds = await plugin.enumerateCertificates(deviceId, plugin.CERT_CATEGORY_USER);
+    for (const certId of certIds || []) {
+      const pem = await plugin.getCertificate(deviceId, certId);
+      const parsed = await plugin.parseCertificateFromString(pem);
+      const validToDate = parseRutokenDate(parsed?.notAfter || parsed?.validTo || parsed?.validNotAfter);
+      if (validToDate && !isCertificateDateValid(validToDate.toISOString())) {
+        continue;
+      }
+
+      const subjectName = normalizeRutokenDn(parsed?.subject) || certId;
+      const issuerName = normalizeRutokenDn(parsed?.issuer);
+      const commonName = parsed?.subject?.commonName || parsed?.subject?.CN || subjectName;
+      const algorithm = parsed?.publicKeyAlgorithm || parsed?.signatureAlgorithm || 'Rutoken certificate';
+      result.push({
+        label: commonName,
+        subjectName,
+        issuerName,
+        thumbprint: parsed?.thumbprint || parsed?.fingerprint || certId,
+        serialNumber: parsed?.serialNumber || certId,
+        validToDate: validToDate ? validToDate.toISOString() : '',
+        algorithm,
+        certId,
+        deviceId,
+        tokenLabel,
+      });
+    }
+  }
+
+  return result;
+}
+
+async function initRutoken() {
+  const provider = state.cryptoProviders.rutoken;
+  try {
+    if (!window.rutoken) {
+      throw new Error('Скрипт rutoken-plugin.min.js не загрузился');
+    }
+
+    await window.rutoken.ready;
+    if (isBrowserWithRutokenExtension()) {
+      const extensionInstalled = await window.rutoken.isExtensionInstalled();
+      if (!extensionInstalled) {
+        throw new Error("Не найдено расширение 'Адаптер Рутокен Плагина'.");
+      }
+    }
+
+    const pluginInstalled = await window.rutoken.isPluginInstalled();
+    if (!pluginInstalled) {
+      throw new Error('Рутокен Плагин не установлен.');
+    }
+
+    const plugin = await window.rutoken.loadPlugin();
+    if (!plugin?.valid) {
+      throw new Error('Не удалось загрузить Рутокен Плагин.');
+    }
+
+    const certificates = await enumerateRutokenCertificates(plugin);
+    provider.ready = true;
+    provider.certificates = certificates;
+    provider.client = plugin;
+    if (state.activeCryptoStack === 'rutoken') {
+      syncActiveProviderState();
+      setPluginState(`Рутокен готов, доступных непросроченных сертификатов: ${certificates.length}`);
+      setStatus('Расширение и плагин Рутокен доступны. Можно готовить документ и выбирать сертификат.');
+    }
+  } catch (error) {
+    provider.ready = false;
+    provider.certificates = [];
+    provider.client = null;
+    if (state.activeCryptoStack === 'rutoken') {
+      syncActiveProviderState();
+      setPluginState('Рутокен недоступен');
+      setStatus(`Не удалось инициализировать Рутокен: ${getRutokenErrorMessage(error)}`);
+    }
+  }
+}
+
+async function initActiveCryptoStack({ force = false } = {}) {
+  const provider = getActiveProviderState();
+  if (!force && provider?.ready) {
+    syncActiveProviderState();
+    setPluginState(`${getCryptoStackLabel()} готов, доступных непросроченных сертификатов: ${state.certificates.length}`);
+    setStatus(`Активен ${getCryptoStackLabel()}. Можно готовить документ и выбирать сертификат.`);
+    return;
+  }
+
+  syncActiveProviderState();
+  setPluginState(`Проверка ${getCryptoStackLabel()}…`);
+  setStatus(`Проверяю расширение и плагин ${getCryptoStackLabel()}…`);
+
+  if (state.activeCryptoStack === 'rutoken') {
+    await initRutoken();
+    return;
+  }
+
+  await initCryptoPro();
+}
+
+async function switchCryptoStack(mode) {
+  if (!CRYPTO_STACK_LABELS[mode] || mode === state.activeCryptoStack) {
+    return;
+  }
+  state.activeCryptoStack = mode;
+  syncActiveProviderState();
+  await initActiveCryptoStack({ force: true });
+}
+
+async function signPreparedContentRutoken(selectedCertificate, contentToSignBase64) {
+  const plugin = state.cryptoProviders.rutoken.client;
+  if (!plugin) {
+    throw new Error('Рутокен плагин не готов.');
+  }
+
+  const hashHex = base64ToHex(contentToSignBase64);
+  const options = {
+    detached: true,
+    addUserCertificate: true,
+    addSignTime: false,
+  };
+  if (isRutokenRsaCertificate(selectedCertificate)) {
+    options.rsaHashAlgorithm = detectRutokenHashAlgorithmConstant(selectedCertificate, plugin);
+  }
+
+  const cmsSignature = await plugin.sign(
+    selectedCertificate.deviceId,
+    selectedCertificate.certId,
+    hashHex,
+    plugin.DATA_FORMAT_HASH,
+    options,
+  );
+  return normalizeCmsBase64(cmsSignature);
 }
 
 function openCertificateDialog(certificates) {
@@ -176,7 +441,8 @@ function openCertificateDialog(certificates) {
     certificates.forEach((certificate, index) => {
       const option = document.createElement('option');
       option.value = String(index);
-      option.textContent = `${certificate.label} · ${certificate.algorithm} · до ${certificate.validToDate}`;
+      const tokenSuffix = certificate.tokenLabel ? ` · ${certificate.tokenLabel}` : '';
+      option.textContent = `${certificate.label} · ${certificate.algorithm}${tokenSuffix} · до ${certificate.validToDate}`;
       select.appendChild(option);
     });
 
@@ -938,7 +1204,7 @@ function fileToBase64(file) {
 
 async function prepareAndSign() {
   if (!state.pluginReady) {
-    throw new Error('CryptoPro plugin не готов.');
+    throw new Error(`${getCryptoStackLabel()} plugin не готов.`);
   }
 
   const selectedCertificate = await openCertificateDialog(state.certificates);
@@ -963,8 +1229,10 @@ async function prepareAndSign() {
     throw new Error(prepareData.message || 'Не удалось подготовить PDF.');
   }
 
-  setStatus(`Выбран сертификат. Прошу CryptoPro подписать хеш: ${selectedCertificate.label}`);
-  const cmsSignatureBase64 = await signPreparedContent(selectedCertificate, prepareData.contentToSignBase64);
+  setStatus(`Выбран сертификат. Прошу ${getCryptoStackLabel()} подписать хеш: ${selectedCertificate.label}`);
+  const cmsSignatureBase64 = state.activeCryptoStack === 'rutoken'
+    ? await signPreparedContentRutoken(selectedCertificate, prepareData.contentToSignBase64)
+    : await signPreparedContent(selectedCertificate, prepareData.contentToSignBase64);
 
   setStatus('Встраиваю CMS-подпись обратно в PDF…');
   const completeResponse = await fetch('./api/sign/complete', {
@@ -1029,13 +1297,28 @@ document.getElementById('useDefaultPdf').addEventListener('click', async () => {
   document.getElementById('pdfUpload').value = '';
 });
 
+document.querySelectorAll('input[name="cryptoStack"]').forEach((input) => {
+  input.addEventListener('change', async (event) => {
+    if (!event.target.checked) {
+      return;
+    }
+    try {
+      await switchCryptoStack(event.target.value);
+    } catch (error) {
+      setStatus(`Ошибка переключения криптоплагина: ${error.message}`);
+    }
+  });
+});
+
 document.getElementById('signButton').addEventListener('click', async () => {
   const button = document.getElementById('signButton');
   button.disabled = true;
   try {
     await prepareAndSign();
   } catch (error) {
-    const details = window.cadesplugin?.getLastError ? window.cadesplugin.getLastError(error) : error.message;
+    const details = state.activeCryptoStack === 'rutoken'
+      ? getRutokenErrorMessage(error)
+      : (window.cadesplugin?.getLastError ? window.cadesplugin.getLastError(error) : error.message);
     setStatus(`Ошибка: ${details}`);
   } finally {
     button.disabled = false;

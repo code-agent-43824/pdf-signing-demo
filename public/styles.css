@@ -91,6 +91,31 @@ h1, h2, h3 { margin: 0; }
   align-items: baseline;
   margin-bottom: 16px;
 }
+.panel-head-stack {
+  align-items: flex-start;
+}
+.stack-switcher {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+.stack-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #f8faff;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.stack-option input {
+  margin: 0;
+}
 .upload-row {
   display: flex;
   gap: 12px;

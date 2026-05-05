@@ -6,6 +6,7 @@
     <title>Выдача формуляров — PDF Signing Demo</title>
     <link rel="stylesheet" href="./styles.css" />
     <script src="https://www.cryptopro.ru/sites/default/files/products/cades/cadesplugin_api.js"></script>
+    <script src="./vendor/rutoken-plugin.min.js"></script>
   </head>
   <body>
     <main class="page">
@@ -14,7 +15,7 @@
           <p class="eyebrow">Демо-контур</p>
           <h1>Выдача формуляров</h1>
           <p class="lead">
-            Сервер показывает PDF-формуляр, подготавливает его под PAdES и ждёт CMS detached подпись от CryptoPro Browser Plugin.
+            Сервер показывает PDF-формуляр, подготавливает его под PAdES и ждёт CMS detached подпись от выбранного браузерного криптоплагина.
           </p>
         </div>
         <div class="hero-actions">
@@ -24,8 +25,20 @@
       </header>
 
       <section class="panel status-panel">
-        <div class="panel-head">
-          <h2>Статус подписи</h2>
+        <div class="panel-head panel-head-stack">
+          <div>
+            <h2>Статус подписи</h2>
+            <div class="stack-switcher" role="radiogroup" aria-label="Выбор криптоплагина">
+              <label class="stack-option">
+                <input id="cryptoStackCryptoPro" type="radio" name="cryptoStack" value="cryptopro" checked />
+                <span>CryptoPro плагин</span>
+              </label>
+              <label class="stack-option">
+                <input id="cryptoStackRutoken" type="radio" name="cryptoStack" value="rutoken" />
+                <span>Рутокен плагин</span>
+              </label>
+            </div>
+          </div>
           <span id="pluginState" class="muted">Проверка CryptoPro…</span>
         </div>
         <div id="statusLog" class="status-log">Ожидание действий.</div>
