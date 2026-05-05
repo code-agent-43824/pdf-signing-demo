@@ -90,6 +90,33 @@
           </div>
           <div id="stampVisualPanel" class="settings-panel" role="tabpanel">
             <div class="settings-grid">
+              <section class="settings-section settings-preview-section">
+                <div class="panel-head preview-head">
+                  <div>
+                    <h4>Визуальное превью</h4>
+                    <p class="muted dialog-subtitle">Отдельное фронтенд-превью: помогает оценить вид и размещение, не вмешиваясь в реальную PDF-подпись.</p>
+                  </div>
+                </div>
+                <div class="preview-layout">
+                  <div class="preview-page-wrap">
+                    <div class="preview-page" id="stampPreviewPage">
+                      <div class="preview-stamp" id="stampPreviewCard"></div>
+                    </div>
+                  </div>
+                  <div class="preview-sidepanel">
+                    <div class="preview-meta">
+                      <div><span class="muted">Правило:</span> <strong id="previewRuleName">—</strong></div>
+                      <div><span class="muted">Страница:</span> <strong id="previewPageMode">—</strong></div>
+                      <div><span class="muted">Якорь:</span> <strong id="previewAnchor">—</strong></div>
+                      <div><span class="muted">Сетка:</span> <strong id="previewGrid">—</strong></div>
+                    </div>
+                    <div class="preview-note muted">
+                      Это схематичное превью. Оно показывает компоновку, цвета, размеры, строки и примерное размещение, но не подменяет реальный рендер в PDF.
+                    </div>
+                  </div>
+                </div>
+              </section>
+
               <section class="settings-section">
                 <h4>Внешний вид</h4>
                 <div class="form-grid form-grid-compact">

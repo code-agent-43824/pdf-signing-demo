@@ -309,6 +309,115 @@ function escapeHtml(value) {
     .replaceAll('"', '&quot;');
 }
 
+function fontPreviewFamily(fontPath, fallback = 'sans-serif') {
+  const value = String(fontPath || '').toLowerCase();
+  if (value.includes('serif')) return 'Georgia, "Times New Roman", serif';
+  if (value.includes('mono')) return '"SFMono-Regular", Consolas, monospace';
+  if (value.includes('sans')) return 'Inter, Arial, sans-serif';
+  return fallback;
+}
+
+function replacePreviewTokens(value) {
+  return String(value || '')
+    .replaceAll('{signer.cert_id}', '78AB-CDEF-9012-3456')
+    .replaceAll('{signer.name}', 'Иванов Иван Иванович')
+    .replaceAll('{signer.issuer}', 'ООО УЦ «Демо Сертификат»')
+    .replaceAll('{signer.valid_to}', '31.12.2027')
+    .replaceAll('{signer.value}', 'Демо-значение');
+}
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function updateStampPreview(root, config) {
+  const draft = ensureStampConfigShape(config);
+  const previewPage = root.querySelector('#stampPreviewPage');
+  const previewCard = root.querySelector('#stampPreviewCard');
+  if (!previewPage || !previewCard) {
+    return;
+  }
+
+  const rule = draft.placements.rules[0] || { pages: {}, placement: {} };
+  const appearance = draft.appearance || {};
+  const layout = appearance.layout || {};
+  const separator = appearance.separator || {};
+  const fonts = appearance.fonts || {};
+  const width = Number(appearance.width || 176);
+  const height = Number(appearance.height || 108);
+  const pageRect = previewPage.getBoundingClientRect();
+  const pageWidth = pageRect.width || 420;
+  const pageHeight = pageRect.height || 594;
+  const scale = Math.min((pageWidth * 0.72) / width, (pageHeight * 0.42) / height, 2.2);
+  const stampWidth = Math.max(120, Math.round(width * scale));
+  const stampHeight = Math.max(72, Math.round(height * scale));
+
+  previewCard.style.width = `${stampWidth}px`;
+  previewCard.style.minHeight = `${stampHeight}px`;
+  previewCard.style.background = normalizeColor(appearance.backgroundColor, '#F5F8FF');
+  previewCard.style.color = normalizeColor(appearance.textColor, '#1A2842');
+  previewCard.style.border = `${Math.max(0, Math.round(Number(appearance.borderWidth || 0) * scale * 0.7))}px solid ${normalizeColor(appearance.borderColor, '#3F68B8')}`;
+  previewCard.style.borderRadius = `${Math.round(Number(appearance.borderRadius || 0) * scale * 0.7)}px`;
+
+  const leftPadding = Math.max(10, Math.round(Number(layout.contentLeft || 12) * scale * 0.62));
+  const rightPadding = Math.max(10, Math.round(Number(layout.contentRight || 12) * scale * 0.62));
+  const topPadding = Math.max(10, Math.round(Number(layout.startY || 10) * scale * 0.62));
+  const titleSize = clamp(Math.round(Number(fonts.title?.size || 30) * scale * 0.52), 10, 34);
+  const labelSize = clamp(Math.round(Number(fonts.label?.size || 27) * scale * 0.48), 9, 24);
+  const valueSize = clamp(Math.round(Number(fonts.value?.size || 27) * scale * 0.48), 9, 24);
+  const titleGap = Math.max(8, Math.round(Number(layout.afterTitleGap || 16) * scale * 0.4));
+  const rowLabelGap = Math.max(5, Math.round(Number(layout.rowLabelGap || 12) * scale * 0.34));
+  const rowExtraGap = Math.max(5, Math.round(Number(layout.rowExtraGap || 8) * scale * 0.34));
+  const separatorHeight = Math.max(1, Math.round(Number(separator.width || 1) * scale * 0.6));
+  const separatorMarginLeft = Math.max(0, Math.round(Number(separator.left || 0) * scale * 0.6));
+  const separatorMarginRight = Math.max(0, Math.round(Number(separator.right || 0) * scale * 0.6));
+
+  const titleHtml = (draft.content.title || [])
+    .map((line) => escapeHtml(replacePreviewTokens(line)))
+    .join('<br>');
+
+  const rowsHtml = (draft.content.rows || []).map((row) => {
+    const label = escapeHtml(replacePreviewTokens(row.label));
+    const value = escapeHtml(replacePreviewTokens(row.value));
+    return `
+      <div class="preview-stamp-row" style="margin-top:${rowLabelGap}px; margin-bottom:${rowExtraGap}px;">
+        <div class="preview-stamp-label" style="font-size:${labelSize}px; font-family:${fontPreviewFamily(fonts.label?.path, 'Georgia, serif')};">${label}</div>
+        <div class="preview-stamp-value" style="font-size:${valueSize}px; font-family:${fontPreviewFamily(fonts.value?.path, 'Inter, Arial, sans-serif')};">${value}</div>
+      </div>
+    `;
+  }).join('');
+
+  previewCard.innerHTML = `
+    <div class="preview-stamp-inner" style="padding:${topPadding}px ${rightPadding}px ${topPadding}px ${leftPadding}px;">
+      <div class="preview-stamp-title" style="font-size:${titleSize}px; font-family:${fontPreviewFamily(fonts.title?.path, 'Georgia, serif')};">${titleHtml || 'Документ подписан<br>электронной подписью'}</div>
+      ${separator.enabled ? `<div class="preview-stamp-separator" style="height:${separatorHeight}px; background:${normalizeColor(separator.color, '#6E87BC')}; margin:${titleGap}px ${separatorMarginRight}px 0 ${separatorMarginLeft}px; width:calc(100% - ${separatorMarginLeft + separatorMarginRight}px);"></div>` : ''}
+      <div class="preview-stamp-rows" style="margin-top:${separator.enabled ? Math.max(8, Math.round(titleGap * 0.72)) : titleGap}px;">${rowsHtml}</div>
+    </div>
+  `;
+
+  const anchor = String(rule.placement.anchor || 'bottom-right');
+  const offsetX = Number(rule.placement.offsetX || 0);
+  const offsetY = Number(rule.placement.offsetY || 0);
+  const x = Math.round(Math.abs(offsetX) * 0.35);
+  const y = Math.round(Math.abs(offsetY) * 0.35);
+  previewCard.style.left = 'auto';
+  previewCard.style.right = 'auto';
+  previewCard.style.top = 'auto';
+  previewCard.style.bottom = 'auto';
+
+  if (anchor.includes('right')) previewCard.style.right = `${clamp(x, 10, 80)}px`;
+  if (anchor.includes('left')) previewCard.style.left = `${clamp(x, 10, 80)}px`;
+  if (anchor.includes('top')) previewCard.style.top = `${clamp(y, 10, 80)}px`;
+  if (anchor.includes('bottom')) previewCard.style.bottom = `${clamp(y, 10, 80)}px`;
+
+  root.querySelector('#previewRuleName').textContent = rule.name || 'default-rule';
+  root.querySelector('#previewPageMode').textContent = rule.pages.mode === 'single'
+    ? `single · стр. ${rule.pages.page || 1}`
+    : (rule.pages.mode || 'single');
+  root.querySelector('#previewAnchor').textContent = `${anchor} · x:${offsetX} · y:${offsetY}`;
+  root.querySelector('#previewGrid').textContent = `${rule.placement.mode || 'grid'} · колонок ${rule.placement.columns || 1} · шаг ${rule.placement.stepX || 0}/${rule.placement.stepY || 0}`;
+}
+
 function populateVisualForm(root, config) {
   const draft = ensureStampConfigShape(config);
   const rule = draft.placements.rules[0];
@@ -395,6 +504,8 @@ function populateVisualForm(root, config) {
     ['appearanceTextColor', 'appearanceTextColorText'],
     ['separatorColor', 'separatorColorText'],
   ].forEach(([colorId, textId]) => bindColorPair(root, colorId, textId));
+
+  updateStampPreview(root, draft);
 }
 
 function collectStampRows(root) {
@@ -502,6 +613,14 @@ function switchStampTab(root, nextTab) {
 }
 
 function wireStampSettingsForm(root) {
+  const refreshPreview = () => {
+    try {
+      updateStampPreview(root, readVisualForm(root));
+    } catch {
+      // Игнорируем промежуточные невалидные состояния ввода в превью.
+    }
+  };
+
   root.querySelector('#addStampRow').addEventListener('click', () => {
     const nextConfig = readVisualForm(root);
     nextConfig.content.rows.push({
@@ -523,6 +642,9 @@ function wireStampSettingsForm(root) {
     state.stampConfig = nextConfig;
     populateVisualForm(root, state.stampConfig);
   });
+
+  root.querySelector('#stampVisualPanel').addEventListener('input', refreshPreview);
+  root.querySelector('#stampVisualPanel').addEventListener('change', refreshPreview);
 
   root.querySelector('#stampTabVisual').addEventListener('click', () => {
     try {

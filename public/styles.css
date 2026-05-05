@@ -193,6 +193,91 @@ h1, h2, h3 { margin: 0; }
 .font-card h5 {
   margin: 0 0 12px;
 }
+.settings-preview-section {
+  overflow: hidden;
+}
+.preview-head {
+  margin-bottom: 12px;
+}
+.preview-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(260px, 0.7fr);
+  gap: 16px;
+  align-items: start;
+}
+.preview-page-wrap {
+  padding: 18px;
+  border: 1px dashed var(--line);
+  border-radius: 16px;
+  background: linear-gradient(180deg, #f9fbff, #f2f6fd);
+}
+.preview-page {
+  position: relative;
+  width: min(100%, 420px);
+  aspect-ratio: 210 / 297;
+  margin: 0 auto;
+  border-radius: 14px;
+  border: 1px solid #cfd8ea;
+  background:
+    linear-gradient(#eef3fb 1px, transparent 1px) 0 0 / 100% 36px,
+    linear-gradient(90deg, #f6f8fd, #ffffff);
+  box-shadow: inset 0 0 0 8px rgba(255,255,255,0.55);
+  overflow: hidden;
+}
+.preview-stamp {
+  position: absolute;
+  min-width: 120px;
+  max-width: 82%;
+  box-shadow: 0 10px 24px rgba(29, 50, 92, 0.16);
+  overflow: hidden;
+}
+.preview-stamp-inner {
+  width: 100%;
+  height: 100%;
+  padding: 0;
+}
+.preview-stamp-title {
+  margin: 0;
+  white-space: pre-line;
+  font-weight: 700;
+  line-height: 1.15;
+}
+.preview-stamp-separator {
+  width: 100%;
+  border-radius: 999px;
+}
+.preview-stamp-rows {
+  display: grid;
+  gap: 0;
+}
+.preview-stamp-row {
+  display: grid;
+  gap: 3px;
+}
+.preview-stamp-label {
+  font-weight: 700;
+  line-height: 1.1;
+}
+.preview-stamp-value {
+  line-height: 1.15;
+  opacity: 0.95;
+  word-break: break-word;
+}
+.preview-sidepanel {
+  display: grid;
+  gap: 14px;
+}
+.preview-meta,
+.preview-note {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 14px;
+  background: #fff;
+}
+.preview-meta {
+  display: grid;
+  gap: 10px;
+}
 .form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -329,6 +414,7 @@ h1, h2, h3 { margin: 0; }
   .form-grid,
   .form-grid-compact,
   .fonts-grid,
-  .row-card-grid { grid-template-columns: 1fr; }
+  .row-card-grid,
+  .preview-layout { grid-template-columns: 1fr; }
   .settings-tabs { flex-wrap: wrap; }
 }
