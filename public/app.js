@@ -21,6 +21,8 @@ const CRYPTO_STACK_LABELS = {
   rutoken: 'Рутокен',
 };
 
+const CRYPTO_STACK_STORAGE_KEY = 'pdf-signing-demo.crypto-stack';
+
 const TEMPLATE_TOKEN_OPTIONS = [
   { value: '{signer.cert_id}', label: 'ID сертификата' },
   { value: '{signer.name}', label: 'ФИО владельца' },
@@ -46,6 +48,33 @@ function getCryptoStackLabel(mode = state.activeCryptoStack) {
 
 function getActiveProviderState() {
   return state.cryptoProviders[state.activeCryptoStack];
+}
+
+function getSavedCryptoStack() {
+  try {
+    const fromDom = document.querySelector('input[name="cryptoStack"]:checked')?.value;
+    if (CRYPTO_STACK_LABELS[fromDom]) {
+      return fromDom;
+    }
+    const fromStorage = window.localStorage.getItem(CRYPTO_STACK_STORAGE_KEY);
+    if (CRYPTO_STACK_LABELS[fromStorage]) {
+      return fromStorage;
+    }
+  } catch (_error) {
+    // ignore storage issues
+  }
+  return 'cryptopro';
+}
+
+function syncCryptoStackControls() {
+  document.querySelectorAll('input[name="cryptoStack"]').forEach((input) => {
+    input.checked = input.value === state.activeCryptoStack;
+  });
+  try {
+    window.localStorage.setItem(CRYPTO_STACK_STORAGE_KEY, state.activeCryptoStack);
+  } catch (_error) {
+    // ignore storage issues
+  }
 }
 
 function syncActiveProviderState() {
@@ -85,6 +114,9 @@ function showPdf(url, metaText) {
 }
 
 async function boot() {
+  state.activeCryptoStack = getSavedCryptoStack();
+  syncCryptoStackControls();
+
   const [formResponse] = await Promise.all([
     fetch('./api/form').then((response) => response.json()),
     fetchStampConfig(),
@@ -358,33 +390,44 @@ async function enumerateRutokenCertificates(plugin) {
       // ignore label lookup failure
     }
 
-    const certIds = await plugin.enumerateCertificates(deviceId, plugin.CERT_CATEGORY_USER);
-    for (const certId of certIds || []) {
-      const pem = await plugin.getCertificate(deviceId, certId);
-      const parsed = await plugin.parseCertificateFromString(pem);
-      const validToDate = parseRutokenDate(parsed?.notAfter || parsed?.validTo || parsed?.validNotAfter);
-      if (validToDate && !isCertificateDateValid(validToDate.toISOString())) {
-        continue;
-      }
+    const categories = [plugin.CERT_CATEGORY_USER, plugin.CERT_CATEGORY_UNSPEC]
+      .filter((value, index, array) => value !== undefined && array.indexOf(value) === index);
+    const seenCertIds = new Set();
 
-      const subjectName = normalizeRutokenDn(parsed?.subject) || certId;
-      const issuerName = normalizeRutokenDn(parsed?.issuer);
-      const commonName = getRutokenDnCommonName(parsed?.subject) || subjectName;
-      const algorithm = parsed?.publicKeyAlgorithm || parsed?.signatureAlgorithm || 'Rutoken certificate';
-      result.push({
-        label: commonName,
-        commonName,
-        subjectName,
-        issuerName,
-        issuerLabel: getRutokenDnCommonName(parsed?.issuer) || issuerName,
-        thumbprint: parsed?.thumbprint || parsed?.fingerprint || certId,
-        serialNumber: parsed?.serialNumber || certId,
-        validToDate: validToDate ? validToDate.toISOString() : '',
-        algorithm,
-        certId,
-        deviceId,
-        tokenLabel,
-      });
+    for (const category of categories) {
+      const certIds = await plugin.enumerateCertificates(deviceId, category);
+      for (const certId of certIds || []) {
+        if (seenCertIds.has(certId)) {
+          continue;
+        }
+        seenCertIds.add(certId);
+
+        const pem = await plugin.getCertificate(deviceId, certId);
+        const parsed = await plugin.parseCertificateFromString(pem);
+        const validToDate = parseRutokenDate(parsed?.notAfter || parsed?.validTo || parsed?.validNotAfter);
+        if (validToDate && !isCertificateDateValid(validToDate.toISOString())) {
+          continue;
+        }
+
+        const subjectName = normalizeRutokenDn(parsed?.subject) || certId;
+        const issuerName = normalizeRutokenDn(parsed?.issuer);
+        const commonName = getRutokenDnCommonName(parsed?.subject) || subjectName;
+        const algorithm = parsed?.publicKeyAlgorithm || parsed?.signatureAlgorithm || 'Rutoken certificate';
+        result.push({
+          label: commonName,
+          commonName,
+          subjectName,
+          issuerName,
+          issuerLabel: getRutokenDnCommonName(parsed?.issuer) || issuerName,
+          thumbprint: parsed?.thumbprint || parsed?.fingerprint || certId,
+          serialNumber: parsed?.serialNumber || certId,
+          validToDate: validToDate ? validToDate.toISOString() : '',
+          algorithm,
+          certId,
+          deviceId,
+          tokenLabel,
+        });
+      }
     }
   }
 
@@ -463,6 +506,7 @@ async function switchCryptoStack(mode) {
     return;
   }
   state.activeCryptoStack = mode;
+  syncCryptoStackControls();
   syncActiveProviderState();
   await initActiveCryptoStack({ force: true });
 }
@@ -476,8 +520,6 @@ async function signPreparedContentRutoken(selectedCertificate, contentToSignBase
   const hashHex = base64ToHex(contentToSignBase64);
   const options = {
     detached: true,
-    addUserCertificate: true,
-    addSignTime: false,
   };
   if (isRutokenRsaCertificate(selectedCertificate)) {
     options.rsaHashAlgorithm = detectRutokenHashAlgorithmConstant(selectedCertificate, plugin);
@@ -494,7 +536,6 @@ async function signPreparedContentRutoken(selectedCertificate, contentToSignBase
 }
 
 function renderCertificateCard(certificate, index, isSelected) {
-  const badge = certificate.tokenLabel || certificate.algorithm || getCryptoStackLabel();
   return `
     <button
       type="button"
@@ -503,18 +544,13 @@ function renderCertificateCard(certificate, index, isSelected) {
       role="option"
       aria-selected="${isSelected ? 'true' : 'false'}"
     >
-      <div class="certificate-card-head">
-        <div class="certificate-card-title">${escapeHtml(certificate.commonName || certificate.label || 'Без имени')}</div>
-        <div class="certificate-card-badge">${escapeHtml(badge)}</div>
-      </div>
-      <div class="certificate-card-subtitle">${escapeHtml(certificate.subjectName || '—')}</div>
       <dl class="certificate-meta">
         <dt>Common Name</dt>
         <dd>${escapeHtml(certificate.commonName || certificate.label || '—')}</dd>
+        <dt>Issuer</dt>
+        <dd>${escapeHtml(certificate.issuerLabel || certificate.issuerName || '—')}</dd>
         <dt>Срок действия</dt>
         <dd>${escapeHtml(formatCertificateDate(certificate.validToDate))}</dd>
-        <dt>Издатель</dt>
-        <dd>${escapeHtml(certificate.issuerLabel || certificate.issuerName || '—')}</dd>
       </dl>
     </button>
   `;
@@ -599,6 +635,29 @@ function openRutokenPinDialog({ title = 'Введите PIN-код токена.
   });
 }
 
+async function getRutokenPinRetriesLeft(plugin, deviceId) {
+  try {
+    const pinsInfo = await plugin.getDeviceInfo(deviceId, plugin.TOKEN_INFO_PINS_INFO);
+    const retriesLeft = pinsInfo?.retriesLeft;
+    if (Number.isFinite(Number(retriesLeft))) {
+      return Number(retriesLeft);
+    }
+  } catch (_error) {
+    // ignore and try legacy fallback below
+  }
+
+  try {
+    const retriesLeft = await plugin.getDeviceInfo(deviceId, plugin.TOKEN_INFO_PIN_RETRIES_LEFT);
+    if (Number.isFinite(Number(retriesLeft))) {
+      return Number(retriesLeft);
+    }
+  } catch (_error) {
+    // ignore legacy fallback failure
+  }
+
+  return null;
+}
+
 async function ensureRutokenLogin(deviceId) {
   const plugin = state.cryptoProviders.rutoken.client;
   if (!plugin) {
@@ -606,12 +665,9 @@ async function ensureRutokenLogin(deviceId) {
   }
 
   try {
-    const isLoggedIn = await plugin.getDeviceInfo(deviceId, plugin.TOKEN_INFO_IS_LOGGED_IN);
-    if (isLoggedIn) {
-      return false;
-    }
+    await plugin.logout(deviceId);
   } catch (_error) {
-    // ignore lookup failure and try login explicitly
+    // ignore: token may already be logged out
   }
 
   let errorMessage = '';
@@ -622,14 +678,9 @@ async function ensureRutokenLogin(deviceId) {
     });
     try {
       await plugin.login(deviceId, pin);
-      return true;
+      return;
     } catch (error) {
-      let retriesLeft = null;
-      try {
-        retriesLeft = await plugin.getDeviceInfo(deviceId, plugin.TOKEN_INFO_PIN_RETRIES_LEFT);
-      } catch (_innerError) {
-        // ignore retries lookup failure
-      }
+      const retriesLeft = await getRutokenPinRetriesLeft(plugin, deviceId);
       const retriesSuffix = Number.isFinite(Number(retriesLeft)) ? ` Осталось попыток: ${retriesLeft}.` : '';
       errorMessage = `Не удалось авторизоваться: ${getRutokenErrorMessage(error, plugin)}.${retriesSuffix}`;
     }
@@ -1459,17 +1510,16 @@ async function prepareAndSign() {
   }
 
   setStatus(`Выбран сертификат. Прошу ${getCryptoStackLabel()} подписать хеш: ${selectedCertificate.label}`);
-  let rutokenLoginOpened = false;
   let cmsSignatureBase64;
   try {
     if (state.activeCryptoStack === 'rutoken') {
-      rutokenLoginOpened = await ensureRutokenLogin(selectedCertificate.deviceId);
+      await ensureRutokenLogin(selectedCertificate.deviceId);
     }
     cmsSignatureBase64 = state.activeCryptoStack === 'rutoken'
       ? await signPreparedContentRutoken(selectedCertificate, prepareData.contentToSignBase64)
       : await signPreparedContent(selectedCertificate, prepareData.contentToSignBase64);
   } finally {
-    if (state.activeCryptoStack === 'rutoken' && rutokenLoginOpened) {
+    if (state.activeCryptoStack === 'rutoken') {
       try {
         await state.cryptoProviders.rutoken.client?.logout(selectedCertificate.deviceId);
       } catch (_error) {

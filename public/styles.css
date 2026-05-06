@@ -510,9 +510,9 @@ h1, h2, h3 { margin: 0; }
 }
 .certificate-list {
   display: grid;
-  gap: 12px;
-  margin: 18px 0;
-  max-height: min(60vh, 520px);
+  gap: 8px;
+  margin: 16px 0;
+  max-height: min(54vh, 420px);
   overflow: auto;
   padding-right: 4px;
 }
@@ -520,9 +520,9 @@ h1, h2, h3 { margin: 0; }
   width: 100%;
   text-align: left;
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: 14px;
   background: #fbfcff;
-  padding: 16px;
+  padding: 12px 14px;
   cursor: pointer;
   transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
 }
@@ -533,39 +533,13 @@ h1, h2, h3 { margin: 0; }
 .certificate-card.is-selected {
   border-color: #7ea2ff;
   background: #eef4ff;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
-}
-.certificate-card-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: start;
-  gap: 12px;
-  margin-bottom: 10px;
-}
-.certificate-card-title {
-  font-size: 16px;
-  font-weight: 700;
-}
-.certificate-card-badge {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--primary-dark);
-  background: #e8efff;
-  border: 1px solid #c7d6ff;
-  border-radius: 999px;
-  padding: 5px 10px;
-  white-space: nowrap;
-}
-.certificate-card-subtitle {
-  color: var(--muted);
-  font-size: 14px;
-  margin-bottom: 12px;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.10);
 }
 .certificate-meta {
   display: grid;
-  grid-template-columns: 140px minmax(0, 1fr);
-  gap: 8px 12px;
-  font-size: 14px;
+  grid-template-columns: 112px minmax(0, 1fr);
+  gap: 4px 10px;
+  font-size: 13px;
 }
 .certificate-meta dt {
   margin: 0;
@@ -624,7 +598,6 @@ h1, h2, h3 { margin: 0; }
   .hero, .panel-head, .dialog-actions, .hero-actions { flex-direction: column; align-items: stretch; }
   .pdf-frame { min-height: 60vh; }
   .dialog-card-wide { max-height: none; }
-  .certificate-card-head,
   .dialog-actions { flex-direction: column; align-items: stretch; }
   .certificate-meta { grid-template-columns: 1fr; }
   .form-grid,
