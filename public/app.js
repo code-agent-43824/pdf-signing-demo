@@ -566,7 +566,6 @@ async function signPreparedContentRutoken(selectedCertificate, contentToSignBase
     throw new Error('Рутокен плагин не готов.');
   }
 
-  const hashHex = base64ToHex(contentToSignBase64);
   const options = {
     detached: true,
   };
@@ -577,8 +576,8 @@ async function signPreparedContentRutoken(selectedCertificate, contentToSignBase
   const cmsSignature = await plugin.sign(
     selectedCertificate.deviceId,
     selectedCertificate.certId,
-    hashHex,
-    plugin.DATA_FORMAT_HASH,
+    contentToSignBase64,
+    plugin.DATA_FORMAT_BASE64,
     options,
   );
   return normalizeCmsBase64(cmsSignature);
@@ -711,15 +710,6 @@ async function ensureRutokenLogin(deviceId) {
   const plugin = state.cryptoProviders.rutoken.client;
   if (!plugin) {
     throw new Error('Рутокен плагин не готов.');
-  }
-
-  try {
-    const isLoggedIn = await plugin.getDeviceInfo(deviceId, plugin.TOKEN_INFO_IS_LOGGED_IN);
-    if (isLoggedIn) {
-      return;
-    }
-  } catch (_error) {
-    // ignore state lookup failure
   }
 
   let errorMessage = '';
