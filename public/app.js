@@ -133,23 +133,24 @@ function setUploadState(message) {
   document.getElementById('uploadState').textContent = message;
 }
 
-async function fetchStampConfig() {
-  const response = await fetch('./api/stamp-config');
+async function fetchJsonOk(url, options, fallbackMessage) {
+  const response = await fetch(url, options);
   const data = await response.json();
   if (!response.ok || !data.ok) {
-    throw new Error(data.message || 'Не удалось загрузить конфиг штампа.');
+    throw new Error(data.message || fallbackMessage);
   }
+  return data;
+}
+
+async function fetchStampConfig() {
+  const data = await fetchJsonOk('./api/stamp-config', undefined, 'Не удалось загрузить конфиг штампа.');
   state.stampConfig = data.config;
   state.stampConfigPath = data.configPath;
   return data;
 }
 
 async function fetchAvailableFonts() {
-  const response = await fetch('./api/fonts');
-  const data = await response.json();
-  if (!response.ok || !data.ok) {
-    throw new Error(data.message || 'Не удалось загрузить список шрифтов.');
-  }
+  const data = await fetchJsonOk('./api/fonts', undefined, 'Не удалось загрузить список шрифтов.');
   state.availableFonts = data.fonts || [];
   return data;
 }
@@ -164,7 +165,7 @@ async function boot() {
   syncCryptoStackControls();
 
   const [formResponse] = await Promise.all([
-    fetch('./api/form').then((response) => response.json()),
+    fetchJsonOk('./api/form', undefined, 'Не удалось загрузить тестовый PDF.'),
     fetchStampConfig(),
     fetchAvailableFonts(),
   ]);
@@ -254,6 +255,24 @@ function escapeHtml(value) {
 function closeActiveDialog() {
   state.activeDialog?.remove();
   state.activeDialog = null;
+}
+
+function rejectDialog(reject, message, close = closeActiveDialog) {
+  close();
+  reject(new Error(message));
+}
+
+function revokeUploadedPdfObjectUrl() {
+  if (state.uploadedPdfObjectUrl) {
+    URL.revokeObjectURL(state.uploadedPdfObjectUrl);
+    state.uploadedPdfObjectUrl = null;
+  }
+}
+
+function resetUploadedPdfSelection() {
+  revokeUploadedPdfObjectUrl();
+  state.uploadedPdfBase64 = null;
+  state.uploadedPdfName = null;
 }
 
 async function enumerateCertificates() {
@@ -711,13 +730,11 @@ function openRutokenPinDialog({ title = 'Введите PIN-код токена.
 
     confirm.addEventListener('click', submit);
     cancel.addEventListener('click', () => {
-      close();
-      reject(new Error('Ввод PIN-кода отменён.'));
+      rejectDialog(reject, 'Ввод PIN-кода отменён.', close);
     });
     backdrop.addEventListener('click', (event) => {
       if (event.target === backdrop) {
-        close();
-        reject(new Error('Ввод PIN-кода отменён.'));
+        rejectDialog(reject, 'Ввод PIN-кода отменён.', close);
       }
     });
 
@@ -815,14 +832,12 @@ function openCertificateDialog(certificates) {
     });
 
     cancel.addEventListener('click', () => {
-      closeActiveDialog();
-      reject(new Error('Выбор сертификата отменён.'));
+      rejectDialog(reject, 'Выбор сертификата отменён.');
     });
 
     backdrop.addEventListener('click', (event) => {
       if (event.target === backdrop) {
-        closeActiveDialog();
-        reject(new Error('Выбор сертификата отменён.'));
+        rejectDialog(reject, 'Выбор сертификата отменён.');
       }
     });
 
@@ -1026,14 +1041,6 @@ function renderStampRows(root, rows) {
     `;
     container.appendChild(card);
   });
-}
-
-function escapeHtml(value) {
-  return String(value)
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;');
 }
 
 function fontPreviewFamily(fontPath, fallback = 'sans-serif') {
@@ -1496,15 +1503,11 @@ function openStampSettingsDialog() {
         const parsed = isJsonVisible
           ? ensureStampConfigShape(JSON.parse(root.querySelector('#stampConfigEditor').value))
           : readVisualForm(root);
-        const response = await fetch('./api/stamp-config', {
+        const data = await fetchJsonOk('./api/stamp-config', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ config: parsed }),
-        });
-        const data = await response.json();
-        if (!response.ok || !data.ok) {
-          throw new Error(data.message || 'Не удалось сохранить конфиг штампа.');
-        }
+        }, 'Не удалось сохранить конфиг штампа.');
         state.stampConfig = parsed;
         state.stampConfigPath = data.configPath || state.stampConfigPath;
         close();
@@ -1579,7 +1582,7 @@ async function prepareAndSign() {
   const selectedCertificate = await openCertificateDialog(state.certificates);
 
   setStatus('Подготавливаю PDF под PAdES…');
-  const prepareResponse = await fetch('./api/sign/prepare', {
+  const prepareData = await fetchJsonOk('./api/sign/prepare', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -1592,11 +1595,7 @@ async function prepareAndSign() {
         validToDate: selectedCertificate.validToDate,
       },
     }),
-  });
-  const prepareData = await prepareResponse.json();
-  if (!prepareResponse.ok || !prepareData.ok) {
-    throw new Error(prepareData.message || 'Не удалось подготовить PDF.');
-  }
+  }, 'Не удалось подготовить PDF.');
 
   setStatus(`Выбран сертификат. Прошу ${getCryptoStackLabel()} подписать хеш: ${selectedCertificate.label}`);
   let cmsSignatureBase64;
@@ -1618,18 +1617,14 @@ async function prepareAndSign() {
   }
 
   setStatus('Встраиваю CMS-подпись обратно в PDF…');
-  const completeResponse = await fetch('./api/sign/complete', {
+  const completeData = await fetchJsonOk('./api/sign/complete', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       sessionId: prepareData.sessionId,
       cmsSignatureBase64,
     }),
-  });
-  const completeData = await completeResponse.json();
-  if (!completeResponse.ok || !completeData.ok) {
-    throw new Error(completeData.message || 'Не удалось встроить подпись в PDF.');
-  }
+  }, 'Не удалось встроить подпись в PDF.');
 
   const signedPdf = document.getElementById('signedPdf');
   const signedState = document.getElementById('signedState');
@@ -1652,7 +1647,7 @@ document.getElementById('pdfUpload').addEventListener('change', async (event) =>
   }
 
   try {
-    if (state.uploadedPdfObjectUrl) URL.revokeObjectURL(state.uploadedPdfObjectUrl);
+    revokeUploadedPdfObjectUrl();
     state.uploadedPdfBase64 = await fileToBase64(file);
     state.uploadedPdfName = file.name;
     state.uploadedPdfObjectUrl = URL.createObjectURL(file);
@@ -1665,14 +1660,8 @@ document.getElementById('pdfUpload').addEventListener('change', async (event) =>
 });
 
 document.getElementById('useDefaultPdf').addEventListener('click', async () => {
-  if (state.uploadedPdfObjectUrl) {
-    URL.revokeObjectURL(state.uploadedPdfObjectUrl);
-  }
-  state.uploadedPdfBase64 = null;
-  state.uploadedPdfName = null;
-  state.uploadedPdfObjectUrl = null;
-  const response = await fetch('./api/form');
-  const data = await response.json();
+  resetUploadedPdfSelection();
+  const data = await fetchJsonOk('./api/form', undefined, 'Не удалось загрузить тестовый PDF.');
   state.defaultPdfUrl = data.pdfUrl;
   showPdf(data.pdfUrl, `${Math.round(data.size / 1024)} KB`);
   setUploadState('Сейчас используется тестовый PDF с сервера.');
