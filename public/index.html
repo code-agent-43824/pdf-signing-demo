@@ -75,13 +75,45 @@
 
     <template id="certificateDialogTemplate">
       <div class="dialog-backdrop">
-        <div class="dialog-card">
+        <div class="dialog-card dialog-card-certificates">
           <h3>Выбор сертификата</h3>
-          <p class="muted">Страница не выбирает сертификат автоматически — выбери его сам.</p>
-          <select id="certificateSelect" class="certificate-select"></select>
+          <p class="muted">Выбери сертификат вручную. Для CryptoPro и Рутокен список показан в одном и том же виде.</p>
+          <div id="certificateList" class="certificate-list" role="listbox" aria-label="Список сертификатов"></div>
           <div class="dialog-actions">
             <button id="cancelCertificate" class="secondary">Отмена</button>
             <button id="confirmCertificate" class="primary">Подписать этим сертификатом</button>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <template id="rutokenPinDialogTemplate">
+      <div class="dialog-backdrop">
+        <div class="dialog-card dialog-card-pin">
+          <h3>PIN-код Рутокен</h3>
+          <p id="rutokenPinPrompt" class="muted">Введите PIN-код токена.</p>
+          <label class="field">
+            <span>PIN-код</span>
+            <input id="rutokenPinInput" class="pin-input" type="password" inputmode="numeric" autocomplete="off" pattern="[0-9]*" placeholder="••••••••" />
+          </label>
+          <div id="rutokenPinError" class="pin-error hidden"></div>
+          <div class="pin-pad" aria-label="Экранная цифровая клавиатура">
+            <button type="button" class="pin-key" data-key="1">1</button>
+            <button type="button" class="pin-key" data-key="2">2</button>
+            <button type="button" class="pin-key" data-key="3">3</button>
+            <button type="button" class="pin-key" data-key="4">4</button>
+            <button type="button" class="pin-key" data-key="5">5</button>
+            <button type="button" class="pin-key" data-key="6">6</button>
+            <button type="button" class="pin-key" data-key="7">7</button>
+            <button type="button" class="pin-key" data-key="8">8</button>
+            <button type="button" class="pin-key" data-key="9">9</button>
+            <button type="button" class="pin-key pin-key-action" data-action="clear">Сброс</button>
+            <button type="button" class="pin-key" data-key="0">0</button>
+            <button type="button" class="pin-key pin-key-action" data-action="backspace">⌫</button>
+          </div>
+          <div class="dialog-actions">
+            <button id="cancelRutokenPin" class="secondary">Отмена</button>
+            <button id="confirmRutokenPin" class="primary">Продолжить</button>
           </div>
         </div>
       </div>

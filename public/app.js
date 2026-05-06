@@ -2,6 +2,7 @@ const state = {
   certificates: [],
   pluginReady: false,
   activeCryptoStack: 'cryptopro',
+  activeDialog: null,
   cryptoProviders: {
     cryptopro: { ready: false, certificates: [], client: null },
     rutoken: { ready: false, certificates: [], client: null },
@@ -121,6 +122,62 @@ function isCertificateDateValid(validToDate) {
   return !Number.isNaN(parsed.getTime()) && parsed.getTime() > Date.now();
 }
 
+function parseDistinguishedName(value) {
+  const source = String(value || '').trim();
+  if (!source) return {};
+
+  return source
+    .split(/,(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .reduce((accumulator, part) => {
+      const separatorIndex = part.indexOf('=');
+      if (separatorIndex === -1) return accumulator;
+      const key = part.slice(0, separatorIndex).trim();
+      const valuePart = part.slice(separatorIndex + 1).trim().replace(/^"|"$/g, '');
+      if (key) {
+        accumulator[key] = valuePart;
+      }
+      return accumulator;
+    }, {});
+}
+
+function getCertificateCommonName(subjectName) {
+  const parsed = parseDistinguishedName(subjectName);
+  return parsed.CN || parsed.commonName || parsed.name || String(subjectName || '').trim();
+}
+
+function getCertificateIssuerLabel(issuerName) {
+  const parsed = parseDistinguishedName(issuerName);
+  return parsed.CN || parsed.O || parsed.OU || String(issuerName || '').trim();
+}
+
+function formatCertificateDate(value) {
+  if (!value) return '—';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return String(value);
+  }
+  return new Intl.DateTimeFormat('ru-RU', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(parsed);
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;');
+}
+
+function closeActiveDialog() {
+  state.activeDialog?.remove();
+  state.activeDialog = null;
+}
+
 async function enumerateCertificates() {
   const store = await createObject('CAdESCOM.Store');
   await store.Open(
@@ -148,9 +205,11 @@ async function enumerateCertificates() {
       const algorithm = await publicKey.Algorithm;
       const friendlyName = await getProp(algorithm, 'FriendlyName', 'FriendlyName');
       result.push({
-        label: subjectName,
+        label: getCertificateCommonName(subjectName),
+        commonName: getCertificateCommonName(subjectName),
         subjectName,
         issuerName,
+        issuerLabel: getCertificateIssuerLabel(issuerName),
         thumbprint,
         serialNumber,
         validToDate,
@@ -214,6 +273,13 @@ function normalizeRutokenDn(value) {
       .join(', ');
   }
   return String(value);
+}
+
+function getRutokenDnCommonName(value) {
+  if (!value || typeof value !== 'object') {
+    return normalizeRutokenDn(value);
+  }
+  return value.commonName || value.CN || value.title || value.name || normalizeRutokenDn(value);
 }
 
 function parseRutokenDate(value) {
@@ -303,12 +369,14 @@ async function enumerateRutokenCertificates(plugin) {
 
       const subjectName = normalizeRutokenDn(parsed?.subject) || certId;
       const issuerName = normalizeRutokenDn(parsed?.issuer);
-      const commonName = parsed?.subject?.commonName || parsed?.subject?.CN || subjectName;
+      const commonName = getRutokenDnCommonName(parsed?.subject) || subjectName;
       const algorithm = parsed?.publicKeyAlgorithm || parsed?.signatureAlgorithm || 'Rutoken certificate';
       result.push({
         label: commonName,
+        commonName,
         subjectName,
         issuerName,
+        issuerLabel: getRutokenDnCommonName(parsed?.issuer) || issuerName,
         thumbprint: parsed?.thumbprint || parsed?.fingerprint || certId,
         serialNumber: parsed?.serialNumber || certId,
         validToDate: validToDate ? validToDate.toISOString() : '',
@@ -425,6 +493,149 @@ async function signPreparedContentRutoken(selectedCertificate, contentToSignBase
   return normalizeCmsBase64(cmsSignature);
 }
 
+function renderCertificateCard(certificate, index, isSelected) {
+  const badge = certificate.tokenLabel || certificate.algorithm || getCryptoStackLabel();
+  return `
+    <button
+      type="button"
+      class="certificate-card${isSelected ? ' is-selected' : ''}"
+      data-index="${index}"
+      role="option"
+      aria-selected="${isSelected ? 'true' : 'false'}"
+    >
+      <div class="certificate-card-head">
+        <div class="certificate-card-title">${escapeHtml(certificate.commonName || certificate.label || 'Без имени')}</div>
+        <div class="certificate-card-badge">${escapeHtml(badge)}</div>
+      </div>
+      <div class="certificate-card-subtitle">${escapeHtml(certificate.subjectName || '—')}</div>
+      <dl class="certificate-meta">
+        <dt>Common Name</dt>
+        <dd>${escapeHtml(certificate.commonName || certificate.label || '—')}</dd>
+        <dt>Срок действия</dt>
+        <dd>${escapeHtml(formatCertificateDate(certificate.validToDate))}</dd>
+        <dt>Издатель</dt>
+        <dd>${escapeHtml(certificate.issuerLabel || certificate.issuerName || '—')}</dd>
+      </dl>
+    </button>
+  `;
+}
+
+function openRutokenPinDialog({ title = 'Введите PIN-код токена.', errorMessage = '' } = {}) {
+  return new Promise((resolve, reject) => {
+    closeActiveDialog();
+
+    const fragment = document.getElementById('rutokenPinDialogTemplate').content.cloneNode(true);
+    const backdrop = fragment.querySelector('.dialog-backdrop');
+    const prompt = fragment.querySelector('#rutokenPinPrompt');
+    const input = fragment.querySelector('#rutokenPinInput');
+    const error = fragment.querySelector('#rutokenPinError');
+    const confirm = fragment.querySelector('#confirmRutokenPin');
+    const cancel = fragment.querySelector('#cancelRutokenPin');
+
+    state.activeDialog = backdrop;
+    prompt.textContent = title;
+    if (errorMessage) {
+      error.textContent = errorMessage;
+      error.classList.remove('hidden');
+    }
+
+    const close = () => closeActiveDialog();
+    const submit = () => {
+      const pin = String(input.value || '').replace(/\D+/g, '');
+      if (!pin) {
+        error.textContent = 'PIN-код пустой.';
+        error.classList.remove('hidden');
+        input.focus();
+        return;
+      }
+      close();
+      resolve(pin);
+    };
+
+    fragment.querySelectorAll('.pin-key').forEach((button) => {
+      button.addEventListener('click', () => {
+        const key = button.dataset.key;
+        const action = button.dataset.action;
+        if (key) {
+          input.value = `${input.value}${key}`;
+          error.classList.add('hidden');
+          return;
+        }
+        if (action === 'clear') {
+          input.value = '';
+        }
+        if (action === 'backspace') {
+          input.value = input.value.slice(0, -1);
+        }
+        input.focus();
+      });
+    });
+
+    input.addEventListener('input', () => {
+      input.value = input.value.replace(/\D+/g, '');
+      error.classList.add('hidden');
+    });
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        submit();
+      }
+    });
+
+    confirm.addEventListener('click', submit);
+    cancel.addEventListener('click', () => {
+      close();
+      reject(new Error('Ввод PIN-кода отменён.'));
+    });
+    backdrop.addEventListener('click', (event) => {
+      if (event.target === backdrop) {
+        close();
+        reject(new Error('Ввод PIN-кода отменён.'));
+      }
+    });
+
+    document.body.appendChild(backdrop);
+    requestAnimationFrame(() => input.focus());
+  });
+}
+
+async function ensureRutokenLogin(deviceId) {
+  const plugin = state.cryptoProviders.rutoken.client;
+  if (!plugin) {
+    throw new Error('Рутокен плагин не готов.');
+  }
+
+  try {
+    const isLoggedIn = await plugin.getDeviceInfo(deviceId, plugin.TOKEN_INFO_IS_LOGGED_IN);
+    if (isLoggedIn) {
+      return false;
+    }
+  } catch (_error) {
+    // ignore lookup failure and try login explicitly
+  }
+
+  let errorMessage = '';
+  while (true) {
+    const pin = await openRutokenPinDialog({
+      title: 'Рутокен не запрашивает PIN сам. Введите PIN-код токена, чтобы продолжить подпись.',
+      errorMessage,
+    });
+    try {
+      await plugin.login(deviceId, pin);
+      return true;
+    } catch (error) {
+      let retriesLeft = null;
+      try {
+        retriesLeft = await plugin.getDeviceInfo(deviceId, plugin.TOKEN_INFO_PIN_RETRIES_LEFT);
+      } catch (_innerError) {
+        // ignore retries lookup failure
+      }
+      const retriesSuffix = Number.isFinite(Number(retriesLeft)) ? ` Осталось попыток: ${retriesLeft}.` : '';
+      errorMessage = `Не удалось авторизоваться: ${getRutokenErrorMessage(error, plugin)}.${retriesSuffix}`;
+    }
+  }
+}
+
 function openCertificateDialog(certificates) {
   return new Promise((resolve, reject) => {
     if (!certificates.length) {
@@ -432,29 +643,47 @@ function openCertificateDialog(certificates) {
       return;
     }
 
+    closeActiveDialog();
     const fragment = document.getElementById('certificateDialogTemplate').content.cloneNode(true);
     const backdrop = fragment.querySelector('.dialog-backdrop');
-    const select = fragment.querySelector('#certificateSelect');
+    const list = fragment.querySelector('#certificateList');
     const confirm = fragment.querySelector('#confirmCertificate');
     const cancel = fragment.querySelector('#cancelCertificate');
+    let selectedIndex = 0;
 
-    certificates.forEach((certificate, index) => {
-      const option = document.createElement('option');
-      option.value = String(index);
-      const tokenSuffix = certificate.tokenLabel ? ` · ${certificate.tokenLabel}` : '';
-      option.textContent = `${certificate.label} · ${certificate.algorithm}${tokenSuffix} · до ${certificate.validToDate}`;
-      select.appendChild(option);
-    });
+    state.activeDialog = backdrop;
+
+    const render = () => {
+      list.innerHTML = certificates
+        .map((certificate, index) => renderCertificateCard(certificate, index, index === selectedIndex))
+        .join('');
+
+      list.querySelectorAll('.certificate-card').forEach((card) => {
+        card.addEventListener('click', () => {
+          selectedIndex = Number(card.dataset.index);
+          render();
+        });
+      });
+    };
+
+    render();
 
     confirm.addEventListener('click', () => {
-      const picked = certificates[Number(select.value)];
-      backdrop.remove();
+      const picked = certificates[selectedIndex];
+      closeActiveDialog();
       resolve(picked);
     });
 
     cancel.addEventListener('click', () => {
-      backdrop.remove();
+      closeActiveDialog();
       reject(new Error('Выбор сертификата отменён.'));
+    });
+
+    backdrop.addEventListener('click', (event) => {
+      if (event.target === backdrop) {
+        closeActiveDialog();
+        reject(new Error('Выбор сертификата отменён.'));
+      }
     });
 
     document.body.appendChild(backdrop);
@@ -1230,9 +1459,24 @@ async function prepareAndSign() {
   }
 
   setStatus(`Выбран сертификат. Прошу ${getCryptoStackLabel()} подписать хеш: ${selectedCertificate.label}`);
-  const cmsSignatureBase64 = state.activeCryptoStack === 'rutoken'
-    ? await signPreparedContentRutoken(selectedCertificate, prepareData.contentToSignBase64)
-    : await signPreparedContent(selectedCertificate, prepareData.contentToSignBase64);
+  let rutokenLoginOpened = false;
+  let cmsSignatureBase64;
+  try {
+    if (state.activeCryptoStack === 'rutoken') {
+      rutokenLoginOpened = await ensureRutokenLogin(selectedCertificate.deviceId);
+    }
+    cmsSignatureBase64 = state.activeCryptoStack === 'rutoken'
+      ? await signPreparedContentRutoken(selectedCertificate, prepareData.contentToSignBase64)
+      : await signPreparedContent(selectedCertificate, prepareData.contentToSignBase64);
+  } finally {
+    if (state.activeCryptoStack === 'rutoken' && rutokenLoginOpened) {
+      try {
+        await state.cryptoProviders.rutoken.client?.logout(selectedCertificate.deviceId);
+      } catch (_error) {
+        // ignore logout failure
+      }
+    }
+  }
 
   setStatus('Встраиваю CMS-подпись обратно в PDF…');
   const completeResponse = await fetch('./api/sign/complete', {
