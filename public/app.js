@@ -609,6 +609,8 @@ async function signPreparedContentRutoken(selectedCertificate, contentToSignBase
 
   const options = {
     detached: true,
+    addSignTime: true,
+    addEssCert: true,
   };
   if (isRutokenRsaCertificate(selectedCertificate)) {
     options.rsaHashAlgorithm = detectRutokenHashAlgorithmConstant(selectedCertificate, plugin);
