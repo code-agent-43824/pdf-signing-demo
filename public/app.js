@@ -367,11 +367,37 @@ function normalizeRutokenDn(value) {
   return String(value);
 }
 
-function getRutokenDnCommonName(value) {
-  if (!value || typeof value !== 'object') {
-    return normalizeRutokenDn(value);
+function getRutokenDnField(value, fieldNames = []) {
+  const wanted = new Set(fieldNames.map((field) => String(field).toLowerCase()));
+  if (!value) return '';
+  if (typeof value === 'string') return '';
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = getRutokenDnField(item, fieldNames);
+      if (found) return found;
+    }
+    return '';
   }
-  return value.commonName || value.CN || value.title || value.name || normalizeRutokenDn(value);
+  if (typeof value === 'object') {
+    for (const [key, item] of Object.entries(value)) {
+      if (wanted.has(String(key).toLowerCase()) && item !== undefined && item !== null && item !== '') {
+        return String(item);
+      }
+    }
+    if ('rdn' in value && 'value' in value && wanted.has(String(value.rdn).toLowerCase())) {
+      return String(value.value);
+    }
+    for (const item of Object.values(value)) {
+      const found = getRutokenDnField(item, fieldNames);
+      if (found) return found;
+    }
+  }
+  return '';
+}
+
+function getRutokenDnCommonName(value) {
+  const commonName = getRutokenDnField(value, ['commonName', 'CN']);
+  return commonName || normalizeRutokenDn(value);
 }
 
 function parseRutokenDate(value) {
@@ -469,16 +495,19 @@ async function enumerateRutokenCertificates(plugin) {
           continue;
         }
 
-        const subjectName = normalizeRutokenDn(parsed?.subject) || certId;
-        const issuerName = normalizeRutokenDn(parsed?.issuer);
-        const commonName = getRutokenDnCommonName(parsed?.subject) || subjectName;
+        const subjectNameRaw = normalizeRutokenDn(parsed?.subject) || certId;
+        const issuerNameRaw = normalizeRutokenDn(parsed?.issuer);
+        const commonName = getRutokenDnCommonName(parsed?.subject) || subjectNameRaw;
+        const issuerCommonName = getRutokenDnCommonName(parsed?.issuer) || issuerNameRaw;
         const algorithm = parsed?.publicKeyAlgorithm || parsed?.signatureAlgorithm || 'Rutoken certificate';
         result.push({
           label: commonName,
           commonName,
-          subjectName,
-          issuerName,
-          issuerLabel: getRutokenDnCommonName(parsed?.issuer) || issuerName,
+          subjectName: commonName,
+          issuerName: issuerCommonName,
+          subjectNameRaw,
+          issuerNameRaw,
+          issuerLabel: issuerCommonName,
           thumbprint: parsed?.thumbprint || parsed?.fingerprint || certId,
           serialNumber: parsed?.serialNumber || certId,
           validToDate: validToDate ? validToDate.toISOString() : '',
