@@ -108,7 +108,6 @@ function loadExternalScript(mode) {
     script.src = src;
     script.async = true;
     script.dataset.loading = 'true';
-    script.crossOrigin = 'anonymous';
     script.addEventListener('load', () => {
       script.dataset.loading = 'false';
       script.dataset.loaded = 'true';
@@ -347,9 +346,22 @@ function normalizeRutokenDn(value) {
   if (typeof value === 'object') {
     const preferred = value.commonName || value.CN || value.title || value.name;
     if (preferred) return String(preferred);
+    if ('rdn' in value && 'value' in value) {
+      return `${value.rdn}=${value.value}`;
+    }
     return Object.entries(value)
       .filter(([, item]) => item !== undefined && item !== null && item !== '')
-      .map(([key, item]) => `${key}=${item}`)
+      .map(([key, item]) => {
+        if (Array.isArray(item)) {
+          const normalized = item.map((entry) => normalizeRutokenDn(entry)).filter(Boolean).join(', ');
+          return normalized || '';
+        }
+        if (item && typeof item === 'object' && 'rdn' in item && 'value' in item) {
+          return `${item.rdn}=${item.value}`;
+        }
+        return `${key}=${normalizeRutokenDn(item)}`;
+      })
+      .filter(Boolean)
       .join(', ');
   }
   return String(value);
