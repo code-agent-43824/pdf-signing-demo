@@ -4,8 +4,8 @@ const state = {
   activeCryptoStack: 'cryptopro',
   activeDialog: null,
   cryptoProviders: {
-    cryptopro: { ready: false, certificates: [], client: null },
-    rutoken: { ready: false, certificates: [], client: null },
+    cryptopro: { ready: false, checked: false, certificates: [], client: null },
+    rutoken: { ready: false, checked: false, certificates: [], client: null },
   },
   uploadedPdfBase64: null,
   uploadedPdfName: null,
@@ -43,6 +43,7 @@ function setStatus(message) {
 
 function setPluginState(message) {
   document.getElementById('pluginState').textContent = message;
+  updateEnvironmentDiagnostics();
 }
 
 function getCryptoStackLabel(mode = state.activeCryptoStack) {
@@ -126,15 +127,74 @@ function syncActiveProviderState() {
   const provider = getActiveProviderState();
   state.pluginReady = Boolean(provider?.ready);
   state.certificates = provider?.certificates || [];
+  updateEnvironmentDiagnostics();
 }
 
-function setUploadState(message) {
-  document.getElementById('uploadState').textContent = message;
+function setUploadState(message, { empty = false } = {}) {
+  const node = document.getElementById('uploadState');
+  node.textContent = message;
+  node.classList.toggle('is-empty', empty);
+}
+
+function setPreviewMode(mode = 'empty') {
+  const sourceEmpty = document.getElementById('sourceEmpty');
+  const sourcePdf = document.getElementById('sourcePdf');
+  const signedState = document.getElementById('signedState');
+  const signedPdf = document.getElementById('signedPdf');
+  const previewTitle = document.getElementById('previewTitle');
+  const previewHint = document.getElementById('previewHint');
+  const successBanner = document.getElementById('successBanner');
+
+  sourceEmpty.classList.toggle('hidden', mode !== 'empty');
+  sourcePdf.classList.toggle('hidden', mode !== 'source');
+  signedState.classList.toggle('hidden', mode !== 'signed-empty');
+  signedPdf.classList.toggle('hidden', mode !== 'signed');
+  successBanner.classList.toggle('hidden', mode !== 'signed');
+
+  if (mode === 'signed') {
+    previewTitle.textContent = 'Подписанный документ';
+    previewHint.textContent = 'Финальная версия PDF после встраивания подписи и штампа';
+    return;
+  }
+
+  previewTitle.textContent = 'Предпросмотр документа';
+  previewHint.textContent = mode === 'source'
+    ? 'Исходный загруженный PDF перед подписанием'
+    : 'После загрузки PDF-файла его предпросмотр появится здесь';
+}
+
+function updateEnvironmentDiagnostics() {
+  const cryptopro = state.cryptoProviders.cryptopro;
+  const rutoken = state.cryptoProviders.rutoken;
+  const setStatusNode = (id, provider, pendingLabel = 'Проверка…') => {
+    const node = document.getElementById(id);
+    if (!node) return;
+    node.classList.remove('is-ready', 'is-error', 'is-pending');
+    if (provider?.ready === true) {
+      node.classList.add('is-ready');
+      node.textContent = 'загружено';
+      return;
+    }
+    if (provider?.checked) {
+      node.classList.add('is-error');
+      node.textContent = 'не загружено';
+      return;
+    }
+    node.classList.add('is-pending');
+    node.textContent = pendingLabel;
+  };
+
+  setStatusNode('statusCryptoPro', cryptopro);
+  setStatusNode('statusRutoken', rutoken);
+
+  const activeLabel = document.getElementById('activePluginLabel');
+  if (activeLabel) {
+    activeLabel.textContent = `Активен ${getCryptoStackLabel()}`;
+  }
 }
 
 function showSourceEmptyState(message = 'PDF ещё не загружен') {
-  document.getElementById('sourceEmpty')?.classList.remove('hidden');
-  document.getElementById('sourcePdf').classList.add('hidden');
+  setPreviewMode('empty');
   document.getElementById('sourcePdf').removeAttribute('src');
   document.getElementById('docMeta').textContent = message;
 }
@@ -162,9 +222,8 @@ async function fetchAvailableFonts() {
 }
 
 function showPdf(url, metaText) {
-  document.getElementById('sourceEmpty')?.classList.add('hidden');
   document.getElementById('sourcePdf').src = url;
-  document.getElementById('sourcePdf').classList.remove('hidden');
+  setPreviewMode('source');
   document.getElementById('docMeta').textContent = metaText;
 }
 
@@ -174,7 +233,7 @@ async function boot() {
 
   await Promise.all([fetchStampConfig(), fetchAvailableFonts()]);
   showSourceEmptyState();
-  setUploadState('Ожидание загрузки пользовательского PDF.');
+  setUploadState('PDF ещё не выбран.', { empty: true });
   await initActiveCryptoStack({ force: true });
 }
 
@@ -280,11 +339,9 @@ function resetUploadedPdfSelection() {
 
 function resetSignedPdfPreview() {
   const signedPdf = document.getElementById('signedPdf');
-  const signedState = document.getElementById('signedState');
   const downloadLink = document.getElementById('downloadLink');
-  signedPdf.classList.add('hidden');
   signedPdf.removeAttribute('src');
-  signedState.classList.remove('hidden');
+  setPreviewMode(state.uploadedPdfBase64 ? 'source' : 'empty');
   downloadLink.classList.add('hidden');
   downloadLink.removeAttribute('href');
 }
@@ -337,6 +394,7 @@ async function enumerateCertificates() {
 
 async function initCryptoPro() {
   const provider = state.cryptoProviders.cryptopro;
+  provider.checked = true;
   try {
     await loadExternalScript('cryptopro');
     if (!window.cadesplugin) {
@@ -558,6 +616,7 @@ async function enumerateRutokenCertificates(plugin) {
 
 async function initRutoken() {
   const provider = state.cryptoProviders.rutoken;
+  provider.checked = true;
   try {
     await loadExternalScript('rutoken');
     if (!window.rutoken) {
@@ -1644,14 +1703,12 @@ async function prepareAndSign() {
   }, 'Не удалось встроить подпись в PDF.');
 
   const signedPdf = document.getElementById('signedPdf');
-  const signedState = document.getElementById('signedState');
   const downloadLink = document.getElementById('downloadLink');
   signedPdf.src = completeData.signedPdfUrl;
-  signedPdf.classList.remove('hidden');
-  signedState.classList.add('hidden');
+  setPreviewMode('signed');
   downloadLink.href = completeData.signedPdfUrl;
   downloadLink.classList.remove('hidden');
-  setStatus('Готово: подписанный PDF собран и показан отдельно. Исходный документ в левом окне не менялся.');
+  setStatus('Готово: подписанный PDF собран, встроен в контейнер и показан в области предпросмотра.');
 }
 
 document.getElementById('pdfUpload').addEventListener('change', async (event) => {
@@ -1670,7 +1727,7 @@ document.getElementById('pdfUpload').addEventListener('change', async (event) =>
     state.uploadedPdfObjectUrl = URL.createObjectURL(file);
     resetSignedPdfPreview();
     showPdf(state.uploadedPdfObjectUrl, `${file.name} · ${Math.round(file.size / 1024)} KB`);
-    setUploadState(`Загружен PDF: ${file.name}`);
+    setUploadState(`${file.name} · PDF документ · ${Math.round(file.size / 1024)} КБ`);
     setStatus('PDF загружен. Теперь можно выбрать сертификат и подписать документ.');
   } catch (error) {
     setStatus(`Ошибка загрузки PDF: ${error.message}`);
