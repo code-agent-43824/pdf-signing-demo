@@ -128,6 +128,7 @@ router.post('/api/stamp-config', (req, res) => {
 router.get('/api/form', (_req, res) => {
   const stats = fs.statSync(formPdfPath);
   res.json({
+    ok: true,
     title: 'Формуляр на подпись',
     pdfUrl: `./assets/${FORM_PDF_NAME}`,
     size: stats.size,
