@@ -1,12 +1,14 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
+const { execFileSync } = require('child_process');
 const { createPreparedPdf, embedCmsSignature, createSessionStore } = require('./signing/pades');
 
 const app = express();
 const PORT = process.env.PORT || 3010;
 const BASE_PATH = process.env.BASE_PATH || '/';
 const FORM_PDF_NAME = 'formular.pdf';
+const CMS_NORMALIZER_PATH = path.join(__dirname, '..', 'scripts', 'normalize-cms.py');
 const publicDir = path.join(__dirname, '..', 'public');
 const assetsDir = path.join(publicDir, 'assets');
 const generatedDir = path.join(publicDir, 'generated');
@@ -67,6 +69,24 @@ function listAvailableFonts() {
       path: fontPath,
       label: path.basename(fontPath).replace(/\.(ttf|otf|ttc)$/i, ''),
     }));
+}
+
+function normalizeCmsSignatureBase64(cmsSignatureBase64) {
+  const payload = String(cmsSignatureBase64 || '').trim();
+  if (!payload) {
+    return payload;
+  }
+
+  try {
+    return execFileSync('python3', [CMS_NORMALIZER_PATH], {
+      input: payload,
+      encoding: 'utf8',
+      maxBuffer: 10 * 1024 * 1024,
+    }).trim() || payload;
+  } catch (error) {
+    console.warn('CMS normalization skipped:', error.message);
+    return payload;
+  }
 }
 
 const router = express.Router();
@@ -146,10 +166,12 @@ router.post('/api/sign/complete', (req, res) => {
       return res.status(404).json({ ok: false, stage: 'complete', message: 'Signing session not found or expired.' });
     }
 
+    const normalizedCmsSignatureBase64 = normalizeCmsSignatureBase64(cmsSignatureBase64);
+
     const signedPdf = embedCmsSignature({
       preparedPdf: session.preparedPdf,
       byteRange: session.byteRange,
-      cmsBase64: cmsSignatureBase64,
+      cmsBase64: normalizedCmsSignatureBase64,
       placeholderLength: session.placeholderLength,
     });
 
