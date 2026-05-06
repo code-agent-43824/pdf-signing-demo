@@ -19,7 +19,6 @@
         </div>
         <div class="topbar-actions">
           <button id="stampSettingsButton" class="secondary" type="button">Настроить штампы</button>
-          <button class="ghost-button" type="button">Справка</button>
         </div>
       </header>
 
@@ -128,18 +127,46 @@
             </div>
           </div>
 
-          <div id="sourceEmpty" class="preview-empty-state">
-            <div class="preview-empty-icon">📄</div>
-            <h3>Предпросмотр документа</h3>
-            <p>После загрузки PDF-файла его предпросмотр появится здесь.</p>
-            <div class="stamp-placeholder">
-              <div class="stamp-placeholder-box">Здесь будет размещён штамп электронной подписи</div>
+          <div class="viewer-shell">
+            <div class="viewer-toolbar viewer-toolbar-top">
+              <div class="viewer-toolbar-group">
+                <span class="viewer-burger">☰</span>
+                <span id="viewerFileName" class="viewer-file-name">Документ не загружен</span>
+              </div>
+              <div class="viewer-toolbar-group viewer-toolbar-center">
+                <button class="viewer-tool" type="button">−</button>
+                <span class="viewer-toolbar-pill">1 / 1</span>
+                <button class="viewer-tool" type="button">+</button>
+                <span class="viewer-toolbar-pill">100%</span>
+              </div>
+              <div class="viewer-toolbar-group viewer-toolbar-right">
+                <span class="viewer-tool viewer-tool-icon">⤓</span>
+                <span class="viewer-tool viewer-tool-icon">⎙</span>
+                <span class="viewer-tool viewer-tool-icon">⋯</span>
+              </div>
+            </div>
+
+            <div class="viewer-stage">
+              <div id="sourceEmpty" class="preview-empty-state">
+                <div class="preview-empty-icon">📄</div>
+                <h3>Предпросмотр документа</h3>
+                <p>После загрузки PDF-файла его предпросмотр появится здесь.</p>
+                <div class="stamp-placeholder">
+                  <div class="stamp-placeholder-box">Здесь будет размещён штамп электронной подписи</div>
+                </div>
+              </div>
+
+              <iframe id="sourcePdf" title="Исходный PDF" class="pdf-frame preview-frame hidden"></iframe>
+              <div id="signedState" class="empty-state hidden">Пока нет подписанного документа.</div>
+              <iframe id="signedPdf" title="Подписанный PDF" class="pdf-frame preview-frame hidden"></iframe>
+            </div>
+
+            <div class="viewer-toolbar viewer-toolbar-bottom">
+              <div class="viewer-toolbar-group viewer-toolbar-center">
+                <span class="viewer-toolbar-pill">PDF preview</span>
+              </div>
             </div>
           </div>
-
-          <iframe id="sourcePdf" title="Исходный PDF" class="pdf-frame preview-frame hidden"></iframe>
-          <div id="signedState" class="empty-state hidden">Пока нет подписанного документа.</div>
-          <iframe id="signedPdf" title="Подписанный PDF" class="pdf-frame preview-frame hidden"></iframe>
         </section>
       </section>
     </main>
@@ -147,12 +174,21 @@
     <template id="certificateDialogTemplate">
       <div class="dialog-backdrop">
         <div class="dialog-card dialog-card-certificates">
-          <h3>Выбор сертификата</h3>
-          <p class="muted">Выбери сертификат вручную. Для CryptoPro и Рутокен список показан в одном и том же виде.</p>
+          <div class="dialog-titlebar">
+            <div>
+              <h3>Выбор сертификата</h3>
+              <p class="muted">Выберите сертификат для подписания документа.</p>
+            </div>
+          </div>
+          <div class="certificate-table-head">
+            <span>Владелец</span>
+            <span>Издатель</span>
+            <span>Действителен до</span>
+          </div>
           <div id="certificateList" class="certificate-list" role="listbox" aria-label="Список сертификатов"></div>
           <div class="dialog-actions">
             <button id="cancelCertificate" class="secondary">Отмена</button>
-            <button id="confirmCertificate" class="primary">Подписать этим сертификатом</button>
+            <button id="confirmCertificate" class="primary">Выбрать</button>
           </div>
         </div>
       </div>

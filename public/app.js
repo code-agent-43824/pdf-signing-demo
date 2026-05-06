@@ -128,12 +128,21 @@ function syncActiveProviderState() {
   state.pluginReady = Boolean(provider?.ready);
   state.certificates = provider?.certificates || [];
   updateEnvironmentDiagnostics();
+  updatePrimaryActionState();
 }
 
 function setUploadState(message, { empty = false } = {}) {
   const node = document.getElementById('uploadState');
   node.textContent = message;
   node.classList.toggle('is-empty', empty);
+}
+
+function updatePrimaryActionState() {
+  const button = document.getElementById('signButton');
+  if (!button) return;
+  const canSign = Boolean(state.uploadedPdfBase64 && state.pluginReady);
+  button.disabled = !canSign;
+  button.classList.toggle('is-disabled', !canSign);
 }
 
 function setPreviewMode(mode = 'empty') {
@@ -197,6 +206,11 @@ function showSourceEmptyState(message = 'PDF ещё не загружен') {
   setPreviewMode('empty');
   document.getElementById('sourcePdf').removeAttribute('src');
   document.getElementById('docMeta').textContent = message;
+  const viewerFileName = document.getElementById('viewerFileName');
+  if (viewerFileName) {
+    viewerFileName.textContent = 'Документ не загружен';
+  }
+  updatePrimaryActionState();
 }
 
 async function fetchJsonOk(url, options, fallbackMessage) {
@@ -225,6 +239,11 @@ function showPdf(url, metaText) {
   document.getElementById('sourcePdf').src = url;
   setPreviewMode('source');
   document.getElementById('docMeta').textContent = metaText;
+  const viewerFileName = document.getElementById('viewerFileName');
+  if (viewerFileName) {
+    viewerFileName.textContent = state.uploadedPdfName || 'Загруженный документ';
+  }
+  updatePrimaryActionState();
 }
 
 async function boot() {
@@ -344,6 +363,7 @@ function resetSignedPdfPreview() {
   setPreviewMode(state.uploadedPdfBase64 ? 'source' : 'empty');
   downloadLink.classList.add('hidden');
   downloadLink.removeAttribute('href');
+  updatePrimaryActionState();
 }
 
 async function enumerateCertificates() {
@@ -1706,6 +1726,10 @@ async function prepareAndSign() {
   const downloadLink = document.getElementById('downloadLink');
   signedPdf.src = completeData.signedPdfUrl;
   setPreviewMode('signed');
+  const viewerFileName = document.getElementById('viewerFileName');
+  if (viewerFileName) {
+    viewerFileName.textContent = 'Подписанный документ';
+  }
   downloadLink.href = completeData.signedPdfUrl;
   downloadLink.classList.remove('hidden');
   setStatus('Готово: подписанный PDF собран, встроен в контейнер и показан в области предпросмотра.');
