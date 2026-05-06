@@ -22,6 +22,10 @@ const CRYPTO_STACK_LABELS = {
 };
 
 const CRYPTO_STACK_STORAGE_KEY = 'pdf-signing-demo.crypto-stack';
+const CRYPTO_SCRIPTS = {
+  cryptopro: 'https://www.cryptopro.ru/sites/default/files/products/cades/cadesplugin_api.js',
+  rutoken: './vendor/rutoken-plugin.min.js',
+};
 
 const TEMPLATE_TOKEN_OPTIONS = [
   { value: '{signer.cert_id}', label: 'ID сертификата' },
@@ -75,6 +79,49 @@ function syncCryptoStackControls() {
   } catch (_error) {
     // ignore storage issues
   }
+}
+
+function getScriptElementId(mode) {
+  return `crypto-script-${mode}`;
+}
+
+function loadExternalScript(mode) {
+  const src = CRYPTO_SCRIPTS[mode];
+  if (!src) {
+    return Promise.reject(new Error(`Неизвестный криптоплагин: ${mode}`));
+  }
+
+  const existing = document.getElementById(getScriptElementId(mode));
+  if (existing?.dataset.loaded === 'true') {
+    return Promise.resolve();
+  }
+  if (existing?.dataset.loading === 'true') {
+    return new Promise((resolve, reject) => {
+      existing.addEventListener('load', () => resolve(), { once: true });
+      existing.addEventListener('error', () => reject(new Error(`Не удалось загрузить скрипт ${mode}.`)), { once: true });
+    });
+  }
+
+  return new Promise((resolve, reject) => {
+    const script = existing || document.createElement('script');
+    script.id = getScriptElementId(mode);
+    script.src = src;
+    script.async = true;
+    script.dataset.loading = 'true';
+    script.crossOrigin = 'anonymous';
+    script.addEventListener('load', () => {
+      script.dataset.loading = 'false';
+      script.dataset.loaded = 'true';
+      resolve();
+    }, { once: true });
+    script.addEventListener('error', () => {
+      script.dataset.loading = 'false';
+      reject(new Error(`Не удалось загрузить скрипт ${mode}.`));
+    }, { once: true });
+    if (!existing) {
+      document.head.appendChild(script);
+    }
+  });
 }
 
 function syncActiveProviderState() {
@@ -259,6 +306,7 @@ async function enumerateCertificates() {
 async function initCryptoPro() {
   const provider = state.cryptoProviders.cryptopro;
   try {
+    await loadExternalScript('cryptopro');
     if (!window.cadesplugin) {
       throw new Error('Скрипт cadesplugin_api.js не загрузился');
     }
@@ -437,6 +485,7 @@ async function enumerateRutokenCertificates(plugin) {
 async function initRutoken() {
   const provider = state.cryptoProviders.rutoken;
   try {
+    await loadExternalScript('rutoken');
     if (!window.rutoken) {
       throw new Error('Скрипт rutoken-plugin.min.js не загрузился');
     }
@@ -665,9 +714,12 @@ async function ensureRutokenLogin(deviceId) {
   }
 
   try {
-    await plugin.logout(deviceId);
+    const isLoggedIn = await plugin.getDeviceInfo(deviceId, plugin.TOKEN_INFO_IS_LOGGED_IN);
+    if (isLoggedIn) {
+      return;
+    }
   } catch (_error) {
-    // ignore: token may already be logged out
+    // ignore state lookup failure
   }
 
   let errorMessage = '';
@@ -680,9 +732,13 @@ async function ensureRutokenLogin(deviceId) {
       await plugin.login(deviceId, pin);
       return;
     } catch (error) {
+      const message = getRutokenErrorMessage(error, plugin);
+      if (message.includes('ALREADY_LOGGED_IN') || String(error?.message || '') === String(plugin?.errorCodes?.ALREADY_LOGGED_IN || '93')) {
+        return;
+      }
       const retriesLeft = await getRutokenPinRetriesLeft(plugin, deviceId);
       const retriesSuffix = Number.isFinite(Number(retriesLeft)) ? ` Осталось попыток: ${retriesLeft}.` : '';
-      errorMessage = `Не удалось авторизоваться: ${getRutokenErrorMessage(error, plugin)}.${retriesSuffix}`;
+      errorMessage = `Не удалось авторизоваться: ${message}.${retriesSuffix}`;
     }
   }
 }
