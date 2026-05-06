@@ -8,12 +8,12 @@
   </head>
   <body>
     <main class="page">
-      <header class="hero">
-        <div>
+      <header class="hero panel-shell">
+        <div class="hero-copy">
           <p class="eyebrow">Демо-контур</p>
           <h1>Выдача формуляров</h1>
           <p class="lead">
-            Сервер показывает PDF-формуляр, подготавливает его под PAdES и ждёт CMS detached подпись от выбранного браузерного криптоплагина.
+            Загрузите PDF, выберите криптоплагин и соберите подписанный документ с визуальным штампом и detached CMS-подписью.
           </p>
         </div>
         <div class="hero-actions">
@@ -22,52 +22,77 @@
         </div>
       </header>
 
-      <section class="panel status-panel">
-        <div class="panel-head panel-head-stack">
-          <div>
-            <h2>Статус подписи</h2>
-            <div class="stack-switcher" role="radiogroup" aria-label="Выбор криптоплагина">
-              <label class="stack-option">
-                <input id="cryptoStackCryptoPro" type="radio" name="cryptoStack" value="cryptopro" checked />
-                <span>CryptoPro плагин</span>
-              </label>
-              <label class="stack-option">
-                <input id="cryptoStackRutoken" type="radio" name="cryptoStack" value="rutoken" />
-                <span>Рутокен плагин</span>
+      <section class="workspace-grid">
+        <section class="panel document-panel panel-shell">
+          <div class="panel-head document-panel-head">
+            <div>
+              <h2>Документ на подпись</h2>
+              <span id="docMeta" class="muted">PDF ещё не загружен</span>
+            </div>
+            <label class="upload-label upload-label-hero">
+              <input id="pdfUpload" type="file" accept="application/pdf" hidden />
+              <span>Загрузить PDF</span>
+            </label>
+          </div>
+
+          <div id="sourceEmpty" class="source-empty-state">
+            <div class="source-empty-card">
+              <span class="source-empty-kicker">Шаг 1</span>
+              <h3>Загрузите PDF-документ</h3>
+              <p>
+                Для каждой новой подписи документ выбирается вручную. После загрузки слева появится предпросмотр исходного PDF.
+              </p>
+              <label class="upload-label upload-label-large">
+                <input type="file" accept="application/pdf" hidden data-upload-proxy />
+                <span>Выбрать PDF-файл</span>
               </label>
             </div>
           </div>
-          <span id="pluginState" class="muted">Проверка CryptoPro…</span>
-        </div>
-        <div id="statusLog" class="status-log">Ожидание действий.</div>
-      </section>
 
-      <section class="panel">
-        <div class="panel-head">
-          <h2>Исходный PDF-документ</h2>
-          <span id="docMeta" class="muted">Загрузка…</span>
-        </div>
-        <div class="upload-row">
-          <label class="upload-label">
-            <input id="pdfUpload" type="file" accept="application/pdf" hidden />
-            <span>Загрузить свой PDF</span>
-          </label>
-          <button id="useDefaultPdf" class="secondary" type="button">Использовать тестовый PDF</button>
-          <span id="uploadState" class="muted">Сейчас используется тестовый PDF с сервера.</span>
-        </div>
-        <iframe id="sourcePdf" title="Исходный PDF" class="pdf-frame"></iframe>
-      </section>
+          <div id="uploadState" class="upload-note muted">Ожидание загрузки пользовательского PDF.</div>
+          <iframe id="sourcePdf" title="Исходный PDF" class="pdf-frame hidden"></iframe>
+        </section>
 
-      <section class="panel panel-secondary">
-        <div class="panel-head">
-          <h2>Подписанный PDF-документ</h2>
-          <span class="muted">Появится после встраивания подписи</span>
-        </div>
-        <div id="signedState" class="empty-state">
-          Пока нет подписанного документа.
-        </div>
-        <iframe id="signedPdf" title="Подписанный PDF" class="pdf-frame hidden"></iframe>
-        <a id="downloadLink" class="download hidden" download="signed-formular.pdf">Скачать подписанный PDF</a>
+        <aside class="sidebar-stack">
+          <section class="panel status-panel panel-shell">
+            <div class="panel-head panel-head-stack">
+              <div>
+                <h2>Статус подписи</h2>
+                <p class="muted panel-caption">Выбор плагина и текущий статус сценария подписания.</p>
+              </div>
+            </div>
+
+            <div class="plugin-toolbar">
+              <div id="pluginState" class="plugin-status-pill">Проверка CryptoPro…</div>
+              <div class="stack-switcher stack-switcher-inline" role="radiogroup" aria-label="Выбор криптоплагина">
+                <label class="stack-option">
+                  <input id="cryptoStackCryptoPro" type="radio" name="cryptoStack" value="cryptopro" checked />
+                  <span>CryptoPro</span>
+                </label>
+                <label class="stack-option">
+                  <input id="cryptoStackRutoken" type="radio" name="cryptoStack" value="rutoken" />
+                  <span>Рутокен</span>
+                </label>
+              </div>
+            </div>
+
+            <div id="statusLog" class="status-log">Ожидание действий.</div>
+          </section>
+
+          <section class="panel panel-secondary result-panel panel-shell">
+            <div class="panel-head">
+              <div>
+                <h2>Подписанный документ</h2>
+                <span class="muted">Появится после успешного встраивания подписи</span>
+              </div>
+            </div>
+            <div id="signedState" class="empty-state">
+              Пока нет подписанного документа.
+            </div>
+            <iframe id="signedPdf" title="Подписанный PDF" class="pdf-frame pdf-frame-result hidden"></iframe>
+            <a id="downloadLink" class="download hidden" download="signed-formular.pdf">Скачать подписанный PDF</a>
+          </section>
+        </aside>
       </section>
     </main>
 

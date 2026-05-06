@@ -7,7 +7,6 @@ const state = {
     cryptopro: { ready: false, certificates: [], client: null },
     rutoken: { ready: false, certificates: [], client: null },
   },
-  defaultPdfUrl: null,
   uploadedPdfBase64: null,
   uploadedPdfName: null,
   uploadedPdfObjectUrl: null,
@@ -133,6 +132,13 @@ function setUploadState(message) {
   document.getElementById('uploadState').textContent = message;
 }
 
+function showSourceEmptyState(message = 'PDF ещё не загружен') {
+  document.getElementById('sourceEmpty')?.classList.remove('hidden');
+  document.getElementById('sourcePdf').classList.add('hidden');
+  document.getElementById('sourcePdf').removeAttribute('src');
+  document.getElementById('docMeta').textContent = message;
+}
+
 async function fetchJsonOk(url, options, fallbackMessage) {
   const response = await fetch(url, options);
   const data = await response.json();
@@ -156,7 +162,9 @@ async function fetchAvailableFonts() {
 }
 
 function showPdf(url, metaText) {
+  document.getElementById('sourceEmpty')?.classList.add('hidden');
   document.getElementById('sourcePdf').src = url;
+  document.getElementById('sourcePdf').classList.remove('hidden');
   document.getElementById('docMeta').textContent = metaText;
 }
 
@@ -164,14 +172,9 @@ async function boot() {
   state.activeCryptoStack = getSavedCryptoStack();
   syncCryptoStackControls();
 
-  const [formResponse] = await Promise.all([
-    fetchJsonOk('./api/form', undefined, 'Не удалось загрузить тестовый PDF.'),
-    fetchStampConfig(),
-    fetchAvailableFonts(),
-  ]);
-  state.defaultPdfUrl = formResponse.pdfUrl;
-  showPdf(formResponse.pdfUrl, `${Math.round(formResponse.size / 1024)} KB`);
-  setUploadState('Сейчас используется тестовый PDF с сервера.');
+  await Promise.all([fetchStampConfig(), fetchAvailableFonts()]);
+  showSourceEmptyState();
+  setUploadState('Ожидание загрузки пользовательского PDF.');
   await initActiveCryptoStack({ force: true });
 }
 
@@ -273,6 +276,17 @@ function resetUploadedPdfSelection() {
   revokeUploadedPdfObjectUrl();
   state.uploadedPdfBase64 = null;
   state.uploadedPdfName = null;
+}
+
+function resetSignedPdfPreview() {
+  const signedPdf = document.getElementById('signedPdf');
+  const signedState = document.getElementById('signedState');
+  const downloadLink = document.getElementById('downloadLink');
+  signedPdf.classList.add('hidden');
+  signedPdf.removeAttribute('src');
+  signedState.classList.remove('hidden');
+  downloadLink.classList.add('hidden');
+  downloadLink.removeAttribute('href');
 }
 
 async function enumerateCertificates() {
@@ -1578,6 +1592,9 @@ async function prepareAndSign() {
   if (!state.pluginReady) {
     throw new Error(`${getCryptoStackLabel()} plugin не готов.`);
   }
+  if (!state.uploadedPdfBase64) {
+    throw new Error('Сначала загрузите PDF-документ для подписи.');
+  }
 
   const selectedCertificate = await openCertificateDialog(state.certificates);
 
@@ -1651,22 +1668,26 @@ document.getElementById('pdfUpload').addEventListener('change', async (event) =>
     state.uploadedPdfBase64 = await fileToBase64(file);
     state.uploadedPdfName = file.name;
     state.uploadedPdfObjectUrl = URL.createObjectURL(file);
+    resetSignedPdfPreview();
     showPdf(state.uploadedPdfObjectUrl, `${file.name} · ${Math.round(file.size / 1024)} KB`);
-    setUploadState(`Загружен пользовательский PDF: ${file.name}`);
-    setStatus('Пользовательский PDF загружен. Теперь можно подписывать именно его.');
+    setUploadState(`Загружен PDF: ${file.name}`);
+    setStatus('PDF загружен. Теперь можно выбрать сертификат и подписать документ.');
   } catch (error) {
     setStatus(`Ошибка загрузки PDF: ${error.message}`);
   }
 });
 
-document.getElementById('useDefaultPdf').addEventListener('click', async () => {
-  resetUploadedPdfSelection();
-  const data = await fetchJsonOk('./api/form', undefined, 'Не удалось загрузить тестовый PDF.');
-  state.defaultPdfUrl = data.pdfUrl;
-  showPdf(data.pdfUrl, `${Math.round(data.size / 1024)} KB`);
-  setUploadState('Сейчас используется тестовый PDF с сервера.');
-  setStatus('Возвратился к тестовому PDF с сервера.');
-  document.getElementById('pdfUpload').value = '';
+document.querySelectorAll('[data-upload-proxy]').forEach((input) => {
+  input.addEventListener('change', (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const realInput = document.getElementById('pdfUpload');
+    const transfer = new DataTransfer();
+    transfer.items.add(file);
+    realInput.files = transfer.files;
+    realInput.dispatchEvent(new Event('change', { bubbles: true }));
+    event.target.value = '';
+  });
 });
 
 document.querySelectorAll('input[name="cryptoStack"]').forEach((input) => {
