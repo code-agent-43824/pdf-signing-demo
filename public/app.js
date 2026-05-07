@@ -21,6 +21,7 @@ const state = {
       checked: false,
       certificates: [],
       client: null,
+      tokenMonitorAttached: false,
       diagnostics: {
         extension: { state: 'pending', text: 'Проверка…' },
         plugin: { state: 'pending', text: 'Проверка…' },
@@ -58,6 +59,33 @@ const CRYPTO_STACK_STORAGE_KEY = 'pdf-signing-demo.crypto-stack';
 const CRYPTO_SCRIPTS = {
   cryptopro: 'https://www.cryptopro.ru/sites/default/files/products/cades/cadesplugin_api.js',
   rutoken: './vendor/rutoken-plugin.min.js',
+};
+
+const STAMP_POSITION_PRESETS = {
+  left: {
+    label: 'Слева',
+    anchor: 'bottom-left',
+    offsetX: 24,
+    offsetY: 24,
+  },
+  'center-left': {
+    label: 'По центру слева',
+    anchor: 'bottom-left',
+    offsetX: 182,
+    offsetY: 24,
+  },
+  'center-right': {
+    label: 'По центру справа',
+    anchor: 'bottom-right',
+    offsetX: 182,
+    offsetY: 24,
+  },
+  right: {
+    label: 'Совсем справа',
+    anchor: 'bottom-right',
+    offsetX: 24,
+    offsetY: 24,
+  },
 };
 
 const TEMPLATE_TOKEN_OPTIONS = [
@@ -132,6 +160,87 @@ function bindRutokenRefreshEvents() {
       requestRutokenEnvironmentRefresh({ silentStatus: true });
     }
   });
+}
+
+function getStampPlacementPresetKey(config = state.stampConfig) {
+  const rule = getDefaultPlacementRule(ensureStampConfigShape(config));
+  const placement = rule?.placement || {};
+  const anchor = String(placement.anchor || 'bottom-right');
+  const offsetX = Number(placement.offsetX || 0);
+  const offsetY = Number(placement.offsetY || 0);
+
+  return Object.entries(STAMP_POSITION_PRESETS).find(([, preset]) => (
+    preset.anchor === anchor
+    && Number(preset.offsetX) === offsetX
+    && Number(preset.offsetY) === offsetY
+  ))?.[0] || 'right';
+}
+
+function updateStampPlacementUi() {
+  const activePreset = getStampPlacementPresetKey();
+  document.querySelectorAll('[data-stamp-position]').forEach((button) => {
+    const isActive = button.dataset.stampPosition === activePreset;
+    button.classList.toggle('is-active', isActive);
+    button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+  });
+
+  const summary = document.getElementById('stampPositionSummary');
+  if (summary) {
+    const preset = STAMP_POSITION_PRESETS[activePreset] || STAMP_POSITION_PRESETS.right;
+    summary.textContent = `Штамп будет поставлен: ${preset.label.toLowerCase()}.`;
+  }
+}
+
+function applyStampPlacementPreset(presetKey) {
+  const preset = STAMP_POSITION_PRESETS[presetKey];
+  if (!preset) return;
+
+  const draft = ensureStampConfigShape(state.stampConfig);
+  const rule = getDefaultPlacementRule(draft);
+  rule.placement.mode = 'anchored';
+  rule.placement.anchor = preset.anchor;
+  rule.placement.offsetX = preset.offsetX;
+  rule.placement.offsetY = preset.offsetY;
+  rule.placement.columns = 1;
+  rule.placement.stepX = 0;
+  rule.placement.stepY = 0;
+  state.stampConfig = draft;
+  updateStampPlacementUi();
+}
+
+function bindRutokenTokenMonitor(plugin) {
+  const provider = state.cryptoProviders.rutoken;
+  if (provider.tokenMonitorAttached || typeof plugin?.tokenMonitor !== 'function') {
+    return;
+  }
+
+  plugin.tokenMonitor(async (type, slotId) => {
+    try {
+      await refreshRutokenEnvironment({ silentStatus: true });
+      if (state.activeCryptoStack !== 'rutoken') {
+        return;
+      }
+
+      if (type === 'connected') {
+        let label = `Рутокен ${slotId}`;
+        try {
+          label = await plugin.getDeviceInfo(slotId, plugin.TOKEN_INFO_LABEL) || label;
+        } catch (_error) {
+          // ignore label lookup failure
+        }
+        setStatus(`Рутокен подключен: ${label}.`);
+        return;
+      }
+
+      if (type === 'disconnected') {
+        setStatus('Рутокен извлечён.');
+      }
+    } catch (_error) {
+      // Ошибку уже показываем в диагностике.
+    }
+  });
+
+  provider.tokenMonitorAttached = true;
 }
 
 function updateSelectedCertificateUi() {
@@ -360,6 +469,7 @@ async function fetchStampConfig() {
   const data = await fetchJsonOk('./api/stamp-config', undefined, 'Не удалось загрузить конфиг штампа.');
   state.stampConfig = data.config;
   state.stampConfigPath = data.configPath;
+  updateStampPlacementUi();
   return data;
 }
 
@@ -875,12 +985,14 @@ async function initRutoken() {
     }
     provider.client = plugin;
     provider.ready = true;
+    bindRutokenTokenMonitor(plugin);
     setProviderDiagnostic('rutoken', 'plugin', 'ready', 'доступен');
     await refreshRutokenEnvironment();
   } catch (error) {
     provider.ready = false;
     provider.certificates = [];
     provider.client = null;
+    provider.tokenMonitorAttached = false;
     setProviderDiagnostic('rutoken', 'plugin', 'error', 'недоступен');
     setProviderDiagnostic('rutoken', 'token', 'error', 'не найден');
     if (state.activeCryptoStack === 'rutoken') {
@@ -1667,6 +1779,7 @@ function switchStampTab(root, nextTab) {
 
   if (nextTab === 'json') {
     state.stampConfig = readVisualForm(root);
+    updateStampPlacementUi();
     editor.value = `${JSON.stringify(state.stampConfig, null, 2)}\n`;
     visualTab.classList.remove('is-active');
     jsonTab.classList.add('is-active');
@@ -1679,6 +1792,7 @@ function switchStampTab(root, nextTab) {
 
   const parsed = JSON.parse(editor.value || '{}');
   state.stampConfig = ensureStampConfigShape(parsed);
+  updateStampPlacementUi();
   populateVisualForm(root, state.stampConfig);
   jsonTab.classList.remove('is-active');
   visualTab.classList.add('is-active');
@@ -1706,6 +1820,7 @@ function wireStampSettingsForm(root) {
       breakAnywhere: false,
     });
     state.stampConfig = nextConfig;
+    updateStampPlacementUi();
     populateVisualForm(root, state.stampConfig);
   });
 
@@ -1716,6 +1831,7 @@ function wireStampSettingsForm(root) {
     const nextConfig = readVisualForm(root);
     nextConfig.content.rows.splice(index, 1);
     state.stampConfig = nextConfig;
+    updateStampPlacementUi();
     populateVisualForm(root, state.stampConfig);
   });
 
@@ -1770,6 +1886,7 @@ function wireStampSettingsForm(root) {
 
   root.querySelector('#stampTabJson').addEventListener('click', () => {
     state.stampConfig = readVisualForm(root);
+    updateStampPlacementUi();
     switchStampTab(root, 'json');
   });
 }
@@ -1817,6 +1934,7 @@ function openStampSettingsDialog() {
         }, 'Не удалось сохранить конфиг штампа.');
         state.stampConfig = parsed;
         state.stampConfigPath = data.configPath || state.stampConfigPath;
+        updateStampPlacementUi();
         close();
         resolve();
       } catch (error) {
@@ -2053,6 +2171,13 @@ document.getElementById('stampSettingsButton').addEventListener('click', async (
   } finally {
     button.disabled = false;
   }
+});
+
+document.querySelectorAll('[data-stamp-position]').forEach((button) => {
+  button.addEventListener('click', () => {
+    applyStampPlacementPreset(button.dataset.stampPosition);
+    setStatus(`Положение штампа обновлено: ${STAMP_POSITION_PRESETS[button.dataset.stampPosition]?.label || 'выбрано'}.`);
+  });
 });
 
 boot().catch((error) => {
