@@ -4,7 +4,6 @@ const state = {
   pluginReady: false,
   activeCryptoStack: 'cryptopro',
   activeDialog: null,
-  rutokenPollTimer: null,
   cryptoProviders: {
     cryptopro: {
       ready: false,
@@ -112,23 +111,27 @@ function getCertificateKey(certificate, mode = state.activeCryptoStack) {
   return String(certificate.thumbprint || certificate.serialNumber || certificate.label || '');
 }
 
-function startRutokenMonitoring() {
-  stopRutokenMonitoring();
-  if (state.activeCryptoStack !== 'rutoken') {
-    return;
+function requestRutokenEnvironmentRefresh(options = {}) {
+  if (state.activeCryptoStack !== 'rutoken' || !state.cryptoProviders.rutoken.client) {
+    return Promise.resolve();
   }
-  state.rutokenPollTimer = window.setInterval(() => {
-    refreshRutokenEnvironment({ silentStatus: true }).catch(() => {
-      // Ошибку уже показываем в статусах диагностики.
-    });
-  }, 3000);
+  return refreshRutokenEnvironment(options).catch(() => {
+    // Ошибку уже показываем в статусах диагностики.
+  });
 }
 
-function stopRutokenMonitoring() {
-  if (state.rutokenPollTimer) {
-    window.clearInterval(state.rutokenPollTimer);
-    state.rutokenPollTimer = null;
-  }
+function bindRutokenRefreshEvents() {
+  window.addEventListener('focus', () => {
+    requestRutokenEnvironmentRefresh({ silentStatus: true });
+  });
+  window.addEventListener('pageshow', () => {
+    requestRutokenEnvironmentRefresh({ silentStatus: true });
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+      requestRutokenEnvironmentRefresh({ silentStatus: true });
+    }
+  });
 }
 
 function updateSelectedCertificateUi() {
@@ -380,6 +383,7 @@ function showPdf(url, metaText) {
 async function boot() {
   state.activeCryptoStack = getSavedCryptoStack();
   syncCryptoStackControls();
+  bindRutokenRefreshEvents();
 
   await Promise.all([fetchStampConfig(), fetchAvailableFonts()]);
   showSourceEmptyState();
@@ -894,7 +898,6 @@ async function initActiveCryptoStack({ force = false } = {}) {
   if (!force && provider?.ready) {
     syncActiveProviderState();
     if (state.activeCryptoStack === 'rutoken') {
-      startRutokenMonitoring();
       await refreshRutokenEnvironment({ silentStatus: true });
     }
     setStatus(`Активен ${getCryptoStackLabel()}. Можно выбрать сертификат и подписать документ.`);
@@ -906,11 +909,9 @@ async function initActiveCryptoStack({ force = false } = {}) {
 
   if (state.activeCryptoStack === 'rutoken') {
     await initRutoken();
-    startRutokenMonitoring();
     return;
   }
 
-  stopRutokenMonitoring();
   await initCryptoPro();
 }
 
@@ -918,7 +919,6 @@ async function switchCryptoStack(mode) {
   if (!CRYPTO_STACK_LABELS[mode] || mode === state.activeCryptoStack) {
     return;
   }
-  stopRutokenMonitoring();
   state.activeCryptoStack = mode;
   state.selectedCertificate = null;
   syncCryptoStackControls();
@@ -1882,6 +1882,9 @@ function fileToBase64(file) {
 }
 
 async function prepareAndSign() {
+  if (state.activeCryptoStack === 'rutoken') {
+    await requestRutokenEnvironmentRefresh({ silentStatus: true });
+  }
   if (!state.pluginReady) {
     throw new Error(`${getCryptoStackLabel()} plugin не готов.`);
   }
@@ -2005,6 +2008,9 @@ document.getElementById('chooseCertificateButton').addEventListener('click', asy
   const button = document.getElementById('chooseCertificateButton');
   button.disabled = true;
   try {
+    if (state.activeCryptoStack === 'rutoken') {
+      await requestRutokenEnvironmentRefresh({ silentStatus: true });
+    }
     const selectedCertificate = await openCertificateDialog(state.certificates, state.selectedCertificate);
     state.selectedCertificate = selectedCertificate;
     updatePrimaryActionState();
