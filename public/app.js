@@ -4,6 +4,7 @@ const state = {
   pluginReady: false,
   activeCryptoStack: 'cryptopro',
   activeDialog: null,
+  selectedStampPosition: 'right',
   cryptoProviders: {
     cryptopro: {
       ready: false,
@@ -89,13 +90,6 @@ const STAMP_POSITION_PRESETS = {
   },
 };
 
-const STAMP_POSITION_SEQUENCES = {
-  left: ['left', 'center-left', 'center-right', 'right'],
-  'center-left': ['center-left', 'left', 'center-right', 'right'],
-  'center-right': ['center-right', 'right', 'center-left', 'left'],
-  right: ['right', 'center-right', 'center-left', 'left'],
-};
-
 const TEMPLATE_TOKEN_OPTIONS = [
   { value: '{signer.cert_id}', label: 'ID сертификата' },
   { value: '{signer.name}', label: 'ФИО владельца' },
@@ -170,7 +164,10 @@ function bindRutokenRefreshEvents() {
   });
 }
 
-function getStampPlacementPresetKey(config = state.stampConfig) {
+function getStampPlacementPresetKey(config = state.stampConfig, { preferSelected = true } = {}) {
+  if (preferSelected && STAMP_POSITION_PRESETS[state.selectedStampPosition]) {
+    return state.selectedStampPosition;
+  }
   const rule = getDefaultPlacementRule(ensureStampConfigShape(config));
   const placement = rule?.placement || {};
   const anchor = String(placement.anchor || 'bottom-right');
@@ -199,6 +196,7 @@ function applyStampPlacementPreset(presetKey) {
 
   const draft = ensureStampConfigShape(state.stampConfig);
   draft.appearance.width = 128;
+  state.selectedStampPosition = presetKey;
   const rule = getDefaultPlacementRule(draft);
   rule.placement.mode = 'anchored';
   rule.placement.anchor = preset.anchor;
@@ -207,34 +205,6 @@ function applyStampPlacementPreset(presetKey) {
   rule.placement.columns = 1;
   rule.placement.stepX = 0;
   rule.placement.stepY = 0;
-
-  const preservedRules = (draft.placements.rules || []).filter((candidate) => {
-    if (!candidate) return false;
-    const signatureIndex = Number(candidate?.match?.signatureIndex);
-    if (signatureIndex >= 1 && signatureIndex <= 4) return false;
-    return Boolean(candidate.match && Object.keys(candidate.match).length > 0);
-  });
-
-  const sequence = STAMP_POSITION_SEQUENCES[presetKey] || STAMP_POSITION_SEQUENCES.right;
-  const overrides = sequence.map((slotKey, index) => {
-    const slot = STAMP_POSITION_PRESETS[slotKey];
-    return {
-      name: `quick-slot-${slotKey}-${index + 1}`,
-      match: { signatureIndex: index + 1 },
-      pages: cloneConfig(rule.pages || {}),
-      placement: {
-        mode: 'anchored',
-        anchor: slot.anchor,
-        offsetX: slot.offsetX,
-        offsetY: slot.offsetY,
-        columns: 1,
-        stepX: 0,
-        stepY: 0,
-      },
-    };
-  });
-
-  draft.placements.rules = [...overrides, rule, ...preservedRules];
   state.stampConfig = draft;
   updateStampPlacementUi();
 }
@@ -527,6 +497,7 @@ async function fetchStampConfig() {
   const data = await fetchJsonOk('./api/stamp-config', undefined, 'Не удалось загрузить конфиг штампа.');
   state.stampConfig = data.config;
   state.stampConfigPath = data.configPath;
+  state.selectedStampPosition = getStampPlacementPresetKey(data.config, { preferSelected: false });
   updateStampPlacementUi();
   return data;
 }
@@ -2084,6 +2055,7 @@ async function prepareAndSign() {
     body: JSON.stringify({
       pdfBase64: state.uploadedPdfBase64,
       stampConfig: state.stampConfig,
+      requestedStampPosition: state.selectedStampPosition,
       signer: {
         subjectName: selectedCertificate.subjectName,
         issuerName: selectedCertificate.issuerName,

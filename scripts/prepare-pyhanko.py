@@ -112,6 +112,13 @@ DEFAULT_CONFIG = {
     },
 }
 
+QUICK_POSITION_PRESETS = {
+    'left': {'anchor': 'bottom-left', 'offsetX': 24, 'offsetY': 24},
+    'center-left': {'anchor': 'bottom-left', 'offsetX': 163, 'offsetY': 24},
+    'center-right': {'anchor': 'bottom-right', 'offsetX': 163, 'offsetY': 24},
+    'right': {'anchor': 'bottom-right', 'offsetX': 24, 'offsetY': 24},
+}
+
 
 TEMPLATE_RE = re.compile(r'\{\s*([a-zA-Z0-9_.-]+)\s*\}')
 
@@ -424,6 +431,24 @@ def rule_matches(rule, signature_index):
 
 
 def find_rule(config, signature_index):
+    requested_slot = str(config.get('requestedStampPosition') or '').strip().lower()
+    if requested_slot in QUICK_POSITION_PRESETS:
+        base_rule = (config.get('placements', {}).get('rules') or [{}])[0] or {}
+        slot = QUICK_POSITION_PRESETS[requested_slot]
+        return {
+            'name': f'quick-{requested_slot}',
+            'pages': dict(base_rule.get('pages') or {'mode': 'single', 'page': 1, 'widgetPageMode': 'first'}),
+            'placement': {
+                'mode': 'anchored',
+                'anchor': slot['anchor'],
+                'offsetX': slot['offsetX'],
+                'offsetY': slot['offsetY'],
+                'columns': 1,
+                'stepX': 0,
+                'stepY': 0,
+            },
+        }
+
     rules = config.get('placements', {}).get('rules', [])
     for rule in rules:
         if rule_matches(rule, signature_index):
