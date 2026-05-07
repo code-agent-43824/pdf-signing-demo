@@ -2047,6 +2047,7 @@ async function prepareAndSign() {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       pdfBase64: state.uploadedPdfBase64,
+      stampConfig: state.stampConfig,
       signer: {
         subjectName: selectedCertificate.subjectName,
         issuerName: selectedCertificate.issuerName,
