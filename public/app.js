@@ -72,13 +72,13 @@ const STAMP_POSITION_PRESETS = {
   'center-left': {
     label: 'По центру слева',
     anchor: 'bottom-left',
-    offsetX: 182,
+    offsetX: 163,
     offsetY: 24,
   },
   'center-right': {
     label: 'По центру справа',
     anchor: 'bottom-right',
-    offsetX: 182,
+    offsetX: 163,
     offsetY: 24,
   },
   right: {
@@ -87,6 +87,13 @@ const STAMP_POSITION_PRESETS = {
     offsetX: 24,
     offsetY: 24,
   },
+};
+
+const STAMP_POSITION_SEQUENCES = {
+  left: ['left', 'center-left', 'center-right', 'right'],
+  'center-left': ['center-left', 'left', 'center-right', 'right'],
+  'center-right': ['center-right', 'right', 'center-left', 'left'],
+  right: ['right', 'center-right', 'center-left', 'left'],
 };
 
 const TEMPLATE_TOKEN_OPTIONS = [
@@ -191,6 +198,7 @@ function applyStampPlacementPreset(presetKey) {
   if (!preset) return;
 
   const draft = ensureStampConfigShape(state.stampConfig);
+  draft.appearance.width = 128;
   const rule = getDefaultPlacementRule(draft);
   rule.placement.mode = 'anchored';
   rule.placement.anchor = preset.anchor;
@@ -199,6 +207,34 @@ function applyStampPlacementPreset(presetKey) {
   rule.placement.columns = 1;
   rule.placement.stepX = 0;
   rule.placement.stepY = 0;
+
+  const preservedRules = (draft.placements.rules || []).filter((candidate) => {
+    if (!candidate) return false;
+    const signatureIndex = Number(candidate?.match?.signatureIndex);
+    if (signatureIndex >= 1 && signatureIndex <= 4) return false;
+    return Boolean(candidate.match && Object.keys(candidate.match).length > 0);
+  });
+
+  const sequence = STAMP_POSITION_SEQUENCES[presetKey] || STAMP_POSITION_SEQUENCES.right;
+  const overrides = sequence.map((slotKey, index) => {
+    const slot = STAMP_POSITION_PRESETS[slotKey];
+    return {
+      name: `quick-slot-${slotKey}-${index + 1}`,
+      match: { signatureIndex: index + 1 },
+      pages: cloneConfig(rule.pages || {}),
+      placement: {
+        mode: 'anchored',
+        anchor: slot.anchor,
+        offsetX: slot.offsetX,
+        offsetY: slot.offsetY,
+        columns: 1,
+        stepX: 0,
+        stepY: 0,
+      },
+    };
+  });
+
+  draft.placements.rules = [...overrides, rule, ...preservedRules];
   state.stampConfig = draft;
   updateStampPlacementUi();
 }
@@ -1522,7 +1558,7 @@ function updateStampPreview(root, config) {
   const layout = appearance.layout || {};
   const separator = appearance.separator || {};
   const fonts = appearance.fonts || {};
-  const width = Number(appearance.width || 176);
+  const width = Number(appearance.width || 128);
   const height = Number(appearance.height || 108);
   const pageRect = previewPage.getBoundingClientRect();
   const pageWidth = pageRect.width || 420;
@@ -1601,7 +1637,7 @@ function populateVisualForm(root, config) {
   const draft = ensureStampConfigShape(config);
   const rule = getDefaultPlacementRule(draft);
 
-  root.querySelector('#appearanceWidth').value = Number(draft.appearance.width || 176);
+  root.querySelector('#appearanceWidth').value = Number(draft.appearance.width || 128);
   root.querySelector('#appearanceHeight').value = Number(draft.appearance.height || 108);
   root.querySelector('#appearanceImageScale').value = Number(draft.appearance.imageScale || 4);
   root.querySelector('#appearanceBorderWidth').value = Number(draft.appearance.borderWidth || 0);

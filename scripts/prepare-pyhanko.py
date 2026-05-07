@@ -31,7 +31,7 @@ SUPPORTED_SUBFILTERS = {
 
 DEFAULT_CONFIG = {
     'appearance': {
-        'width': 176,
+        'width': 128,
         'height': 108,
         'imageScale': 4,
         'backgroundColor': '#F5F8FF',
@@ -100,8 +100,8 @@ DEFAULT_CONFIG = {
                     'anchor': 'bottom-right',
                     'offsetX': 24,
                     'offsetY': 24,
-                    'columns': 3,
-                    'stepX': -181,
+                    'columns': 4,
+                    'stepX': -139,
                     'stepY': 116,
                 },
             }
