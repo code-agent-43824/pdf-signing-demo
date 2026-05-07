@@ -71,13 +71,15 @@
             <div class="step-index">1</div>
             <div class="step-body">
               <h3>Исходный документ</h3>
-              <p class="muted">Для каждой новой подписи PDF выбирается вручную.</p>
-              <label class="upload-label upload-label-large step-upload-button">
+              <p class="muted">PDF выбирается вручную для каждой новой подписи.</p>
+              <label id="uploadCard" class="file-card file-upload-card is-empty step-upload-button">
                 <input id="pdfUpload" type="file" accept="application/pdf" hidden />
-                <span>Выбрать PDF</span>
+                <div class="file-upload-copy">
+                  <strong class="file-upload-title">Выбрать PDF</strong>
+                  <span id="uploadState">PDF ещё не выбран.</span>
+                  <span id="docMeta" class="step-meta muted">Ожидание загрузки пользовательского PDF.</span>
+                </div>
               </label>
-              <div id="uploadState" class="file-card is-empty">PDF ещё не выбран.</div>
-              <div id="docMeta" class="step-meta muted">Ожидание загрузки пользовательского PDF.</div>
             </div>
           </div>
 
@@ -101,10 +103,10 @@
               <h3>Штамп подписи</h3>
               <p class="muted">Выберите горизонтальную позицию штампа. Детальные параметры при необходимости доступны отдельно.</p>
               <div class="stamp-position-grid" role="radiogroup" aria-label="Положение штампа">
-                <button id="stampPositionLeft" class="stamp-position-option" type="button" data-stamp-position="left">Слева</button>
-                <button id="stampPositionCenterLeft" class="stamp-position-option" type="button" data-stamp-position="center-left">По центру слева</button>
-                <button id="stampPositionCenterRight" class="stamp-position-option" type="button" data-stamp-position="center-right">По центру справа</button>
-                <button id="stampPositionRight" class="stamp-position-option" type="button" data-stamp-position="right">Совсем справа</button>
+                <button id="stampPositionLeft" class="stamp-position-option" type="button" data-stamp-position="left"><span class="stamp-position-mini" aria-hidden="true"><span class="stamp-position-mark"></span></span><span class="stamp-position-text">Слева</span></button>
+                <button id="stampPositionCenterLeft" class="stamp-position-option" type="button" data-stamp-position="center-left"><span class="stamp-position-mini" aria-hidden="true"><span class="stamp-position-mark"></span></span><span class="stamp-position-text">Центр слева</span></button>
+                <button id="stampPositionCenterRight" class="stamp-position-option" type="button" data-stamp-position="center-right"><span class="stamp-position-mini" aria-hidden="true"><span class="stamp-position-mark"></span></span><span class="stamp-position-text">Центр справа</span></button>
+                <button id="stampPositionRight" class="stamp-position-option" type="button" data-stamp-position="right"><span class="stamp-position-mini" aria-hidden="true"><span class="stamp-position-mark"></span></span><span class="stamp-position-text">Справа</span></button>
               </div>
               <div id="stampPositionSummary" class="stamp-position-pill">Штамп будет встроен в подготовленный PDF по текущей конфигурации.</div>
             </div>

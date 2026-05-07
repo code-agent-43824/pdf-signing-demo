@@ -22,6 +22,7 @@ const state = {
       certificates: [],
       client: null,
       tokenMonitorAttached: false,
+      tokenMonitorTimer: null,
       diagnostics: {
         extension: { state: 'pending', text: 'Проверка…' },
         plugin: { state: 'pending', text: 'Проверка…' },
@@ -81,7 +82,7 @@ const STAMP_POSITION_PRESETS = {
     offsetY: 24,
   },
   right: {
-    label: 'Совсем справа',
+    label: 'Справа',
     anchor: 'bottom-right',
     offsetX: 24,
     offsetY: 24,
@@ -210,34 +211,60 @@ function applyStampPlacementPreset(presetKey) {
 
 function bindRutokenTokenMonitor(plugin) {
   const provider = state.cryptoProviders.rutoken;
-  if (provider.tokenMonitorAttached || typeof plugin?.tokenMonitor !== 'function') {
+  const monitorSource = plugin?.originalObject && typeof plugin.originalObject.tokenMonitor === 'function'
+    ? plugin.originalObject
+    : plugin;
+  if (provider.tokenMonitorAttached || typeof monitorSource?.tokenMonitor !== 'function') {
     return;
   }
 
-  plugin.tokenMonitor(async (type, slotId) => {
-    try {
-      await refreshRutokenEnvironment({ silentStatus: true });
-      if (state.activeCryptoStack !== 'rutoken') {
-        return;
-      }
+  const scheduleRefresh = (type, slotId) => {
+    if (provider.tokenMonitorTimer) {
+      window.clearTimeout(provider.tokenMonitorTimer);
+      provider.tokenMonitorTimer = null;
+    }
 
-      if (type === 'connected') {
-        let label = `Рутокен ${slotId}`;
-        try {
-          label = await plugin.getDeviceInfo(slotId, plugin.TOKEN_INFO_LABEL) || label;
-        } catch (_error) {
-          // ignore label lookup failure
-        }
-        setStatus(`Рутокен подключен: ${label}.`);
-        return;
-      }
-
-      if (type === 'disconnected') {
+    if (type === 'disconnected') {
+      provider.certificates = [];
+      setProviderDiagnostic('rutoken', 'token', 'error', 'не вставлен');
+      if (state.activeCryptoStack === 'rutoken') {
+        syncActiveProviderState();
         setStatus('Рутокен извлечён.');
       }
-    } catch (_error) {
-      // Ошибку уже показываем в диагностике.
+    } else if (type === 'connected') {
+      setProviderDiagnostic('rutoken', 'token', 'pending', 'обновление…');
+      if (state.activeCryptoStack === 'rutoken') {
+        setStatus('Рутокен подключён, обновляю состояние…');
+      }
     }
+
+    provider.tokenMonitorTimer = window.setTimeout(async () => {
+      provider.tokenMonitorTimer = null;
+      try {
+        await refreshRutokenEnvironment({ silentStatus: true });
+        if (state.activeCryptoStack !== 'rutoken') {
+          return;
+        }
+
+        if (type === 'connected') {
+          let label = `Рутокен ${slotId}`;
+          try {
+            label = await provider.client?.getDeviceInfo(slotId, provider.client.TOKEN_INFO_LABEL) || label;
+          } catch (_error) {
+            // ignore label lookup failure
+          }
+          setStatus(`Рутокен подключён: ${label}.`);
+        } else if (type === 'disconnected') {
+          setStatus('Рутокен извлечён.');
+        }
+      } catch (_error) {
+        // Ошибку уже показываем в диагностике.
+      }
+    }, type === 'connected' ? 500 : 150);
+  };
+
+  monitorSource.tokenMonitor((type, slotId) => {
+    scheduleRefresh(type, slotId);
   });
 
   provider.tokenMonitorAttached = true;
@@ -394,8 +421,9 @@ function syncActiveProviderState() {
 
 function setUploadState(message, { empty = false } = {}) {
   const node = document.getElementById('uploadState');
+  const card = document.getElementById('uploadCard');
   node.textContent = message;
-  node.classList.toggle('is-empty', empty);
+  card?.classList.toggle('is-empty', empty);
 }
 
 function updatePrimaryActionState() {
@@ -992,6 +1020,10 @@ async function initRutoken() {
     provider.ready = false;
     provider.certificates = [];
     provider.client = null;
+    if (provider.tokenMonitorTimer) {
+      window.clearTimeout(provider.tokenMonitorTimer);
+      provider.tokenMonitorTimer = null;
+    }
     provider.tokenMonitorAttached = false;
     setProviderDiagnostic('rutoken', 'plugin', 'error', 'недоступен');
     setProviderDiagnostic('rutoken', 'token', 'error', 'не найден');
