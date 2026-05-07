@@ -101,8 +101,9 @@ body {
 }
 .diagnostics-grid {
   display: grid;
-  grid-template-columns: 1.45fr 1fr 1fr;
+  grid-template-columns: 320px minmax(0, 1fr);
   gap: 16px;
+  align-items: start;
 }
 .diagnostic-item {
   padding: 4px 0;
@@ -111,6 +112,12 @@ body {
   border-left: 1px solid #d6ecea;
   padding-left: 16px;
 }
+.diagnostic-item-switcher {
+  min-width: 0;
+}
+.diagnostic-item-strip {
+  min-width: 0;
+}
 .diagnostic-label {
   display: block;
   margin-bottom: 10px;
@@ -118,40 +125,51 @@ body {
   font-weight: 700;
   color: #53657f;
 }
-.diagnostic-status {
-  display: inline-flex;
+.environment-status-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.environment-status-pill {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid #dce6ef;
+}
+.environment-status-pill-head {
+  display: flex;
   align-items: center;
   gap: 8px;
-  font-weight: 700;
-  color: var(--muted);
+  min-width: 0;
 }
-.diagnostic-status::before {
-  content: '';
+.environment-status-pill-dot {
   width: 10px;
   height: 10px;
   border-radius: 999px;
-  background: #cbd5e1;
+  background: #94a3b8;
+  flex: 0 0 auto;
 }
-.diagnostic-status.is-ready {
-  color: var(--success);
-}
-.diagnostic-status.is-ready::before {
+.environment-status-pill.is-ready .environment-status-pill-dot {
   background: var(--success);
 }
-.diagnostic-status.is-error {
-  color: var(--warning);
+.environment-status-pill.is-error .environment-status-pill-dot {
+  background: var(--warning);
 }
-.diagnostic-status.is-error::before {
-  width: 0;
-  height: 0;
-  border-left: 6px solid transparent;
-  border-right: 6px solid transparent;
-  border-bottom: 11px solid var(--warning);
-  border-radius: 0;
-  background: transparent;
+.environment-status-pill-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #334155;
+  min-width: 0;
 }
-.diagnostic-status.is-pending::before {
-  background: #94a3b8;
+.environment-status-pill-value {
+  font-size: 13px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .panel {
   margin-top: 24px;
@@ -281,18 +299,6 @@ h1, h2, h3 { margin: 0; }
 .compact-toolbar {
   margin-bottom: 0;
 }
-.plugin-status-pill {
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
-  padding: 10px 14px;
-  border-radius: 999px;
-  background: #fff;
-  border: 1px solid var(--line);
-  color: var(--muted);
-  font-weight: 600;
-  box-shadow: none;
-}
 .workflow-head {
   padding-bottom: 18px;
   border-bottom: 1px solid var(--line);
@@ -381,12 +387,18 @@ h1, h2, h3 { margin: 0; }
   display: grid;
   gap: 10px;
 }
+.certificate-count-hint {
+  font-size: 13px;
+}
 .workflow-actions {
   display: grid;
   gap: 12px;
   margin-top: 18px;
 }
 .workflow-primary {
+  width: 100%;
+}
+.workflow-secondary {
   width: 100%;
 }
 .preview-panel-head {
@@ -1014,6 +1026,9 @@ h1, h2, h3 { margin: 0; }
     padding-left: 0;
     border-top: 1px solid #d6ecea;
     padding-top: 12px;
+  }
+  .environment-status-strip {
+    grid-template-columns: 1fr;
   }
 }
 

@@ -31,10 +31,9 @@
           </div>
         </div>
         <div class="diagnostics-grid">
-          <div class="diagnostic-item">
+          <div class="diagnostic-item diagnostic-item-switcher">
             <span class="diagnostic-label">Активный плагин</span>
             <div class="plugin-toolbar compact-toolbar">
-              <div id="pluginState" class="plugin-status-pill">Проверка CryptoPro…</div>
               <div class="stack-switcher stack-switcher-inline" role="radiogroup" aria-label="Выбор криптоплагина">
                 <label class="stack-option">
                   <input id="cryptoStackCryptoPro" type="radio" name="cryptoStack" value="cryptopro" checked />
@@ -47,13 +46,9 @@
               </div>
             </div>
           </div>
-          <div class="diagnostic-item">
-            <span class="diagnostic-label">Расширение CryptoPro Browser Plugin</span>
-            <div id="statusCryptoPro" class="diagnostic-status is-pending">Проверка…</div>
-          </div>
-          <div class="diagnostic-item">
-            <span class="diagnostic-label">Рутокен Плагин</span>
-            <div id="statusRutoken" class="diagnostic-status is-pending">Проверка…</div>
+          <div class="diagnostic-item diagnostic-item-strip">
+            <span class="diagnostic-label">Состояние компонентов</span>
+            <div id="environmentStatusStrip" class="environment-status-strip" aria-live="polite"></div>
           </div>
         </div>
       </section>
@@ -91,11 +86,13 @@
             <div class="step-index">2</div>
             <div class="step-body">
               <h3>Сертификат</h3>
-              <p class="muted">Сертификат выбирается в модальном окне после нажатия кнопки подписания.</p>
+              <p class="muted">Сначала выберите сертификат, затем отдельно запускайте подпись.</p>
               <div class="info-card">
                 <strong id="activePluginLabel">Активен CryptoPro</strong>
-                <span class="muted">После выбора сертификата будет выполнена detached CMS-подпись подготовленного PDF.</span>
+                <span id="selectedCertificateLabel" class="muted">Сертификат не выбран.</span>
+                <span id="certificateCountHint" class="muted certificate-count-hint">Сертификаты ещё не загружены.</span>
               </div>
+              <button id="chooseCertificateButton" class="secondary workflow-secondary" type="button">Выбрать сертификат</button>
             </div>
           </div>
 
@@ -114,7 +111,7 @@
           </div>
 
           <div class="workflow-actions">
-            <button id="signButton" class="primary workflow-primary">Подписать документ</button>
+            <button id="signButton" class="primary workflow-primary">Подписать</button>
             <a id="downloadLink" class="download hidden" download="signed-formular.pdf">Выгрузить подписанный PDF</a>
           </div>
         </aside>
