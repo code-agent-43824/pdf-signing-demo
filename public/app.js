@@ -2,6 +2,7 @@ const state = {
   certificates: [],
   selectedCertificate: null,
   pluginReady: false,
+  busyDepth: 0,
   activeCryptoStack: 'cryptopro',
   activeDialog: null,
   selectedStampPosition: 'right',
@@ -103,6 +104,33 @@ const TEMPLATE_TOKEN_OPTIONS = [
 
 function setStatus(message) {
   document.getElementById('statusLog').textContent = message;
+}
+
+function pushBusyOverlay(message = 'Выполняется криптографическая операция…') {
+  state.busyDepth += 1;
+  const overlay = document.getElementById('busyOverlay');
+  const text = document.getElementById('busyOverlayMessage');
+  if (text) {
+    text.textContent = message;
+  }
+  overlay?.classList.remove('hidden');
+}
+
+function popBusyOverlay() {
+  state.busyDepth = Math.max(0, state.busyDepth - 1);
+  if (state.busyDepth > 0) {
+    return;
+  }
+  document.getElementById('busyOverlay')?.classList.add('hidden');
+}
+
+async function withBusyOverlay(message, task) {
+  pushBusyOverlay(message);
+  try {
+    return await task();
+  } finally {
+    popBusyOverlay();
+  }
 }
 
 function escapeHtml(value) {
@@ -1043,7 +1071,7 @@ async function initActiveCryptoStack({ force = false } = {}) {
   if (!force && provider?.ready) {
     syncActiveProviderState();
     if (state.activeCryptoStack === 'rutoken') {
-      await refreshRutokenEnvironment({ silentStatus: true });
+      await withBusyOverlay('Проверяю состояние Рутокена…', () => refreshRutokenEnvironment({ silentStatus: true }));
     }
     setStatus(`Активен ${getCryptoStackLabel()}. Можно выбрать сертификат и подписать документ.`);
     return;
@@ -1053,11 +1081,11 @@ async function initActiveCryptoStack({ force = false } = {}) {
   setStatus(`Проверяю расширение и плагин ${getCryptoStackLabel()}…`);
 
   if (state.activeCryptoStack === 'rutoken') {
-    await initRutoken();
+    await withBusyOverlay('Подключаю Рутокен…', () => initRutoken());
     return;
   }
 
-  await initCryptoPro();
+  await withBusyOverlay('Подключаю CryptoPro…', () => initCryptoPro());
 }
 
 async function switchCryptoStack(mode) {
@@ -1072,28 +1100,30 @@ async function switchCryptoStack(mode) {
 }
 
 async function signPreparedContentRutoken(selectedCertificate, contentToSignBase64) {
-  const plugin = state.cryptoProviders.rutoken.client;
-  if (!plugin) {
-    throw new Error('Рутокен плагин не готов.');
-  }
+  return withBusyOverlay('Рутокен подписывает данные…', async () => {
+    const plugin = state.cryptoProviders.rutoken.client;
+    if (!plugin) {
+      throw new Error('Рутокен плагин не готов.');
+    }
 
-  const options = {
-    detached: true,
-    addSignTime: true,
-    addEssCert: true,
-  };
-  if (isRutokenRsaCertificate(selectedCertificate)) {
-    options.rsaHashAlgorithm = detectRutokenHashAlgorithmConstant(selectedCertificate, plugin);
-  }
+    const options = {
+      detached: true,
+      addSignTime: true,
+      addEssCert: true,
+    };
+    if (isRutokenRsaCertificate(selectedCertificate)) {
+      options.rsaHashAlgorithm = detectRutokenHashAlgorithmConstant(selectedCertificate, plugin);
+    }
 
-  const cmsSignature = await plugin.sign(
-    selectedCertificate.deviceId,
-    selectedCertificate.certId,
-    contentToSignBase64,
-    plugin.DATA_FORMAT_BASE64,
-    options,
-  );
-  return normalizeCmsBase64(cmsSignature);
+    const cmsSignature = await plugin.sign(
+      selectedCertificate.deviceId,
+      selectedCertificate.certId,
+      contentToSignBase64,
+      plugin.DATA_FORMAT_BASE64,
+      options,
+    );
+    return normalizeCmsBase64(cmsSignature);
+  });
 }
 
 function renderCertificateCard(certificate, index, isSelected) {
@@ -1230,7 +1260,7 @@ async function ensureRutokenLogin(deviceId) {
       errorMessage,
     });
     try {
-      await plugin.login(deviceId, pin);
+      await withBusyOverlay('Проверяю PIN-код на Рутокене…', () => plugin.login(deviceId, pin));
       return;
     } catch (error) {
       const message = getRutokenErrorMessage(error, plugin);
@@ -1993,30 +2023,32 @@ function detectHashAlgorithmConstant(certificate) {
 }
 
 async function signPreparedContent(selectedCertificate, contentToSignBase64) {
-  const oHashedData = await createObject('CAdESCOM.HashedData');
-  await setProp(
-    oHashedData,
-    'propset_Algorithm',
-    'Algorithm',
-    detectHashAlgorithmConstant(selectedCertificate),
-  );
-  await setProp(
-    oHashedData,
-    'propset_DataEncoding',
-    'DataEncoding',
-    window.cadesplugin.CADESCOM_BASE64_TO_BINARY,
-  );
-  await oHashedData.Hash(contentToSignBase64);
+  return withBusyOverlay('CryptoPro подписывает данные…', async () => {
+    const oHashedData = await createObject('CAdESCOM.HashedData');
+    await setProp(
+      oHashedData,
+      'propset_Algorithm',
+      'Algorithm',
+      detectHashAlgorithmConstant(selectedCertificate),
+    );
+    await setProp(
+      oHashedData,
+      'propset_DataEncoding',
+      'DataEncoding',
+      window.cadesplugin.CADESCOM_BASE64_TO_BINARY,
+    );
+    await oHashedData.Hash(contentToSignBase64);
 
-  const oSigner = await createObject('CAdESCOM.CPSigner');
-  await setProp(oSigner, 'propset_Certificate', 'Certificate', selectedCertificate.certificate);
+    const oSigner = await createObject('CAdESCOM.CPSigner');
+    await setProp(oSigner, 'propset_Certificate', 'Certificate', selectedCertificate.certificate);
 
-  const oSignedData = await createObject('CAdESCOM.CadesSignedData');
-  return oSignedData.SignHash(
-    oHashedData,
-    oSigner,
-    window.cadesplugin.CADESCOM_CADES_BES,
-  );
+    const oSignedData = await createObject('CAdESCOM.CadesSignedData');
+    return oSignedData.SignHash(
+      oHashedData,
+      oSigner,
+      window.cadesplugin.CADESCOM_CADES_BES,
+    );
+  });
 }
 
 function fileToBase64(file) {
@@ -2034,7 +2066,7 @@ function fileToBase64(file) {
 
 async function prepareAndSign() {
   if (state.activeCryptoStack === 'rutoken') {
-    await requestRutokenEnvironmentRefresh({ silentStatus: true });
+    await withBusyOverlay('Проверяю состояние Рутокена…', () => requestRutokenEnvironmentRefresh({ silentStatus: true }));
   }
   if (!state.pluginReady) {
     throw new Error(`${getCryptoStackLabel()} plugin не готов.`);
@@ -2162,7 +2194,7 @@ document.getElementById('chooseCertificateButton').addEventListener('click', asy
   button.disabled = true;
   try {
     if (state.activeCryptoStack === 'rutoken') {
-      await requestRutokenEnvironmentRefresh({ silentStatus: true });
+      await withBusyOverlay('Читаю состояние Рутокена…', () => requestRutokenEnvironmentRefresh({ silentStatus: true }));
     }
     const selectedCertificate = await openCertificateDialog(state.certificates, state.selectedCertificate);
     state.selectedCertificate = selectedCertificate;
