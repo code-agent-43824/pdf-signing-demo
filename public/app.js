@@ -23,6 +23,8 @@ const state = {
       client: null,
       tokenMonitorAttached: false,
       tokenMonitorTimer: null,
+      fallbackWatchTimer: null,
+      lastDeviceSnapshot: '',
       diagnostics: {
         extension: { state: 'pending', text: 'Проверка…' },
         plugin: { state: 'pending', text: 'Проверка…' },
@@ -163,6 +165,10 @@ function bindRutokenRefreshEvents() {
   });
 }
 
+function getDeviceSnapshot(deviceIds = []) {
+  return (deviceIds || []).map((value) => String(value)).sort().join('|');
+}
+
 function getStampPlacementPresetKey(config = state.stampConfig) {
   const rule = getDefaultPlacementRule(ensureStampConfigShape(config));
   const placement = rule?.placement || {};
@@ -184,12 +190,6 @@ function updateStampPlacementUi() {
     button.classList.toggle('is-active', isActive);
     button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
   });
-
-  const summary = document.getElementById('stampPositionSummary');
-  if (summary) {
-    const preset = STAMP_POSITION_PRESETS[activePreset] || STAMP_POSITION_PRESETS.right;
-    summary.textContent = `Штамп будет поставлен: ${preset.label.toLowerCase()}.`;
-  }
 }
 
 function applyStampPlacementPreset(presetKey) {
@@ -268,6 +268,39 @@ function bindRutokenTokenMonitor(plugin) {
   });
 
   provider.tokenMonitorAttached = true;
+}
+
+function stopRutokenFallbackWatch() {
+  const provider = state.cryptoProviders.rutoken;
+  if (provider.fallbackWatchTimer) {
+    window.clearInterval(provider.fallbackWatchTimer);
+    provider.fallbackWatchTimer = null;
+  }
+}
+
+function startRutokenFallbackWatch() {
+  const provider = state.cryptoProviders.rutoken;
+  stopRutokenFallbackWatch();
+  if (state.activeCryptoStack !== 'rutoken' || !provider.client) {
+    return;
+  }
+
+  provider.fallbackWatchTimer = window.setInterval(async () => {
+    if (document.hidden || state.activeCryptoStack !== 'rutoken' || !provider.client) {
+      return;
+    }
+    try {
+      const deviceIds = await provider.client.enumerateDevices({ mode: provider.client.ENUMERATE_DEVICES_LIST });
+      const nextSnapshot = getDeviceSnapshot(deviceIds);
+      if (nextSnapshot === provider.lastDeviceSnapshot) {
+        return;
+      }
+      provider.lastDeviceSnapshot = nextSnapshot;
+      await refreshRutokenEnvironment({ silentStatus: true });
+    } catch (_error) {
+      // Ошибку уже показываем в диагностике.
+    }
+  }, 2000);
 }
 
 function updateSelectedCertificateUi() {
@@ -948,6 +981,7 @@ async function refreshRutokenEnvironment({ silentStatus = false } = {}) {
   }
 
   const deviceIds = await plugin.enumerateDevices({ mode: plugin.ENUMERATE_DEVICES_LIST });
+  provider.lastDeviceSnapshot = getDeviceSnapshot(deviceIds);
   const certificates = await enumerateRutokenCertificates(plugin);
   provider.certificates = certificates;
   provider.ready = true;
@@ -1020,10 +1054,12 @@ async function initRutoken() {
     provider.ready = false;
     provider.certificates = [];
     provider.client = null;
+    provider.lastDeviceSnapshot = '';
     if (provider.tokenMonitorTimer) {
       window.clearTimeout(provider.tokenMonitorTimer);
       provider.tokenMonitorTimer = null;
     }
+    stopRutokenFallbackWatch();
     provider.tokenMonitorAttached = false;
     setProviderDiagnostic('rutoken', 'plugin', 'error', 'недоступен');
     setProviderDiagnostic('rutoken', 'token', 'error', 'не найден');
@@ -1042,6 +1078,7 @@ async function initActiveCryptoStack({ force = false } = {}) {
   if (!force && provider?.ready) {
     syncActiveProviderState();
     if (state.activeCryptoStack === 'rutoken') {
+      startRutokenFallbackWatch();
       await refreshRutokenEnvironment({ silentStatus: true });
     }
     setStatus(`Активен ${getCryptoStackLabel()}. Можно выбрать сертификат и подписать документ.`);
@@ -1053,9 +1090,11 @@ async function initActiveCryptoStack({ force = false } = {}) {
 
   if (state.activeCryptoStack === 'rutoken') {
     await initRutoken();
+    startRutokenFallbackWatch();
     return;
   }
 
+  stopRutokenFallbackWatch();
   await initCryptoPro();
 }
 
@@ -1063,6 +1102,7 @@ async function switchCryptoStack(mode) {
   if (!CRYPTO_STACK_LABELS[mode] || mode === state.activeCryptoStack) {
     return;
   }
+  stopRutokenFallbackWatch();
   state.activeCryptoStack = mode;
   state.selectedCertificate = null;
   syncCryptoStackControls();
