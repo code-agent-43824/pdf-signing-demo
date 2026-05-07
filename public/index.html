@@ -110,14 +110,6 @@
 
           <div class="workflow-actions">
             <button id="signButton" class="primary workflow-primary">Подписать</button>
-            <a id="downloadLink" class="download hidden" download="signed-formular.pdf">Выгрузить подписанный PDF</a>
-            <div id="successBanner" class="success-banner hidden">
-              <div class="success-icon">✓</div>
-              <div>
-                <strong>Документ успешно подписан квалифицированной электронной подписью</strong>
-                <div class="muted">Финальный PDF собран и готов к скачиванию.</div>
-              </div>
-            </div>
           </div>
         </aside>
 
@@ -171,6 +163,17 @@
           </div>
         </section>
       </section>
+
+      <div id="successBanner" class="success-banner hidden">
+        <div class="success-banner-copy">
+          <div class="success-icon">✓</div>
+          <div>
+            <strong>Документ успешно подписан квалифицированной электронной подписью</strong>
+            <div class="muted">Финальный PDF собран и готов к скачиванию.</div>
+          </div>
+        </div>
+        <a id="downloadLink" class="download hidden success-download" download="signed-formular.pdf">Выгрузить подписанный PDF</a>
+      </div>
     </main>
 
     <template id="certificateDialogTemplate">

@@ -182,12 +182,15 @@ body {
   display: grid;
   grid-template-columns: 332px minmax(0, 1fr);
   gap: 16px;
-  align-items: start;
+  align-items: stretch;
 }
 .workflow-panel,
 .preview-panel {
   margin-top: 0;
   padding: 14px;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 .eyebrow {
   margin: 0;
@@ -226,7 +229,6 @@ h1, h2, h3 { margin: 0; }
 }
 .download {
   display: inline-block;
-  margin-top: 16px;
   text-decoration: none;
   background: var(--success-soft);
   color: #19653f;
@@ -453,7 +455,8 @@ h1, h2, h3 { margin: 0; }
 .workflow-actions {
   display: grid;
   gap: 8px;
-  margin-top: 10px;
+  margin-top: auto;
+  padding-top: 10px;
 }
 .workflow-primary {
   width: 100%;
@@ -534,6 +537,9 @@ h1, h2, h3 { margin: 0; }
   border-radius: 8px;
   overflow: hidden;
   background: #e9eef4;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
 }
 .viewer-toolbar {
   display: flex;
@@ -597,6 +603,7 @@ h1, h2, h3 { margin: 0; }
 .viewer-stage {
   min-height: 760px;
   background: #eef2f7;
+  flex: 1 1 auto;
 }
 .preview-empty-state {
   min-height: 720px;
@@ -667,15 +674,32 @@ h1, h2, h3 { margin: 0; }
   min-height: 88px;
 }
 .success-banner {
-  margin-top: 0;
+  margin-top: 16px;
   display: flex;
   align-items: center;
-  gap: 14px;
+  justify-content: space-between;
+  gap: 18px;
   padding: 16px 18px;
   border-radius: 8px;
   border: 1px solid #b7e4d2;
   background: linear-gradient(180deg, #effbf6 0%, #f7fffb 100%);
   color: #136f63;
+}
+.success-banner-copy {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+.success-banner-copy strong {
+  display: block;
+  margin-bottom: 4px;
+}
+.success-download {
+  flex: 0 0 auto;
+  min-width: 260px;
+  padding-left: 18px;
+  padding-right: 18px;
 }
 .success-icon {
   width: 34px;
@@ -1160,6 +1184,15 @@ h1, h2, h3 { margin: 0; }
   }
   .stamp-position-grid {
     grid-template-columns: 1fr;
+  }
+  .success-banner,
+  .success-banner-copy {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .success-download {
+    width: 100%;
+    min-width: 0;
   }
 }
 
