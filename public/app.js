@@ -1527,6 +1527,11 @@ function renderStampRows(root, rows) {
 
 function fontPreviewFamily(fontPath, fallback = 'sans-serif') {
   const value = String(fontPath || '').toLowerCase();
+  if (value.includes('pt sans caption')) return '"PT Sans Caption Stamp", "PT Sans Caption", Arial, sans-serif';
+  if (value.includes('ibm plex sans')) return '"IBM Plex Sans Stamp", "IBM Plex Sans", Arial, sans-serif';
+  if (value.includes('roboto condensed')) return '"Roboto Condensed Stamp", "Roboto Condensed", Arial, sans-serif';
+  if (value.includes('noto sans semicondensed')) return '"Noto Sans SemiCondensed Stamp", "Noto Sans", Arial, sans-serif';
+  if (value.includes('golos text')) return '"Golos Text Stamp", "Golos Text", Arial, sans-serif';
   if (value.includes('serif')) return 'Georgia, "Times New Roman", serif';
   if (value.includes('mono')) return '"SFMono-Regular", Consolas, monospace';
   if (value.includes('sans')) return 'Inter, Arial, sans-serif';

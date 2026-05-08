@@ -11,6 +11,7 @@ const FORM_PDF_NAME = 'formular.pdf';
 const CMS_NORMALIZER_PATH = path.join(__dirname, '..', 'scripts', 'normalize-cms.py');
 const publicDir = path.join(__dirname, '..', 'public');
 const assetsDir = path.join(publicDir, 'assets');
+const localFontsDir = path.join(assetsDir, 'fonts');
 const generatedDir = path.join(publicDir, 'generated');
 const formPdfPath = path.join(assetsDir, FORM_PDF_NAME);
 const stampConfigPath = process.env.STAMP_CONFIG_PATH
@@ -18,6 +19,7 @@ const stampConfigPath = process.env.STAMP_CONFIG_PATH
   : path.join(__dirname, '..', 'config', 'stamp-config.json');
 const sessions = createSessionStore({ generatedDir });
 const FONT_DIRS = [
+  localFontsDir,
   '/usr/share/fonts',
   '/usr/local/share/fonts',
   path.join(process.env.HOME || '', '.fonts'),
