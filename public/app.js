@@ -35,6 +35,7 @@ const state = {
   uploadedPdfBase64: null,
   uploadedPdfName: null,
   uploadedPdfObjectUrl: null,
+  defaultStampConfig: null,
   stampConfig: null,
   stampConfigPath: null,
   availableFonts: [],
@@ -59,6 +60,7 @@ const CRYPTO_DIAGNOSTIC_LAYOUTS = {
 };
 
 const CRYPTO_STACK_STORAGE_KEY = 'pdf-signing-demo.crypto-stack';
+const STAMP_CONFIG_STORAGE_KEY = 'pdf-signing-demo.stamp-config';
 const CRYPTO_SCRIPTS = {
   cryptopro: 'https://www.cryptopro.ru/sites/default/files/products/cades/cadesplugin_api.js',
   rutoken: './vendor/rutoken-plugin.min.js',
@@ -551,9 +553,10 @@ async function fetchJsonOk(url, options, fallbackMessage) {
 
 async function fetchStampConfig() {
   const data = await fetchJsonOk('./api/stamp-config', undefined, 'Не удалось загрузить конфиг штампа.');
-  state.stampConfig = data.config;
+  state.defaultStampConfig = ensureStampConfigShape(data.config);
+  state.stampConfig = resolveEffectiveStampConfig(state.defaultStampConfig);
   state.stampConfigPath = data.configPath;
-  state.selectedStampPosition = getStampPlacementPresetKey(data.config, { preferSelected: false });
+  state.selectedStampPosition = getStampPlacementPresetKey(state.stampConfig, { preferSelected: false });
   updateStampPlacementUi();
   return data;
 }
@@ -1356,7 +1359,61 @@ function openCertificateDialog(certificates, preselectedCertificate = null) {
 }
 
 function cloneConfig(config) {
-  return JSON.parse(JSON.stringify(config || {}));
+  if (config === undefined) {
+    return undefined;
+  }
+  return JSON.parse(JSON.stringify(config));
+}
+
+function mergeConfig(base, override) {
+  if (Array.isArray(base) || Array.isArray(override)) {
+    return cloneConfig(override ?? base);
+  }
+  if (!base || typeof base !== 'object') {
+    return cloneConfig(override ?? base);
+  }
+  const result = cloneConfig(base);
+  if (!override || typeof override !== 'object') {
+    return result;
+  }
+  Object.entries(override).forEach(([key, value]) => {
+    if (value && typeof value === 'object' && !Array.isArray(value) && result[key] && typeof result[key] === 'object' && !Array.isArray(result[key])) {
+      result[key] = mergeConfig(result[key], value);
+    } else {
+      result[key] = cloneConfig(value);
+    }
+  });
+  return result;
+}
+
+function loadSavedStampConfig() {
+  try {
+    const raw = window.localStorage.getItem(STAMP_CONFIG_STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch (_error) {
+    return null;
+  }
+}
+
+function savePersonalStampConfig(config) {
+  window.localStorage.setItem(STAMP_CONFIG_STORAGE_KEY, JSON.stringify(config));
+}
+
+function clearPersonalStampConfig() {
+  window.localStorage.removeItem(STAMP_CONFIG_STORAGE_KEY);
+}
+
+function hasPersonalStampConfig() {
+  return Boolean(loadSavedStampConfig());
+}
+
+function resolveEffectiveStampConfig(serverConfig) {
+  const saved = loadSavedStampConfig();
+  if (!saved) {
+    return ensureStampConfigShape(serverConfig);
+  }
+  return ensureStampConfigShape(mergeConfig(serverConfig, saved));
 }
 
 function ensureStampConfigShape(config) {
@@ -1992,12 +2049,13 @@ function openStampSettingsDialog() {
     const fragment = document.getElementById('stampSettingsDialogTemplate').content.cloneNode(true);
     const backdrop = fragment.querySelector('.dialog-backdrop');
     const configPath = fragment.querySelector('#stampConfigPath');
+    const reset = fragment.querySelector('#resetStampSettings');
     const save = fragment.querySelector('#saveStampSettings');
     const cancel = fragment.querySelector('#cancelStampSettings');
     const root = backdrop;
 
     state.stampConfig = ensureStampConfigShape(state.stampConfig);
-    configPath.textContent = state.stampConfigPath || '';
+    configPath.textContent = `${state.stampConfigPath || ''}${hasPersonalStampConfig() ? ' · есть персональные настройки в браузере' : ' · используются серверные настройки по умолчанию'}`;
     populateVisualForm(root, state.stampConfig);
     root.querySelector('#stampConfigEditor').value = `${JSON.stringify(state.stampConfig, null, 2)}\n`;
     wireStampSettingsForm(root);
@@ -2016,6 +2074,17 @@ function openStampSettingsDialog() {
       }
     });
 
+    reset.addEventListener('click', () => {
+      clearPersonalStampConfig();
+      state.stampConfig = ensureStampConfigShape(state.defaultStampConfig);
+      state.selectedStampPosition = getStampPlacementPresetKey(state.stampConfig, { preferSelected: false });
+      configPath.textContent = `${state.stampConfigPath || ''} · используются серверные настройки по умолчанию`;
+      populateVisualForm(root, state.stampConfig);
+      root.querySelector('#stampConfigEditor').value = `${JSON.stringify(state.stampConfig, null, 2)}\n`;
+      updateStampPlacementUi();
+      setStatus('Персональные настройки штампа сброшены. Сейчас используются серверные значения по умолчанию.');
+    });
+
     save.addEventListener('click', async () => {
       save.disabled = true;
       try {
@@ -2023,13 +2092,9 @@ function openStampSettingsDialog() {
         const parsed = isJsonVisible
           ? ensureStampConfigShape(JSON.parse(root.querySelector('#stampConfigEditor').value))
           : readVisualForm(root);
-        const data = await fetchJsonOk('./api/stamp-config', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ config: parsed }),
-        }, 'Не удалось сохранить конфиг штампа.');
+        savePersonalStampConfig(parsed);
         state.stampConfig = parsed;
-        state.stampConfigPath = data.configPath || state.stampConfigPath;
+        state.selectedStampPosition = getStampPlacementPresetKey(state.stampConfig, { preferSelected: false });
         updateStampPlacementUi();
         close();
         resolve();
@@ -2263,7 +2328,7 @@ document.getElementById('stampSettingsButton').addEventListener('click', async (
   try {
     await Promise.all([fetchStampConfig(), fetchAvailableFonts()]);
     await openStampSettingsDialog();
-    setStatus('Конфиг штампа сохранён. Следующая подготовка PDF возьмёт новые параметры.');
+    setStatus('Персональные настройки штампа сохранены в этом браузере. Следующая подготовка PDF возьмёт новые параметры.');
   } catch (error) {
     if (!String(error.message || '').includes('отменена')) {
       setStatus(`Ошибка: ${error.message}`);

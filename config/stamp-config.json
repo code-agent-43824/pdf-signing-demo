@@ -1,33 +1,33 @@
 {
   "appearance": {
-    "width": 128,
-    "height": 108,
+    "width": 150,
+    "height": 70,
     "imageScale": 4,
     "backgroundColor": "#F5F8FF",
     "borderColor": "#3F68B8",
-    "borderWidth": 4,
-    "borderRadius": 18,
-    "textColor": "#1A2842",
+    "borderWidth": 2,
+    "borderRadius": 26,
+    "textColor": "#0D4DC5",
     "separator": {
-      "enabled": true,
+      "enabled": false,
       "y": 56,
       "left": 28,
       "right": 28,
       "color": "#6E87BC",
-      "width": 3
+      "width": 1
     },
     "fonts": {
       "title": {
-        "path": "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf",
+        "path": "/home/openclaw/.openclaw/workspace/repos/pdf-signing-demo/public/assets/fonts/stamp/Roboto Condensed Medium.ttf",
         "size": 30
       },
       "label": {
-        "path": "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf",
-        "size": 27
+        "path": "/home/openclaw/.openclaw/workspace/repos/pdf-signing-demo/public/assets/fonts/stamp/Roboto Condensed Medium.ttf",
+        "size": 22
       },
       "value": {
-        "path": "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "size": 27
+        "path": "/home/openclaw/.openclaw/workspace/repos/pdf-signing-demo/public/assets/fonts/stamp/Roboto Condensed Medium.ttf",
+        "size": 22
       }
     },
     "layout": {
@@ -44,30 +44,32 @@
   },
   "content": {
     "title": [
-      "Документ подписан",
-      "электронной подписью"
+      "Документ подписан электронной подписью"
     ],
     "rows": [
       {
         "label": "ID сертификата",
         "value": "{signer.cert_id}",
-        "breakAnywhere": true,
-        "maxLines": 2
+        "maxLines": 2,
+        "breakAnywhere": true
       },
       {
         "label": "ФИО владельца",
         "value": "{signer.name}",
-        "maxLines": 2
+        "maxLines": 2,
+        "breakAnywhere": false
       },
       {
         "label": "Кем выдан",
         "value": "{signer.issuer}",
-        "maxLines": 2
+        "maxLines": 2,
+        "breakAnywhere": false
       },
       {
         "label": "Срок действия",
         "value": "{signer.valid_to}",
-        "maxLines": 2
+        "maxLines": 2,
+        "breakAnywhere": false
       }
     ]
   },
@@ -84,9 +86,9 @@
       {
         "name": "default-grid",
         "pages": {
-          "mode": "single",
+          "mode": "all",
           "page": 1,
-          "widgetPageMode": "first"
+          "widgetPageMode": "last"
         },
         "placement": {
           "mode": "grid",
