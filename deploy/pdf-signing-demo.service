@@ -4,11 +4,12 @@ After=network.target
 
 [Service]
 Type=simple
-WorkingDirectory=/home/openclaw/.openclaw/workspace/repos/pdf-signing-demo
+WorkingDirectory=/home/openclaw/services/pdf-signing-demo/current
 Environment=NODE_ENV=production
 Environment=PORT=3010
 Environment=BASE_PATH=/pdf-signing/
-ExecStart=/usr/bin/node src/server.js
+Environment=PATH=/home/openclaw/services/pdf-signing-demo/current/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=/home/openclaw/runtime/node/bin/node src/server.js
 Restart=always
 RestartSec=3
 

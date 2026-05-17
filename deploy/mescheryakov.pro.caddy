@@ -7,5 +7,9 @@ mescheryakov.pro, www.mescheryakov.pro {
         redir /pdf-signing/ 308
     }
 
-    # Keep the main static site fallback in the live site config.
+    handle {
+        root * /home/openclaw/sites/mescheryakov.pro/public
+        encode zstd gzip
+        file_server
+    }
 }

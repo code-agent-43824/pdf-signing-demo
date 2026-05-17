@@ -51,9 +51,9 @@ node src/server.js
 
 ## Deploy contour
 
-Current VPS URL:
+Current production URL:
 
-- `https://watsonopenclaw.duckdns.org/pdf-signing/`
+- `https://mescheryakov.pro/pdf-signing/`
 
 Repo includes reference deployment files:
 

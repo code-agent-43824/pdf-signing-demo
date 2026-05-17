@@ -18,6 +18,8 @@ from pyhanko.sign.fields import enumerate_sig_fields
 from pyhanko.sign.signers import cms_embedder, pdf_byterange
 
 CONFIG_PATH = Path(os.environ.get('STAMP_CONFIG_PATH') or Path(__file__).resolve().parents[1] / 'config' / 'stamp-config.json')
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+STAMP_FONT_DIR = PROJECT_ROOT / 'public' / 'assets' / 'fonts' / 'stamp'
 BACKGROUND_LAYOUT = layout.SimpleBoxLayoutRule(
     x_align=layout.AxisAlignment.ALIGN_MID,
     y_align=layout.AxisAlignment.ALIGN_MID,
@@ -267,6 +269,22 @@ def wrap_text_lines(draw, value, font, max_width, max_lines=2, break_anywhere=Fa
     return [line for line in lines[:max_lines] if line]
 
 
+def resolve_font_path(font_path):
+    candidate = Path(str(font_path or ''))
+    if candidate.is_absolute() and candidate.exists():
+        return str(candidate)
+
+    relative_candidate = PROJECT_ROOT / candidate
+    if relative_candidate.exists():
+        return str(relative_candidate)
+
+    stamp_candidate = STAMP_FONT_DIR / candidate.name
+    if candidate.name and stamp_candidate.exists():
+        return str(stamp_candidate)
+
+    return str(candidate)
+
+
 def render_stamp_image(config, metadata):
     appearance = config['appearance']
     layout_cfg = appearance['layout']
@@ -294,9 +312,9 @@ def render_stamp_image(config, metadata):
             width=int(separator_cfg.get('width', 1)),
         )
 
-    title_font = ImageFont.truetype(appearance['fonts']['title']['path'], int(appearance['fonts']['title']['size']))
-    label_font = ImageFont.truetype(appearance['fonts']['label']['path'], int(appearance['fonts']['label']['size']))
-    value_font = ImageFont.truetype(appearance['fonts']['value']['path'], int(appearance['fonts']['value']['size']))
+    title_font = ImageFont.truetype(resolve_font_path(appearance['fonts']['title']['path']), int(appearance['fonts']['title']['size']))
+    label_font = ImageFont.truetype(resolve_font_path(appearance['fonts']['label']['path']), int(appearance['fonts']['label']['size']))
+    value_font = ImageFont.truetype(resolve_font_path(appearance['fonts']['value']['path']), int(appearance['fonts']['value']['size']))
 
     content_left = int(layout_cfg['contentLeft'])
     content_right = width - int(layout_cfg['contentRight'])

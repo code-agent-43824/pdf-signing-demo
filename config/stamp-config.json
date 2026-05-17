@@ -18,15 +18,15 @@
     },
     "fonts": {
       "title": {
-        "path": "/home/openclaw/.openclaw/workspace/repos/pdf-signing-demo/public/assets/fonts/stamp/Roboto Condensed Medium.ttf",
+        "path": "public/assets/fonts/stamp/Roboto Condensed Medium.ttf",
         "size": 30
       },
       "label": {
-        "path": "/home/openclaw/.openclaw/workspace/repos/pdf-signing-demo/public/assets/fonts/stamp/Roboto Condensed Medium.ttf",
+        "path": "public/assets/fonts/stamp/Roboto Condensed Medium.ttf",
         "size": 22
       },
       "value": {
-        "path": "/home/openclaw/.openclaw/workspace/repos/pdf-signing-demo/public/assets/fonts/stamp/Roboto Condensed Medium.ttf",
+        "path": "public/assets/fonts/stamp/Roboto Condensed Medium.ttf",
         "size": 22
       }
     },
