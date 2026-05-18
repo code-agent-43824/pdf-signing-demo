@@ -921,6 +921,29 @@ function getRutokenErrorMessage(error, plugin = state.cryptoProviders.rutoken.cl
   return error.message || String(error);
 }
 
+function getRutokenErrorCode(error) {
+  const message = typeof error === 'string' ? error : String(error?.message || error || '');
+  const numericPrefix = message.match(/^\s*(-?\d+)/);
+  if (numericPrefix) {
+    return Number(numericPrefix[1]);
+  }
+  const numericOnly = Number(message);
+  return Number.isFinite(numericOnly) ? numericOnly : null;
+}
+
+function isRutokenAlreadyLoggedInError(error, plugin = state.cryptoProviders.rutoken.client) {
+  const message = getRutokenErrorMessage(error, plugin);
+  const rawMessage = typeof error === 'string' ? error : String(error?.message || error || '');
+  const code = getRutokenErrorCode(error);
+  const alreadyLoggedInCode = Number(plugin?.errorCodes?.ALREADY_LOGGED_IN ?? 93);
+
+  return message.includes('ALREADY_LOGGED_IN')
+    || rawMessage.includes('ALREADY_LOGGED_IN')
+    || /login has already been performed/i.test(message)
+    || /login has already been performed/i.test(rawMessage)
+    || (Number.isFinite(code) && Number.isFinite(alreadyLoggedInCode) && code === alreadyLoggedInCode);
+}
+
 async function enumerateRutokenCertificates(plugin) {
   const deviceIds = await plugin.enumerateDevices({ mode: plugin.ENUMERATE_DEVICES_LIST });
   const result = [];
@@ -1294,10 +1317,10 @@ async function ensureRutokenLogin(deviceId) {
       await withOperationalCryptoBusyOverlay('Проверяю PIN-код на Рутокене…', () => plugin.login(deviceId, pin), { mode: 'rutoken' });
       return;
     } catch (error) {
-      const message = getRutokenErrorMessage(error, plugin);
-      if (message.includes('ALREADY_LOGGED_IN') || String(error?.message || '') === String(plugin?.errorCodes?.ALREADY_LOGGED_IN || '93')) {
+      if (isRutokenAlreadyLoggedInError(error, plugin)) {
         return;
       }
+      const message = getRutokenErrorMessage(error, plugin);
       const retriesLeft = await getRutokenPinRetriesLeft(plugin, deviceId);
       const retriesSuffix = Number.isFinite(Number(retriesLeft)) ? ` Осталось попыток: ${retriesLeft}.` : '';
       errorMessage = `Не удалось авторизоваться: ${message}.${retriesSuffix}`;
