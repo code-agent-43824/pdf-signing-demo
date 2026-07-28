@@ -3,4 +3,5 @@ node_modules/
 .DS_Store
 *.log
 public/generated/
-scripts/__pycache__/
+__pycache__/
+*.py[cod]

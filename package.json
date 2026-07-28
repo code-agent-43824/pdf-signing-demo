@@ -4,7 +4,10 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --test --test-concurrency=1",
+    "test:golden": "node --test --test-concurrency=1 test/pades-golden.test.js",
+    "fixtures:generate": "python3 test/fixtures/generate.py",
+    "baseline:capture": "node scripts/capture-production-baseline.js"
   },
   "repository": {
     "type": "git",

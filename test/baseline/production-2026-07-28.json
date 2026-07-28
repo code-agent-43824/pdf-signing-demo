@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-07-28T20:04:07.897Z",
+  "baseUrl": "https://mescheryakov.pro/pdf-signing/",
+  "note": "Read-only baseline. Absolute server paths are removed before hashing JSON.",
+  "endpoints": [
+    {
+      "path": ".",
+      "status": 200,
+      "contentType": "text/html; charset=utf-8",
+      "bodyBytes": 33873,
+      "sha256": "8e206ce895876547bf935a2f3259acdb55d26113ad8bdce57c939bb4e6f24131"
+    },
+    {
+      "path": "app.js",
+      "status": 200,
+      "contentType": "text/javascript; charset=utf-8",
+      "bodyBytes": 94941,
+      "sha256": "d7e4b25a1781ae5b1204c0f9b72c64b637a53cac70bdd69c72a256536e637040"
+    },
+    {
+      "path": "api/form",
+      "status": 200,
+      "contentType": "application/json; charset=utf-8",
+      "bodyBytes": 105,
+      "sha256": "0c372c8a5c707d60d12ded7434aa78867465539a50d0aa53e85b35c1ce775c4f"
+    },
+    {
+      "path": "api/stamp-config",
+      "status": 200,
+      "contentType": "application/json; charset=utf-8",
+      "bodyBytes": 1633,
+      "sha256": "6aef60ed68a67126413115bf02ae61e1021d23c435bbfc7b6903f6db76808c0a"
+    },
+    {
+      "path": "health",
+      "status": 404,
+      "contentType": "text/html; charset=utf-8",
+      "bodyBytes": 157,
+      "sha256": "ef859e261bbe0b95d3a910d4acc08347a5dbf07776c66caa7143a09182089033"
+    }
+  ]
+}

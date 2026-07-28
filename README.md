@@ -23,6 +23,14 @@ node src/server.js
 - `reportlab`
 - `Pillow`
 
+Для воспроизводимой установки поддерживаемых версий:
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install --requirement requirements.txt
+```
+
 Переменные окружения:
 
 - `PORT` — порт сервера (по умолчанию `3010`)
@@ -59,3 +67,20 @@ Repo includes reference deployment files:
 
 - `deploy/pdf-signing-demo.service`
 - `deploy/Caddyfile.snippet`
+
+## Проверки golden-корпуса
+
+Golden-корпус фиксирует структурные варианты PDF и автоматически проверяет
+полный цикл подготовки и встраивания от одной до четырёх последовательных
+подписей. Каждая подпись проверяется двумя независимыми средствами:
+OpenSSL CMS и pyHanko PDF validation.
+
+```bash
+npm ci
+python -m pip install --requirement requirements.txt
+npm test
+```
+
+Тестовые сертификат и закрытый ключ создаются во временном каталоге на время
+прогона и не сохраняются в репозитории. Состав корпуса описан в
+`test/fixtures/README.md`.

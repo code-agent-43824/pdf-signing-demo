@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "generator": "test/fixtures/generate.py",
+  "files": {
+    "pdf/simple.pdf": {
+      "sha256": "656c25a3e24438f4cf264f3be9a0dbcfc556fee670f988626069cf44d2b022fc",
+      "size": 673,
+      "pages": 1,
+      "signatureFields": 0
+    },
+    "pdf/multipage.pdf": {
+      "sha256": "e9e92ecfe9d966184fb91c7bc972c40c59ea66accb7e0a624578d48c3afa2bda",
+      "size": 1088,
+      "pages": 3,
+      "signatureFields": 0
+    },
+    "pdf/acroform.pdf": {
+      "sha256": "ed37a321c0ce259c813e16e36f24fa02d01f9fd6305aa87828e51e5d4cd60107",
+      "size": 767,
+      "pages": 1,
+      "signatureFields": 0
+    },
+    "pdf/empty-signature-field.pdf": {
+      "sha256": "aef652a241b54ee74b88ef29211a6c0f973d13e886b998b7191952dc3d37486a",
+      "size": 924,
+      "pages": 1,
+      "signatureFields": 1
+    },
+    "pdf/nonstandard-geometry.pdf": {
+      "sha256": "caed06037a1d4ba652af76aca85addec028e48b1a957ab7c55f1f09502d60d25",
+      "size": 728,
+      "pages": 1,
+      "signatureFields": 0
+    },
+    "invalid/malformed.pdf": {
+      "sha256": "9cd7cf199d804501d42bdac4121fab7239452011cc3d994be69cf5078218cad1",
+      "size": 45,
+      "expectedValid": false
+    },
+    "invalid/malformed-cms.der": {
+      "sha256": "057760e06e6ce040186cb1325c4f453eecc6b0d0c28cbcd755532a0afc7ecea8",
+      "size": 4,
+      "expectedValid": false
+    }
+  },
+  "dynamicScenarios": {
+    "incrementalSignatures": {
+      "input": "pdf/simple.pdf",
+      "signatureCounts": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "validators": [
+        "OpenSSL CMS",
+        "pyHanko PDF"
+      ],
+      "privateKeysCommitted": false
+    }
+  }
+}

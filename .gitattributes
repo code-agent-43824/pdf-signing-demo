@@ -1,0 +1,2 @@
+test/fixtures/pdf/*.pdf binary
+test/fixtures/invalid/*.der binary
