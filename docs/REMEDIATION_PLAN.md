@@ -74,7 +74,8 @@
 
 ### Ход выполнения — 2026-07-28
 
-Статус: **в работе; базовый обезличенный контур реализован локально**.
+Статус: **в работе; базовый обезличенный контур реализован, проверен в CI
+и развёрнут в production; реальные GOST-фикстуры ещё не добавлены**.
 
 Выполнено:
 
@@ -95,11 +96,23 @@
 - добавлены воспроизводимые команды запуска и GitHub Actions workflow;
 - локальный прогон: 4 теста успешно, 0 ошибок, 1 ожидаемый TODO для
   серверного отклонения malformed CMS (относится к фазе 2).
+- GitHub Actions run
+  [`30395001009`](https://github.com/code-agent-43824/pdf-signing-demo/actions/runs/30395001009)
+  завершился успешно за 29 секунд: корпус воспроизведён без diff, golden
+  tests и dependency gate прошли;
+- commit `9d9fca6` развёрнут в
+  `/home/openclaw/services/pdf-signing-demo/current`; перед копированием
+  rsync сохранил заменяемые файлы в
+  `/home/openclaw/services/pdf-signing-demo/backups/20260728T201200Z-golden-baseline`;
+- golden-прогон на production-хосте прошёл на Node `22.22.2`,
+  Python `3.14.4`, pyHanko `0.35.1` и OpenSSL `3.5.5`:
+  4 теста успешно, 0 ошибок, 1 ожидаемый TODO;
+- после рестарта `pdf-signing-demo.service` активен, `NRestarts=0`;
+  read-only сравнение подтвердило неизменность всех пяти endpoint
+  production baseline, а существующие файлы `public/generated` сохранены.
 
 Остаётся до полного закрытия фазы:
 
-- подтвердить workflow на GitHub Actions;
-- повторить golden-прогон в production runtime после deployment;
 - добавить обезличенные реальные GOST CMS-фикстуры CryptoPro и Рутокен.
   Текущий динамический контур использует временный RSA test certificate и
   проверяет механику PDF/CMS, но не заменяет GOST-совместимость.
