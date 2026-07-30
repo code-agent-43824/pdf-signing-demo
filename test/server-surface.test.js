@@ -120,6 +120,10 @@ before(async () => {
       PORT: String(serverPort),
       STAMP_CONFIG_PATH: testConfigPath,
       GENERATED_DIR: testGeneratedDir,
+      PREPARE_RATE_LIMIT: '1000',
+      COMPLETE_RATE_LIMIT: '1000',
+      SIGNING_CONCURRENCY: '1',
+      SIGNING_MAX_QUEUE: '1',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -456,6 +460,49 @@ test('prepare rejects stamp page references outside the uploaded document', asyn
   );
 });
 
+test('bounded queue keeps health responsive and rejects overflow', async () => {
+  const pdfBase64 = fs.readFileSync(
+    path.join(PROJECT_ROOT, 'test', 'fixtures', 'pdf', 'simple.pdf'),
+  ).toString('base64');
+  const body = {
+    pdfBase64,
+    signer: validSigner(),
+  };
+  const first = postJson('api/sign/prepare', body);
+  const second = postJson('api/sign/prepare', body);
+
+  let queueObserved = false;
+  const deadline = Date.now() + 3000;
+  while (Date.now() < deadline) {
+    const ready = await fetch(new URL('health/ready', baseUrl));
+    const readiness = await ready.json();
+    if (readiness.workers?.active === 1 && readiness.workers?.queued === 1) {
+      queueObserved = true;
+      break;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  assert.equal(queueObserved, true);
+
+  const healthStartedAt = performance.now();
+  const liveResponse = await fetch(new URL('health/live', baseUrl));
+  const healthDurationMs = performance.now() - healthStartedAt;
+  assert.equal(liveResponse.status, 200);
+  assert.ok(
+    healthDurationMs < 250,
+    `health endpoint was blocked for ${healthDurationMs.toFixed(1)} ms`,
+  );
+
+  await assertSafeError(
+    await postJson('api/sign/prepare', body),
+    503,
+    'SERVER_BUSY',
+    'prepare',
+  );
+  assert.equal((await first).status, 200);
+  assert.equal((await second).status, 200);
+});
+
 test('complete verifies CMS integrity, certificate binding and retry semantics', async () => {
   const pdfBase64 = fs.readFileSync(
     path.join(PROJECT_ROOT, 'test', 'fixtures', 'pdf', 'simple.pdf'),
@@ -640,6 +687,14 @@ test('liveness and readiness are available only through the production base path
       python: true,
       config: true,
       storage: true,
+      workerLimits: true,
+      workerQueue: true,
+    },
+    workers: {
+      active: 0,
+      queued: 0,
+      concurrency: 1,
+      maxQueue: 1,
     },
   });
 

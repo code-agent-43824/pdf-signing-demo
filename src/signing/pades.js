@@ -1,8 +1,9 @@
 const fs = require('fs');
+const fsp = require('fs/promises');
 const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
-const { execFileSync } = require('child_process');
+const { runIsolatedProcess } = require('../runtime/process-runner');
 
 const PREPARE_PYHANKO_SCRIPT_PATH = path.join(__dirname, '..', '..', 'scripts', 'prepare-pyhanko.py');
 const DEFAULT_SIGNATURE_LENGTH = 16000;
@@ -16,31 +17,45 @@ function findLastByteRange(pdf) {
   return last.slice(1).map((value) => Number(value));
 }
 
-function createPreparedPdfWithPyhanko({ source, signer, stampConfig, requestedStampPosition }) {
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pdf-signing-pyhanko-'));
+async function createPreparedPdfWithPyhanko({
+  source,
+  signer,
+  stampConfig,
+  requestedStampPosition,
+  signal,
+}) {
+  const tempDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'pdf-signing-pyhanko-'));
+  await fsp.chmod(tempDir, 0o700);
   const inputPath = path.join(tempDir, 'input.pdf');
   const outputPath = path.join(tempDir, 'prepared.pdf');
   const tempConfigPath = stampConfig ? path.join(tempDir, 'stamp-config.json') : null;
 
   try {
-    fs.writeFileSync(inputPath, source);
+    await fsp.writeFile(inputPath, source, { mode: 0o600 });
     if (tempConfigPath) {
       const effectiveConfig = {
         ...stampConfig,
         ...(requestedStampPosition ? { requestedStampPosition } : {}),
       };
-      fs.writeFileSync(tempConfigPath, `${JSON.stringify(effectiveConfig, null, 2)}\n`, 'utf8');
+      await fsp.writeFile(
+        tempConfigPath,
+        `${JSON.stringify(effectiveConfig, null, 2)}\n`,
+        { encoding: 'utf8', mode: 0o600 },
+      );
     }
-    execFileSync('python3', [PREPARE_PYHANKO_SCRIPT_PATH, inputPath, JSON.stringify(signer || {}), outputPath], {
-      encoding: 'utf8',
-      maxBuffer: 20 * 1024 * 1024,
-      env: {
-        ...process.env,
-        ...(tempConfigPath ? { STAMP_CONFIG_PATH: tempConfigPath } : {}),
+    await runIsolatedProcess(
+      'python3',
+      [PREPARE_PYHANKO_SCRIPT_PATH, inputPath, JSON.stringify(signer || {}), outputPath],
+      {
+        cwd: tempDir,
+        signal,
+        timeoutMs: 30000,
+        maxBuffer: 20 * 1024 * 1024,
+        env: tempConfigPath ? { STAMP_CONFIG_PATH: tempConfigPath } : {},
       },
-    });
+    );
 
-    const preparedPdf = fs.readFileSync(outputPath);
+    const preparedPdf = await fsp.readFile(outputPath);
     const byteRange = findLastByteRange(preparedPdf);
     const placeholderLength = byteRange[2] - byteRange[1] - 2;
     const contentToSign = Buffer.concat([
@@ -56,13 +71,26 @@ function createPreparedPdfWithPyhanko({ source, signer, stampConfig, requestedSt
       placeholderPos: byteRange[1],
     };
   } finally {
-    fs.rmSync(tempDir, { recursive: true, force: true });
+    await fsp.rm(tempDir, { recursive: true, force: true });
   }
 }
 
-async function createPreparedPdf({ sourcePath, sourceBuffer, signer = {}, stampConfig = null, requestedStampPosition = null }) {
-  const source = sourceBuffer || fs.readFileSync(sourcePath);
-  return createPreparedPdfWithPyhanko({ source, signer, stampConfig, requestedStampPosition });
+async function createPreparedPdf({
+  sourcePath,
+  sourceBuffer,
+  signer = {},
+  stampConfig = null,
+  requestedStampPosition = null,
+  signal = null,
+}) {
+  const source = sourceBuffer || await fsp.readFile(sourcePath);
+  return createPreparedPdfWithPyhanko({
+    source,
+    signer,
+    stampConfig,
+    requestedStampPosition,
+    signal,
+  });
 }
 
 function embedCmsSignature({ preparedPdf, byteRange, cmsBase64, placeholderLength }) {

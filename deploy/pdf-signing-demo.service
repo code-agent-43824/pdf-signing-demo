@@ -9,9 +9,34 @@ Environment=NODE_ENV=production
 Environment=PORT=3010
 Environment=BASE_PATH=/pdf-signing/
 Environment=PATH=/home/openclaw/services/pdf-signing-demo/current/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=SIGNING_CONCURRENCY=1
+Environment=SIGNING_MAX_QUEUE=8
+Environment=SIGNING_QUEUE_TIMEOUT_MS=5000
+Environment=SIGNING_OPERATION_TIMEOUT_MS=60000
+Environment=PREPARE_RATE_LIMIT=12
+Environment=COMPLETE_RATE_LIMIT=30
+Environment=SIGNING_RATE_WINDOW_MS=60000
+Environment=HTTP_HEADERS_TIMEOUT_MS=10000
+Environment=HTTP_REQUEST_TIMEOUT_MS=70000
+Environment=PDF_WORKER_MEMORY_BYTES=536870912
+Environment=PDF_WORKER_CPU_SECONDS=60
 ExecStart=/home/openclaw/runtime/node/bin/node src/server.js
 Restart=always
 RestartSec=3
+KillMode=control-group
+TimeoutStopSec=15
+TasksMax=64
+MemoryMax=768M
+CPUQuota=100%
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectControlGroups=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+RestrictSUIDSGID=true
+LockPersonality=true
+SystemCallArchitectures=native
 
 [Install]
 WantedBy=default.target

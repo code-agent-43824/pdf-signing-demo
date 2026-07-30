@@ -2,7 +2,7 @@ const express = require('express');
 const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
-const { execFileSync } = require('child_process');
+const fsp = require('fs/promises');
 const { createPreparedPdf, embedCmsSignature, createSessionStore } = require('./signing/pades');
 const {
   CmsVerificationError,
@@ -21,6 +21,19 @@ const {
   validateStampConfig,
   validateStampConfigForDocument,
 } = require('./http/validation');
+const {
+  FixedWindowRateLimiter,
+  createRateLimitMiddleware,
+} = require('./http/rate-limit');
+const {
+  OperationControlError,
+  OperationQueue,
+  positiveInteger,
+} = require('./runtime/operation-queue');
+const {
+  WorkerProcessError,
+  runIsolatedProcess,
+} = require('./runtime/process-runner');
 
 const app = express();
 const PORT = process.env.PORT || 3010;
@@ -39,6 +52,40 @@ const stampConfigPath = process.env.STAMP_CONFIG_PATH
   ? path.resolve(process.env.STAMP_CONFIG_PATH)
   : path.join(__dirname, '..', 'config', 'stamp-config.json');
 const sessions = createSessionStore({ generatedDir });
+const operationQueue = new OperationQueue({
+  concurrency: positiveInteger(process.env.SIGNING_CONCURRENCY, 1, 1, 8),
+  maxQueue: positiveInteger(process.env.SIGNING_MAX_QUEUE, 8, 1, 64),
+  perKeyConcurrency: 1,
+  queueTimeoutMs: positiveInteger(
+    process.env.SIGNING_QUEUE_TIMEOUT_MS,
+    5000,
+    100,
+    60000,
+  ),
+  operationTimeoutMs: positiveInteger(
+    process.env.SIGNING_OPERATION_TIMEOUT_MS,
+    60000,
+    5000,
+    300000,
+  ),
+});
+const rateLimitWindowMs = positiveInteger(
+  process.env.SIGNING_RATE_WINDOW_MS,
+  60000,
+  1000,
+  60 * 60 * 1000,
+);
+const prepareRateLimiter = new FixedWindowRateLimiter({
+  limit: positiveInteger(process.env.PREPARE_RATE_LIMIT, 12, 1, 10000),
+  windowMs: rateLimitWindowMs,
+});
+const completeRateLimiter = new FixedWindowRateLimiter({
+  limit: positiveInteger(process.env.COMPLETE_RATE_LIMIT, 30, 1, 10000),
+  windowMs: rateLimitWindowMs,
+});
+let readinessValue = null;
+let readinessExpiresAt = 0;
+let readinessInFlight = null;
 const FONT_DIRS = [
   localFontsDir,
   '/usr/share/fonts',
@@ -49,10 +96,21 @@ const FONT_DIRS = [
 
 fs.mkdirSync(generatedDir, { recursive: true });
 app.disable('x-powered-by');
+app.set('trust proxy', 'loopback');
 app.use((req, res, next) => {
   const requestId = crypto.randomUUID();
   res.locals.requestId = requestId;
   res.setHeader('x-request-id', requestId);
+  next();
+});
+app.use((req, res, next) => {
+  const controller = new AbortController();
+  const abortRequest = () => controller.abort();
+  req.once('aborted', abortRequest);
+  res.once('close', () => {
+    if (!res.writableEnded) abortRequest();
+  });
+  res.locals.requestSignal = controller.signal;
   next();
 });
 app.use((req, res, next) => {
@@ -174,20 +232,26 @@ function listAvailableFonts(catalog) {
   }));
 }
 
-function getReadiness() {
+async function computeReadiness() {
   const checks = {
     python: false,
     config: false,
     storage: false,
+    workerLimits: false,
   };
 
   try {
-    execFileSync('python3', ['--version'], {
-      encoding: 'utf8',
-      stdio: 'ignore',
-      timeout: 2000,
+    await runIsolatedProcess('python3', ['--version'], {
+      timeoutMs: 2000,
+      maxBuffer: 64 * 1024,
+      limits: { enabled: false },
     });
     checks.python = true;
+  } catch {}
+
+  try {
+    fs.accessSync('/usr/bin/prlimit', fs.constants.X_OK);
+    checks.workerLimits = true;
   } catch {}
 
   try {
@@ -209,19 +273,60 @@ function getReadiness() {
   };
 }
 
-function normalizeCmsSignatureBase64(cmsSignatureBase64) {
+async function getReadiness() {
+  const now = Date.now();
+  let base = readinessValue && now < readinessExpiresAt
+    ? readinessValue
+    : null;
+  if (!base) {
+    if (!readinessInFlight) {
+      readinessInFlight = computeReadiness()
+        .then((value) => {
+          readinessValue = value;
+          readinessExpiresAt = Date.now() + 5000;
+          return value;
+        })
+        .finally(() => {
+          readinessInFlight = null;
+        });
+    }
+    base = await readinessInFlight;
+  }
+  const queueStats = operationQueue.stats();
+  const workerQueue = queueStats.concurrency > 0
+    && queueStats.queued <= queueStats.maxQueue;
+  return {
+    ...base,
+    ok: base.ok && workerQueue,
+    checks: {
+      ...base.checks,
+      workerQueue,
+    },
+    workers: queueStats,
+  };
+}
+
+async function normalizeCmsSignatureBase64(cmsSignatureBase64, { signal = null } = {}) {
   const payload = String(cmsSignatureBase64 || '').trim();
   if (!payload) {
     return payload;
   }
 
   try {
-    return execFileSync('python3', [CMS_NORMALIZER_PATH], {
+    const result = await runIsolatedProcess('python3', [CMS_NORMALIZER_PATH], {
       input: payload,
-      encoding: 'utf8',
+      signal,
+      timeoutMs: 10000,
       maxBuffer: 10 * 1024 * 1024,
-    }).trim() || payload;
+    });
+    return result.stdout.trim() || payload;
   } catch (error) {
+    if (
+      error instanceof WorkerProcessError
+      && ['WORKER_TIMEOUT', 'WORKER_ABORTED'].includes(error.code)
+    ) {
+      throw error;
+    }
     throw new CmsVerificationError('CMS_NORMALIZATION_FAILED', error);
   }
 }
@@ -241,6 +346,48 @@ function createCertificateError(error) {
     'INVALID_SIGNER_CERTIFICATE',
     'Не удалось проверить выбранный сертификат.',
     { verifierCode: error.code || 'CERTIFICATE_INSPECTION_FAILED' },
+  );
+}
+
+function createOperationError(error) {
+  if (error instanceof OperationControlError) {
+    if (error.code === 'OPERATION_TIMEOUT') {
+      return new HttpError(
+        504,
+        'OPERATION_TIMEOUT',
+        'Операция подписи превысила допустимое время выполнения.',
+      );
+    }
+    if (['QUEUE_FULL', 'QUEUE_TIMEOUT'].includes(error.code)) {
+      return new HttpError(
+        503,
+        'SERVER_BUSY',
+        'Сервис занят. Повторите попытку позже.',
+      );
+    }
+  }
+  if (error instanceof WorkerProcessError && error.code === 'WORKER_TIMEOUT') {
+    return new HttpError(
+      504,
+      'OPERATION_TIMEOUT',
+      'Операция подписи превысила допустимое время выполнения.',
+    );
+  }
+  return error;
+}
+
+function shouldSkipResponse(res, error) {
+  return (
+    res.destroyed
+    || res.writableEnded
+    || (
+      error instanceof OperationControlError
+      && error.code === 'REQUEST_ABORTED'
+    )
+    || (
+      error instanceof WorkerProcessError
+      && error.code === 'WORKER_ABORTED'
+    )
   );
 }
 
@@ -327,9 +474,13 @@ router.get('/health/live', (_req, res) => {
   res.json({ ok: true, service: 'pdf-signing-demo' });
 });
 
-router.get('/health/ready', (_req, res) => {
-  const readiness = getReadiness();
-  res.status(readiness.ok ? 200 : 503).json(readiness);
+router.get('/health/ready', async (req, res) => {
+  try {
+    const readiness = await getReadiness();
+    res.status(readiness.ok ? 200 : 503).json(readiness);
+  } catch (error) {
+    sendSafeError(req, res, error);
+  }
 });
 
 router.get('/api/stamp-config', (_req, res) => {
@@ -370,40 +521,69 @@ router.get('/api/form', (req, res) => {
   }
 });
 
-router.post('/api/sign/prepare', async (req, res) => {
+const prepareRateLimitMiddleware = createRateLimitMiddleware({
+  limiter: prepareRateLimiter,
+  HttpError,
+  scope: 'prepare',
+});
+const completeRateLimitMiddleware = createRateLimitMiddleware({
+  limiter: completeRateLimiter,
+  HttpError,
+  scope: 'complete',
+});
+const prepareRateLimit = (req, res, next) => prepareRateLimitMiddleware(
+  req,
+  res,
+  (error) => (error ? sendSafeError(req, res, error, 'prepare') : next()),
+);
+const completeRateLimit = (req, res, next) => completeRateLimitMiddleware(
+  req,
+  res,
+  (error) => (error ? sendSafeError(req, res, error, 'complete') : next()),
+);
+
+router.post('/api/sign/prepare', prepareRateLimit, async (req, res) => {
   try {
     validatePrepareBody(req.body);
     const certificateDer = decodeCertificateBase64(
       req.body.signer.certificateBase64,
     );
-    let signer;
-    try {
-      signer = inspectCertificate(certificateDer);
-    } catch (error) {
-      if (error instanceof CmsVerificationError) {
-        throw createCertificateError(error);
-      }
-      throw error;
-    }
     const sourceBuffer = req.body.pdfBase64
       ? decodePdfBase64(req.body.pdfBase64)
-      : fs.readFileSync(formPdfPath);
-    const pdfInfo = await validatePdfBuffer(sourceBuffer);
-    validateStampConfigForDocument(req.body.stampConfig, pdfInfo.pages);
-    const stampConfig = req.body.stampConfig
-      ? createServerStampConfig(req.body.stampConfig, createFontCatalog())
-      : null;
-    const requestedStampPosition = req.body.requestedStampPosition || null;
-    const prepared = await createPreparedPdf({
-      sourceBuffer,
-      signer,
-      stampConfig,
-      requestedStampPosition,
+      : await fsp.readFile(formPdfPath);
+    const result = await operationQueue.run(async (signal) => {
+      let signer;
+      try {
+        signer = await inspectCertificate(certificateDer, { signal });
+      } catch (error) {
+        if (error instanceof CmsVerificationError) {
+          throw createCertificateError(error);
+        }
+        throw error;
+      }
+      const pdfInfo = await validatePdfBuffer(sourceBuffer);
+      validateStampConfigForDocument(req.body.stampConfig, pdfInfo.pages);
+      const stampConfig = req.body.stampConfig
+        ? createServerStampConfig(req.body.stampConfig, createFontCatalog())
+        : null;
+      const requestedStampPosition = req.body.requestedStampPosition || null;
+      const prepared = await createPreparedPdf({
+        sourceBuffer,
+        signer,
+        stampConfig,
+        requestedStampPosition,
+        signal,
+      });
+      const sessionId = sessions.create({
+        ...prepared,
+        expectedCertificateSha256: signer.certificateSha256,
+      });
+      return { prepared, sessionId };
+    }, {
+      key: `prepare:${req.ip}`,
+      signal: res.locals.requestSignal,
     });
-    const sessionId = sessions.create({
-      ...prepared,
-      expectedCertificateSha256: signer.certificateSha256,
-    });
+    const { prepared, sessionId } = result;
     res.json({
       ok: true,
       sessionId,
@@ -413,86 +593,101 @@ router.post('/api/sign/prepare', async (req, res) => {
       note: 'PDF prepared for detached CMS signature (PAdES / ETSI.CAdES.detached).',
     });
   } catch (error) {
-    sendSafeError(req, res, error, 'prepare');
+    if (shouldSkipResponse(res, error)) return;
+    sendSafeError(req, res, createOperationError(error), 'prepare');
   }
 });
 
-router.post('/api/sign/complete', (req, res) => {
+router.post('/api/sign/complete', completeRateLimit, async (req, res) => {
   try {
     validateCompleteBody(req.body);
     const { sessionId, cmsSignatureBase64 } = req.body;
     const decodedCms = decodeCmsBase64(cmsSignatureBase64);
-
-    const session = sessions.get(sessionId);
-    if (!session) {
-      throw new HttpError(
-        404,
-        'SESSION_NOT_FOUND',
-        'Сессия подписания не найдена или истекла.',
-      );
-    }
-    if (decodedCms.length * 2 > session.placeholderLength) {
-      throw new HttpError(
-        400,
-        'CMS_TOO_LARGE',
-        'Размер CMS-подписи превышает допустимый лимит.',
-        {
-          decodedBytes: decodedCms.length,
-          placeholderLength: session.placeholderLength,
-        },
-      );
-    }
-
-    let normalizedCmsSignatureBase64;
-    let normalizedCms;
-    let integrity;
-    try {
-      normalizedCmsSignatureBase64 = normalizeCmsSignatureBase64(cmsSignatureBase64);
-      normalizedCms = decodeCmsBase64(normalizedCmsSignatureBase64);
-      if (normalizedCms.length * 2 > session.placeholderLength) {
-        throw new CmsVerificationError('CMS_EXCEEDS_PLACEHOLDER');
+    const completed = await operationQueue.run(async (signal) => {
+      const session = sessions.get(sessionId);
+      if (!session) {
+        throw new HttpError(
+          404,
+          'SESSION_NOT_FOUND',
+          'Сессия подписания не найдена или истекла.',
+        );
       }
-      integrity = verifyCmsSignature({
-        cmsDer: normalizedCms,
-        content: session.contentToSign,
-        expectedCertificateSha256: session.expectedCertificateSha256,
+      if (decodedCms.length * 2 > session.placeholderLength) {
+        throw new HttpError(
+          400,
+          'CMS_TOO_LARGE',
+          'Размер CMS-подписи превышает допустимый лимит.',
+          {
+            decodedBytes: decodedCms.length,
+            placeholderLength: session.placeholderLength,
+          },
+        );
+      }
+
+      let normalizedCmsSignatureBase64;
+      let normalizedCms;
+      let integrity;
+      try {
+        normalizedCmsSignatureBase64 = await normalizeCmsSignatureBase64(
+          cmsSignatureBase64,
+          { signal },
+        );
+        normalizedCms = decodeCmsBase64(normalizedCmsSignatureBase64);
+        if (normalizedCms.length * 2 > session.placeholderLength) {
+          throw new CmsVerificationError('CMS_EXCEEDS_PLACEHOLDER');
+        }
+        integrity = await verifyCmsSignature({
+          cmsDer: normalizedCms,
+          content: session.contentToSign,
+          expectedCertificateSha256: session.expectedCertificateSha256,
+          signal,
+        });
+      } catch (error) {
+        if (error instanceof CmsVerificationError || error instanceof HttpError) {
+          throw createCmsIntegrityError(error);
+        }
+        throw error;
+      }
+
+      const signedPdf = embedCmsSignature({
+        preparedPdf: session.preparedPdf,
+        byteRange: session.byteRange,
+        cmsBase64: normalizedCmsSignatureBase64,
+        placeholderLength: session.placeholderLength,
       });
-    } catch (error) {
-      if (error instanceof CmsVerificationError || error instanceof HttpError) {
-        throw createCmsIntegrityError(error);
-      }
-      throw error;
-    }
 
-    const signedPdf = embedCmsSignature({
-      preparedPdf: session.preparedPdf,
-      byteRange: session.byteRange,
-      cmsBase64: normalizedCmsSignatureBase64,
-      placeholderLength: session.placeholderLength,
+      let embeddedIntegrity;
+      try {
+        embeddedIntegrity = await verifyEveryEmbeddedSignature(signedPdf, {
+          expectedLastCertificateSha256: session.expectedCertificateSha256,
+          signal,
+        });
+      } catch (error) {
+        if (error instanceof CmsVerificationError) {
+          throw createCmsIntegrityError(error);
+        }
+        throw error;
+      }
+
+      const fileName = sessions.saveSignedPdf(signedPdf);
+      sessions.consume(sessionId);
+      return { fileName, integrity, embeddedIntegrity };
+    }, {
+      key: `complete:${sessionId}`,
+      signal: res.locals.requestSignal,
     });
-
-    let embeddedIntegrity;
-    try {
-      embeddedIntegrity = verifyEveryEmbeddedSignature(signedPdf, {
-        expectedLastCertificateSha256: session.expectedCertificateSha256,
-      });
-    } catch (error) {
-      if (error instanceof CmsVerificationError) {
-        throw createCmsIntegrityError(error);
-      }
-      throw error;
-    }
-
-    const fileName = sessions.saveSignedPdf(signedPdf);
-    sessions.consume(sessionId);
     return res.json({
       ok: true,
-      signedPdfUrl: `./generated/${fileName}`,
+      signedPdfUrl: `./generated/${completed.fileName}`,
       downloadName: 'signed-formular.pdf',
-      verification: createVerificationResult(integrity, embeddedIntegrity),
+      verification: createVerificationResult(
+        completed.integrity,
+        completed.embeddedIntegrity,
+      ),
     });
   } catch (error) {
-    return sendSafeError(req, res, error, 'complete');
+    if (shouldSkipResponse(res, error)) return;
+    return sendSafeError(req, res, createOperationError(error), 'complete');
   }
 });
 
@@ -525,8 +720,26 @@ app.use((error, req, res, _next) => {
   return sendSafeError(req, res, error);
 });
 
-setInterval(() => sessions.cleanup(), 10 * 60 * 1000).unref();
+setInterval(() => {
+  sessions.cleanup();
+  prepareRateLimiter.cleanup();
+  completeRateLimiter.cleanup();
+}, 10 * 60 * 1000).unref();
 
-app.listen(PORT, '127.0.0.1', () => {
+const server = app.listen(PORT, '127.0.0.1', () => {
   console.log(`pdf-signing-demo listening on http://127.0.0.1:${PORT}${BASE_PATH}`);
 });
+server.headersTimeout = positiveInteger(
+  process.env.HTTP_HEADERS_TIMEOUT_MS,
+  10000,
+  1000,
+  60000,
+);
+server.requestTimeout = positiveInteger(
+  process.env.HTTP_REQUEST_TIMEOUT_MS,
+  70000,
+  5000,
+  300000,
+);
+server.keepAliveTimeout = 5000;
+server.setTimeout(server.requestTimeout);

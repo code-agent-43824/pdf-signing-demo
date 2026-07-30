@@ -264,10 +264,10 @@ test('one through four incremental signatures preserve and validate every signat
 
     const cms = createCms(prepared.contentToSign, signatureIndex);
     assert.equal(
-      verifyCmsSignature({
+      (await verifyCmsSignature({
         cmsDer: cms,
         content: prepared.contentToSign,
-      }).ok,
+      })).ok,
       true,
     );
     currentPdf = embedCmsSignature({
@@ -287,7 +287,7 @@ test('one through four incremental signatures preserve and validate every signat
     );
     assert.equal(opensslResults.length, signatureIndex);
     assert.equal(
-      verifyEveryEmbeddedSignature(currentPdf).length,
+      (await verifyEveryEmbeddedSignature(currentPdf)).length,
       signatureIndex,
     );
 
@@ -333,8 +333,8 @@ test('CMS verifier rejects malformed CMS and content or signature tampering', as
   });
   const cms = createCms(prepared.contentToSign, 'negative');
 
-  assert.throws(
-    () => verifyCmsSignature({
+  await assert.rejects(
+    verifyCmsSignature({
       cmsDer: fs.readFileSync(
         path.join(FIXTURE_ROOT, 'invalid', 'malformed-cms.der'),
       ),
@@ -345,8 +345,8 @@ test('CMS verifier rejects malformed CMS and content or signature tampering', as
 
   const tamperedContent = Buffer.from(prepared.contentToSign);
   tamperedContent[0] ^= 0x01;
-  assert.throws(
-    () => verifyCmsSignature({ cmsDer: cms, content: tamperedContent }),
+  await assert.rejects(
+    verifyCmsSignature({ cmsDer: cms, content: tamperedContent }),
     (error) => (
       error instanceof CmsVerificationError
       && error.code === 'CONTENT_DIGEST_MISMATCH'
@@ -355,16 +355,16 @@ test('CMS verifier rejects malformed CMS and content or signature tampering', as
 
   const tamperedCms = Buffer.from(cms);
   tamperedCms[tamperedCms.length - 1] ^= 0x01;
-  assert.throws(
-    () => verifyCmsSignature({
+  await assert.rejects(
+    verifyCmsSignature({
       cmsDer: tamperedCms,
       content: prepared.contentToSign,
     }),
     CmsVerificationError,
   );
 
-  assert.throws(
-    () => verifyCmsSignature({
+  await assert.rejects(
+    verifyCmsSignature({
       cmsDer: createCms(prepared.contentToSign, 'attached', { attached: true }),
       content: prepared.contentToSign,
     }),
@@ -374,8 +374,8 @@ test('CMS verifier rejects malformed CMS and content or signature tampering', as
     ),
   );
 
-  assert.throws(
-    () => verifyCmsSignature({
+  await assert.rejects(
+    verifyCmsSignature({
       cmsDer: createNonCadesCms(prepared.contentToSign, 'missing-ess'),
       content: prepared.contentToSign,
     }),

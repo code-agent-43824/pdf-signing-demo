@@ -522,6 +522,42 @@ trust и qualified остаются явно непроверенными до �
 - Просроченный URL результата не скачивает документ.
 - Автотест подтверждает очистку RAM, temp-файлов и готовых PDF.
 
+### Ход выполнения PR-6 — 2026-07-30
+
+Статус: **worker isolation, bounded concurrency, rate limiting и
+timeouts реализованы; private result storage/TTL остаются в PR-7**.
+
+Выполнено:
+
+- runtime-вызовы Python переведены с `execFileSync` на асинхронный
+  `spawn` без shell, поэтому ожидание PDF/CMS worker не блокирует Node
+  event loop;
+- каждый worker запускается в отдельной process group через `prlimit` с
+  лимитами address space, CPU time и open files, минимальным окружением,
+  ограниченным stdout/stderr и приватным временным каталогом;
+- wall-clock timeout и abort отключившегося клиента завершают сначала
+  `SIGTERM`, затем всю process group через `SIGKILL`; временные файлы
+  удаляются в `finally`;
+- `prepare` и `complete` проходят через общую bounded queue с
+  фиксированным concurrency, максимальной глубиной и timeout ожидания;
+  дополнительно сериализованы `prepare` одного IP и `complete` одной
+  signing session;
+- добавлены отдельные fixed-window rate limits для `prepare` и
+  `complete`, безопасные `429 RATE_LIMITED`, `503 SERVER_BUSY` и
+  `504 OPERATION_TIMEOUT`, а также `Retry-After`/RateLimit headers;
+- настроены Node headers/request/socket timeouts; loopback proxy
+  объявлен единственным доверенным источником forwarded IP;
+- readiness больше не блокирует event loop: Python probe коалесцируется
+  и кэшируется на пять секунд, а live worker counters возвращаются при
+  каждом запросе;
+- reference systemd unit фиксирует те же лимиты и добавляет cgroup
+  `TasksMax`, `MemoryMax`, `CPUQuota`, `KillMode=control-group`,
+  `PrivateTmp` и безопасные sandbox-флаги;
+- регрессии проверяют глобальный/per-key concurrency, queue overflow,
+  operation timeout, rate window, неблокирующий event loop, доступность
+  health под двумя параллельными prepare и отсутствие дочернего процесса
+  после timeout.
+
 ## 7. Фаза 4 — защита браузерного криптоконтура (P1)
 
 - Добавить CSP с минимальным `script-src`, запретом inline-кода и

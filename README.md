@@ -41,6 +41,16 @@ python -m pip install --requirement requirements.txt
 - `STAMP_CONFIG_PATH` — необязательный путь к JSON-конфигу штампа/размещения подписи
 - `GENERATED_DIR` — необязательный каталог результатов (по умолчанию
   `public/generated`; тесты используют отдельный временный каталог)
+- `SIGNING_CONCURRENCY` — число одновременно выполняемых signing
+  operations (по умолчанию `1`);
+- `SIGNING_MAX_QUEUE` — максимальная очередь ожидающих операций
+  (по умолчанию `8`);
+- `SIGNING_QUEUE_TIMEOUT_MS` / `SIGNING_OPERATION_TIMEOUT_MS` — лимиты
+  ожидания очереди и полного выполнения (`5000` / `60000` мс);
+- `PREPARE_RATE_LIMIT` / `COMPLETE_RATE_LIMIT` — отдельные лимиты запросов
+  на IP за окно `SIGNING_RATE_WINDOW_MS` (`12` / `30` за 60 секунд);
+- `PDF_WORKER_MEMORY_BYTES` / `PDF_WORKER_CPU_SECONDS` — лимиты отдельного
+  Python worker через `prlimit` (512 MiB / 60 CPU seconds).
 
 Health endpoints при `BASE_PATH=/pdf-signing/`:
 
@@ -49,6 +59,28 @@ Health endpoints при `BASE_PATH=/pdf-signing/`:
 
 HTTP-сервер слушает только `127.0.0.1`; внешний доступ предполагается
 исключительно через reverse proxy.
+
+## Изоляция тяжёлых операций
+
+Подготовка PDF, разбор сертификата, нормализация и проверка CMS больше не
+используют синхронный `execFileSync`. Python-команды запускаются
+асинхронно в отдельных process groups с минимальным окружением,
+приватными временными каталогами, лимитами address space/CPU/open files и
+ограниченным stdout/stderr.
+
+Все `prepare`/`complete` проходят через bounded queue. На текущем
+одноядерном production-хосте одновременно работает одна операция,
+очередь принимает до восьми; один IP не
+может параллельно выполнять несколько `prepare`, а один session ID —
+несколько `complete`. При timeout или разрыве HTTP-запроса завершается
+вся process group, затем удаляются временные файлы. Переполнение очереди
+возвращает безопасный `503 SERVER_BUSY`, превышение времени —
+`504 OPERATION_TIMEOUT`, rate limit — `429 RATE_LIMITED` с
+`Retry-After`.
+
+Liveness не запускает Python и остаётся доступным под нагрузкой.
+Readiness коалесцирует и кэширует проверку Python на пять секунд, но
+возвращает актуальные `workers.active/queued` при каждом запросе.
 
 ## Настройка штампа подписи
 
