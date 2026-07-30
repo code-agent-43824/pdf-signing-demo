@@ -1321,6 +1321,9 @@ h1, h2, h3 { margin: 0; }
   .verification-grid {
     grid-template-columns: 1fr;
   }
+  .verification-item-head {
+    flex-direction: column;
+  }
 }
 
 @media (max-width: 720px) {

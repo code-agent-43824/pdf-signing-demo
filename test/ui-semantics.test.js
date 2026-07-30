@@ -14,6 +14,10 @@ test('UI separates integrity, trust and qualified status without false success c
     path.join(PROJECT_ROOT, 'public', 'app.js'),
     'utf8',
   );
+  const styles = fs.readFileSync(
+    path.join(PROJECT_ROOT, 'public', 'styles.css'),
+    'utf8',
+  );
 
   assert.match(html, /Подписание PDF электронной подписью/);
   assert.match(html, /id="integrityStatusBadge"/);
@@ -33,5 +37,9 @@ test('UI separates integrity, trust and qualified status without false success c
   assert.match(
     app,
     /Доверие сертификату и квалифицированный статус не проверялись/,
+  );
+  assert.match(
+    styles,
+    /@media \(max-width: 980px\)[\s\S]*?\.verification-item-head\s*\{\s*flex-direction: column;/,
   );
 });
