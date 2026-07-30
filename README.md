@@ -37,6 +37,11 @@ python -m pip install --requirement requirements.txt
 - `BASE_PATH` — базовый путь за reverse proxy (по умолчанию `/`)
 - `STAMP_CONFIG_PATH` — необязательный путь к JSON-конфигу штампа/размещения подписи
 
+Health endpoints при `BASE_PATH=/pdf-signing/`:
+
+- `GET /pdf-signing/health/live` — процесс отвечает
+- `GET /pdf-signing/health/ready` — доступны Python, конфигурация и writable storage
+
 ## Настройка штампа подписи
 
 Весь текущий конфиг штампа лежит в одном месте:
@@ -54,6 +59,10 @@ python -m pip install --requirement requirements.txt
   - все страницы: `"mode": "all"`
   - диапазон: `"mode": "range"`
   - список страниц: `"mode": "list"`
+
+Публичный API отдаёт только конфигурацию по умолчанию для чтения.
+Персональные изменения сохраняются в браузере. Серверные пути конфигурации
+и шрифтов клиенту не раскрываются; шрифты выбираются по непрозрачным ID.
 
 Если правило выбирает несколько страниц, реальный signature widget ставится на одну страницу (`widgetPageMode`: `first` или `last`), а на остальных выбранных страницах рисуются такие же визуальные штампы.
 

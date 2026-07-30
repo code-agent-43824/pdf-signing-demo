@@ -37,7 +37,6 @@ const state = {
   uploadedPdfObjectUrl: null,
   defaultStampConfig: null,
   stampConfig: null,
-  stampConfigPath: null,
   availableFonts: [],
 };
 
@@ -555,7 +554,6 @@ async function fetchStampConfig() {
   const data = await fetchJsonOk('./api/stamp-config', undefined, 'Не удалось загрузить конфиг штампа.');
   state.defaultStampConfig = ensureStampConfigShape(data.config);
   state.stampConfig = resolveEffectiveStampConfig(state.defaultStampConfig);
-  state.stampConfigPath = data.configPath;
   state.selectedStampPosition = getStampPlacementPresetKey(state.stampConfig, { preferSelected: false });
   updateStampPlacementUi();
   return data;
@@ -1501,15 +1499,15 @@ function bindColorPair(root, colorId, textId) {
 
 function fillFontSelect(select, currentPath) {
   const options = [];
-  if (currentPath && !state.availableFonts.some((font) => font.path === currentPath)) {
-    options.push({ path: currentPath, label: `${currentPath.split('/').pop()} (текущий путь)` });
+  if (currentPath && !state.availableFonts.some((font) => font.id === currentPath)) {
+    options.push({ id: currentPath, label: 'Текущий шрифт' });
   }
   options.push(...state.availableFonts);
   select.innerHTML = '';
   options.forEach((font) => {
     const option = document.createElement('option');
-    option.value = font.path;
-    option.textContent = `${font.label} — ${font.path}`;
+    option.value = font.id;
+    option.textContent = font.label;
     select.appendChild(option);
   });
   if (currentPath) {
@@ -1634,7 +1632,8 @@ function renderStampRows(root, rows) {
 }
 
 function fontPreviewFamily(fontPath, fallback = 'sans-serif') {
-  const value = String(fontPath || '').toLowerCase();
+  const selectedFont = state.availableFonts.find((font) => font.id === fontPath);
+  const value = String(selectedFont?.label || fontPath || '').toLowerCase();
   if (value.includes('pt sans caption')) return '"PT Sans Caption Stamp", "PT Sans Caption", Arial, sans-serif';
   if (value.includes('ibm plex sans')) return '"IBM Plex Sans Stamp", "IBM Plex Sans", Arial, sans-serif';
   if (value.includes('roboto condensed')) return '"Roboto Condensed Stamp", "Roboto Condensed", Arial, sans-serif';
@@ -2071,14 +2070,16 @@ function openStampSettingsDialog() {
   return new Promise((resolve, reject) => {
     const fragment = document.getElementById('stampSettingsDialogTemplate').content.cloneNode(true);
     const backdrop = fragment.querySelector('.dialog-backdrop');
-    const configPath = fragment.querySelector('#stampConfigPath');
+    const configStatus = fragment.querySelector('#stampConfigPath');
     const reset = fragment.querySelector('#resetStampSettings');
     const save = fragment.querySelector('#saveStampSettings');
     const cancel = fragment.querySelector('#cancelStampSettings');
     const root = backdrop;
 
     state.stampConfig = ensureStampConfigShape(state.stampConfig);
-    configPath.textContent = `${state.stampConfigPath || ''}${hasPersonalStampConfig() ? ' · есть персональные настройки в браузере' : ' · используются серверные настройки по умолчанию'}`;
+    configStatus.textContent = hasPersonalStampConfig()
+      ? 'Есть персональные настройки в браузере'
+      : 'Используются серверные настройки по умолчанию';
     populateVisualForm(root, state.stampConfig);
     root.querySelector('#stampConfigEditor').value = `${JSON.stringify(state.stampConfig, null, 2)}\n`;
     wireStampSettingsForm(root);
@@ -2101,7 +2102,7 @@ function openStampSettingsDialog() {
       clearPersonalStampConfig();
       state.stampConfig = ensureStampConfigShape(state.defaultStampConfig);
       state.selectedStampPosition = getStampPlacementPresetKey(state.stampConfig, { preferSelected: false });
-      configPath.textContent = `${state.stampConfigPath || ''} · используются серверные настройки по умолчанию`;
+      configStatus.textContent = 'Используются серверные настройки по умолчанию';
       populateVisualForm(root, state.stampConfig);
       root.querySelector('#stampConfigEditor').value = `${JSON.stringify(state.stampConfig, null, 2)}\n`;
       updateStampPlacementUi();

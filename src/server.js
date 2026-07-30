@@ -1,4 +1,5 @@
 const express = require('express');
+const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
 const { execFileSync } = require('child_process');
@@ -10,6 +11,7 @@ const BASE_PATH = process.env.BASE_PATH || '/';
 const FORM_PDF_NAME = 'formular.pdf';
 const CMS_NORMALIZER_PATH = path.join(__dirname, '..', 'scripts', 'normalize-cms.py');
 const publicDir = path.join(__dirname, '..', 'public');
+const projectRoot = path.join(__dirname, '..');
 const assetsDir = path.join(publicDir, 'assets');
 const localFontsDir = path.join(assetsDir, 'fonts');
 const generatedDir = path.join(publicDir, 'generated');
@@ -28,10 +30,6 @@ const FONT_DIRS = [
 
 fs.mkdirSync(generatedDir, { recursive: true });
 app.use(express.json({ limit: '20mb' }));
-
-app.get('/health', (_req, res) => {
-  res.json({ ok: true, service: 'pdf-signing-demo' });
-});
 
 function readStampConfig() {
   return fs.readFileSync(stampConfigPath, 'utf8');
@@ -64,13 +62,102 @@ function collectFontFiles(dirPath, result = []) {
   return result;
 }
 
-function listAvailableFonts() {
-  return Array.from(new Set(FONT_DIRS.flatMap((dir) => collectFontFiles(dir))))
+function resolveConfiguredFontPath(fontPath) {
+  return path.normalize(
+    path.isAbsolute(fontPath) ? fontPath : path.resolve(projectRoot, fontPath),
+  );
+}
+
+function createFontCatalog() {
+  const fonts = Array.from(new Set(FONT_DIRS.flatMap((dir) => collectFontFiles(dir))))
     .sort((left, right) => left.localeCompare(right, 'ru'))
     .map((fontPath) => ({
-      path: fontPath,
+      id: `font-${crypto.createHash('sha256').update(fontPath).digest('hex').slice(0, 16)}`,
+      serverPath: path.normalize(fontPath),
       label: path.basename(fontPath).replace(/\.(ttf|otf|ttc)$/i, ''),
     }));
+
+  return {
+    fonts,
+    byId: new Map(fonts.map((font) => [font.id, font])),
+    byServerPath: new Map(fonts.map((font) => [font.serverPath, font])),
+  };
+}
+
+function visitConfiguredFonts(config, callback) {
+  const fonts = config?.appearance?.fonts;
+  for (const role of ['title', 'label', 'value']) {
+    const entry = fonts?.[role];
+    if (entry?.path) {
+      callback(entry, role);
+    }
+  }
+}
+
+function createClientStampConfig(config, catalog) {
+  const clientConfig = structuredClone(config);
+  visitConfiguredFonts(clientConfig, (entry) => {
+    const serverPath = resolveConfiguredFontPath(entry.path);
+    const font = catalog.byServerPath.get(serverPath);
+    if (!font) {
+      throw new Error('Configured stamp font is unavailable.');
+    }
+    entry.path = font.id;
+  });
+  return clientConfig;
+}
+
+function createServerStampConfig(config, catalog) {
+  const serverConfig = structuredClone(config);
+  visitConfiguredFonts(serverConfig, (entry) => {
+    const font = catalog.byId.get(entry.path)
+      || catalog.byServerPath.get(resolveConfiguredFontPath(entry.path));
+    if (!font) {
+      throw new Error('Unknown stamp font identifier.');
+    }
+    entry.path = font.serverPath;
+  });
+  return serverConfig;
+}
+
+function listAvailableFonts(catalog) {
+  return catalog.fonts.map((font) => ({
+    id: font.id,
+    label: font.label,
+  }));
+}
+
+function getReadiness() {
+  const checks = {
+    python: false,
+    config: false,
+    storage: false,
+  };
+
+  try {
+    execFileSync('python3', ['--version'], {
+      encoding: 'utf8',
+      stdio: 'ignore',
+      timeout: 2000,
+    });
+    checks.python = true;
+  } catch {}
+
+  try {
+    parseStampConfig(readStampConfig());
+    checks.config = true;
+  } catch {}
+
+  try {
+    fs.accessSync(generatedDir, fs.constants.W_OK);
+    checks.storage = true;
+  } catch {}
+
+  return {
+    ok: Object.values(checks).every(Boolean),
+    service: 'pdf-signing-demo',
+    checks,
+  };
 }
 
 function normalizeCmsSignatureBase64(cmsSignatureBase64) {
@@ -93,11 +180,21 @@ function normalizeCmsSignatureBase64(cmsSignatureBase64) {
 
 const router = express.Router();
 
+router.get('/health/live', (_req, res) => {
+  res.json({ ok: true, service: 'pdf-signing-demo' });
+});
+
+router.get('/health/ready', (_req, res) => {
+  const readiness = getReadiness();
+  res.status(readiness.ok ? 200 : 503).json(readiness);
+});
+
 router.get('/api/stamp-config', (_req, res) => {
   try {
     const raw = readStampConfig();
     const config = parseStampConfig(raw);
-    res.json({ ok: true, config, configPath: stampConfigPath });
+    const catalog = createFontCatalog();
+    res.json({ ok: true, config: createClientStampConfig(config, catalog) });
   } catch (error) {
     res.status(500).json({ ok: false, message: error.message });
   }
@@ -105,25 +202,9 @@ router.get('/api/stamp-config', (_req, res) => {
 
 router.get('/api/fonts', (_req, res) => {
   try {
-    res.json({ ok: true, fonts: listAvailableFonts() });
+    res.json({ ok: true, fonts: listAvailableFonts(createFontCatalog()) });
   } catch (error) {
     res.status(500).json({ ok: false, message: error.message });
-  }
-});
-
-router.post('/api/stamp-config', (req, res) => {
-  try {
-    const config = req.body?.config;
-    if (!config || typeof config !== 'object' || Array.isArray(config)) {
-      return res.status(400).json({ ok: false, message: 'config must be a JSON object.' });
-    }
-
-    const serialized = `${JSON.stringify(config, null, 2)}\n`;
-    parseStampConfig(serialized);
-    fs.writeFileSync(stampConfigPath, serialized, 'utf8');
-    return res.json({ ok: true, configPath: stampConfigPath });
-  } catch (error) {
-    return res.status(500).json({ ok: false, message: error.message });
   }
 });
 
@@ -141,7 +222,9 @@ router.post('/api/sign/prepare', async (req, res) => {
   try {
     const signer = req.body?.signer || {};
     const pdfBase64 = req.body?.pdfBase64;
-    const stampConfig = req.body?.stampConfig || null;
+    const stampConfig = req.body?.stampConfig
+      ? createServerStampConfig(req.body.stampConfig, createFontCatalog())
+      : null;
     const requestedStampPosition = req.body?.requestedStampPosition || null;
     const sourceBuffer = pdfBase64 ? Buffer.from(pdfBase64, 'base64') : undefined;
     const prepared = await createPreparedPdf({ sourcePath: formPdfPath, sourceBuffer, signer, stampConfig, requestedStampPosition });
