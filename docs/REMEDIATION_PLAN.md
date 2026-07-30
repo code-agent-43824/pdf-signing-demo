@@ -179,6 +179,51 @@ GOST-файлов**.
   ожидаемый статус через production reverse proxy.
 - Node-порт недоступен извне напрямую.
 
+### Ход выполнения PR-2 — 2026-07-30
+
+Статус фазы: **PR-2 завершён и развёрнут; схемы, лимиты, safe errors,
+loopback bind, rate limits и timeouts остаются в PR-3/PR-6**.
+
+Выполнено:
+
+- удалён публичный `POST /api/stamp-config`; персональные настройки
+  штампа сохраняются только в браузере;
+- `GET /api/stamp-config` больше не возвращает `configPath`;
+- абсолютные пути шрифтов заменены клиентскими opaque IDs, которые
+  сервер сопоставляет с собственным allowlist перед подготовкой PDF;
+- `GET /api/fonts` возвращает только `id` и отображаемое имя шрифта;
+- прежние браузерные настройки с серверным или project-relative путём
+  продолжают работать только тогда, когда путь совпадает с разрешённым
+  шрифтом сервера;
+- health перенесён внутрь base-path router и разделён на
+  `/health/live` и `/health/ready`; readiness проверяет Python runtime,
+  валидность конфигурации и writable storage;
+- добавлены production-like API-регрессии: config write отклоняется без
+  изменения файла, пути не раскрываются, opaque font IDs разрешаются в
+  реальный `prepare`, оба health endpoint работают под `BASE_PATH`.
+
+Проверка и rollout:
+
+- локально: 8 тестов успешно, 0 ошибок, 1 ожидаемый TODO фазы 2;
+- commit `7303d18` запушен; GitHub Actions run
+  [`30518905385`](https://github.com/code-agent-43824/pdf-signing-demo/actions/runs/30518905385)
+  завершился успешно;
+- production backup:
+  `/home/openclaw/services/pdf-signing-demo/backups/20260730T061420Z-pr2`;
+- полный тестовый набор на production runtime: 8 pass, 0 fail,
+  1 ожидаемый TODO;
+- после рестарта сервис active, `NRestarts=0`, существующие 12 generated
+  PDF сохранены;
+- через публичный Caddy route оба health endpoint возвращают `200`,
+  старый `/pdf-signing/health` и запрещённый config POST возвращают `404`;
+- SHA-256 серверного config до и после запрещённого POST совпадает;
+- публичный `prepare` с opaque font IDs успешно вернул корректный
+  четырёхэлементный `ByteRange`;
+- browser smoke подтвердил корректную загрузку UI, отсутствие абсолютных
+  путей в диалоге и выбор шрифтов по opaque IDs. Ошибок приложения в
+  console нет; есть только ожидаемые ошибки отсутствующих crypto
+  extensions в изолированном браузере.
+
 ## 5. Фаза 2 — проверка CMS и честная семантика результата (P0)
 
 ### 5.1. Разделить уровни проверки
