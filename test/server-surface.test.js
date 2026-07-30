@@ -202,6 +202,31 @@ async function assertSafeError(response, status, code, stage = null) {
   return payload;
 }
 
+function assertBrowserSecurityHeaders(response) {
+  const csp = response.headers.get('content-security-policy');
+  assert.ok(csp);
+  assert.match(csp, /(?:^|; )default-src 'self'(?:;|$)/);
+  assert.match(csp, /(?:^|; )script-src 'self' chrome-extension:(?:;|$)/);
+  assert.match(csp, /(?:^|; )script-src-attr 'none'(?:;|$)/);
+  assert.match(csp, /(?:^|; )frame-ancestors 'none'(?:;|$)/);
+  assert.match(csp, /(?:^|; )object-src 'self'(?:;|$)/);
+  assert.doesNotMatch(
+    csp.match(/(?:^|; )script-src ([^;]+)/)?.[1] || '',
+    /'unsafe-inline'|'unsafe-eval'|https?:/,
+  );
+  assert.equal(response.headers.get('x-frame-options'), 'DENY');
+  assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
+  assert.equal(response.headers.get('referrer-policy'), 'no-referrer');
+  assert.match(response.headers.get('permissions-policy') || '', /camera=\(\)/);
+  assert.match(response.headers.get('permissions-policy') || '', /usb=\(\)/);
+  assert.equal(
+    response.headers.get('cache-control'),
+    'no-store, private, max-age=0',
+  );
+  assert.equal(response.headers.get('pragma'), 'no-cache');
+  assert.equal(response.headers.get('expires'), '0');
+}
+
 function canConnect(host, port) {
   return new Promise((resolve) => {
     const socket = net.connect({ host, port });
@@ -214,6 +239,19 @@ function canConnect(host, port) {
     socket.once('error', () => finish(false));
   });
 }
+
+test('browser security policy is enforcing on UI, API and health responses', async () => {
+  const responses = await Promise.all([
+    fetch(baseUrl),
+    fetch(new URL('app.js', baseUrl)),
+    fetch(new URL('api/stamp-config', baseUrl)),
+    fetch(new URL('health/live', baseUrl)),
+  ]);
+  for (const response of responses) {
+    assert.equal(response.status, 200);
+    assertBrowserSecurityHeaders(response);
+  }
+});
 
 test('stamp configuration is read-only and does not disclose server paths', async () => {
   const beforeConfig = fs.readFileSync(testConfigPath);

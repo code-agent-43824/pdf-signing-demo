@@ -858,6 +858,28 @@ h1, h2, h3 { margin: 0; }
 .dialog-card-pin {
   width: min(460px, 100%);
 }
+.dialog-card-confirmation {
+  width: min(680px, 100%);
+}
+.confirmation-details {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.45fr) minmax(0, 1fr);
+  gap: 10px 16px;
+  margin: 20px 0;
+}
+.confirmation-details dt {
+  color: var(--muted);
+  font-weight: 600;
+}
+.confirmation-details dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.confirmation-fingerprint {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+}
 .dialog-card-wide {
   width: min(1280px, 100%);
   max-height: min(92vh, 1040px);
@@ -1342,6 +1364,7 @@ h1, h2, h3 { margin: 0; }
   .dialog-actions { flex-direction: column; align-items: stretch; }
   .certificate-table-head,
   .certificate-meta { grid-template-columns: 1fr; }
+  .confirmation-details { grid-template-columns: 1fr; }
   .form-grid,
   .form-grid-compact,
   .fonts-grid,

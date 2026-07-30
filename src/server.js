@@ -64,6 +64,34 @@ if (
   throw new Error('RESULTS_DIR must be outside the public web root.');
 }
 const formPdfPath = path.join(assetsDir, FORM_PDF_NAME);
+const CONTENT_SECURITY_POLICY = [
+  "default-src 'self'",
+  "base-uri 'none'",
+  "form-action 'none'",
+  "frame-ancestors 'none'",
+  "script-src 'self' chrome-extension:",
+  "script-src-attr 'none'",
+  "style-src 'self'",
+  "style-src-attr 'unsafe-inline'",
+  "img-src 'self' data: blob:",
+  "font-src 'self'",
+  "connect-src 'self'",
+  "frame-src 'self' blob: cpnp-js-call:",
+  "object-src 'self'",
+  "media-src 'none'",
+  "manifest-src 'none'",
+  "worker-src 'self' blob:",
+].join('; ');
+const PERMISSIONS_POLICY = [
+  'camera=()',
+  'display-capture=()',
+  'geolocation=()',
+  'microphone=()',
+  'payment=()',
+  'usb=()',
+  'serial=()',
+  'hid=()',
+].join(', ');
 const stampConfigPath = process.env.STAMP_CONFIG_PATH
   ? path.resolve(process.env.STAMP_CONFIG_PATH)
   : path.join(__dirname, '..', 'config', 'stamp-config.json');
@@ -158,6 +186,19 @@ const FONT_DIRS = [
 
 app.disable('x-powered-by');
 app.set('trust proxy', 'loopback');
+app.use((_req, res, next) => {
+  res.set({
+    'Cache-Control': 'no-store, private, max-age=0',
+    Pragma: 'no-cache',
+    Expires: '0',
+    'Content-Security-Policy': CONTENT_SECURITY_POLICY,
+    'X-Frame-Options': 'DENY',
+    'X-Content-Type-Options': 'nosniff',
+    'Referrer-Policy': 'no-referrer',
+    'Permissions-Policy': PERMISSIONS_POLICY,
+  });
+  next();
+});
 app.use((req, res, next) => {
   const requestId = crypto.randomUUID();
   res.locals.requestId = requestId;

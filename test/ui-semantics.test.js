@@ -45,3 +45,60 @@ test('UI separates integrity, trust and qualified status without false success c
     /@media \(max-width: 980px\)[\s\S]*?\.verification-item-head\s*\{\s*flex-direction: column;/,
   );
 });
+
+test('UI requires an explicit, digest-bound signing confirmation', () => {
+  const html = fs.readFileSync(
+    path.join(PROJECT_ROOT, 'public', 'index.html'),
+    'utf8',
+  );
+  const app = fs.readFileSync(
+    path.join(PROJECT_ROOT, 'public', 'app.js'),
+    'utf8',
+  );
+
+  assert.match(html, /id="signingConfirmationDialogTemplate"/);
+  assert.match(html, /id="confirmationDocumentName"/);
+  assert.match(html, /id="confirmationDocumentDigest"/);
+  assert.match(html, /id="confirmationCertificateFingerprint"/);
+  assert.match(html, /id="confirmSigning"/);
+  assert.match(app, /window\.crypto\.subtle\.digest\('SHA-256', bytes\)/);
+  assert.match(
+    app,
+    /await openSigningConfirmationDialog\(\{[\s\S]*documentName:[\s\S]*documentDigest,[\s\S]*certificate: selectedCertificate/,
+  );
+  assert.ok(
+    app.indexOf('await openSigningConfirmationDialog')
+      < app.indexOf("fetchJsonOk('./api/sign/prepare'"),
+  );
+});
+
+test('certificate usability and Rutoken PIN lifecycle are fail-closed', () => {
+  const html = fs.readFileSync(
+    path.join(PROJECT_ROOT, 'public', 'index.html'),
+    'utf8',
+  );
+  const app = fs.readFileSync(
+    path.join(PROJECT_ROOT, 'public', 'app.js'),
+    'utf8',
+  );
+
+  assert.match(app, /isCertificateDateWindowValid/);
+  assert.match(app, /HasPrivateKey/);
+  assert.match(app, /IsDigitalSignatureEnabled/);
+  assert.match(app, /IsNonRepudiationEnabled/);
+  assert.match(
+    app,
+    /const categories = \[plugin\.CERT_CATEGORY_USER\]/,
+  );
+  assert.doesNotMatch(
+    app.match(/async function enumerateRutokenCertificates[\s\S]*?return result;/)?.[0] || '',
+    /CERT_CATEGORY_UNSPEC/,
+  );
+  assert.match(html, /id="rutokenPinInput"[^>]*data-sensitive-input/);
+  assert.match(app, /finally \{\s*pin = '';/);
+  assert.match(
+    app,
+    /querySelectorAll\('\[data-sensitive-input\]'\)[\s\S]*input\.value = ''/,
+  );
+  assert.doesNotMatch(app, /state\.[A-Za-z0-9_]*pin/i);
+});

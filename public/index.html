@@ -237,7 +237,7 @@
           <p id="rutokenPinPrompt" class="muted">Введите PIN-код токена.</p>
           <label class="field">
             <span>PIN-код</span>
-            <input id="rutokenPinInput" class="pin-input" type="password" inputmode="numeric" autocomplete="new-password" pattern="[0-9]*" placeholder="••••••••" />
+            <input id="rutokenPinInput" class="pin-input" data-sensitive-input type="password" inputmode="numeric" autocomplete="new-password" pattern="[0-9]*" placeholder="••••••••" />
           </label>
           <div id="rutokenPinError" class="pin-error hidden"></div>
           <div class="pin-pad" aria-label="Экранная цифровая клавиатура">
@@ -257,6 +257,29 @@
           <div class="dialog-actions">
             <button id="cancelRutokenPin" class="secondary">Отмена</button>
             <button id="confirmRutokenPin" class="primary">Продолжить</button>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <template id="signingConfirmationDialogTemplate">
+      <div class="dialog-backdrop">
+        <div class="dialog-card dialog-card-confirmation" role="dialog" aria-modal="true" aria-labelledby="signingConfirmationTitle">
+          <h3 id="signingConfirmationTitle">Подтвердите подписание</h3>
+          <p class="muted">Криптографическая операция будет выполнена только после вашего подтверждения.</p>
+          <dl class="confirmation-details">
+            <dt>Документ</dt>
+            <dd id="confirmationDocumentName"></dd>
+            <dt>SHA-256 документа</dt>
+            <dd id="confirmationDocumentDigest" class="confirmation-fingerprint"></dd>
+            <dt>Сертификат</dt>
+            <dd id="confirmationCertificateName"></dd>
+            <dt>Fingerprint сертификата</dt>
+            <dd id="confirmationCertificateFingerprint" class="confirmation-fingerprint"></dd>
+          </dl>
+          <div class="dialog-actions">
+            <button id="cancelSigning" class="secondary" type="button">Отмена</button>
+            <button id="confirmSigning" class="primary" type="button">Подписать</button>
           </div>
         </div>
       </div>

@@ -61,8 +61,14 @@ const CRYPTO_DIAGNOSTIC_LAYOUTS = {
 const CRYPTO_STACK_STORAGE_KEY = 'pdf-signing-demo.crypto-stack';
 const STAMP_CONFIG_STORAGE_KEY = 'pdf-signing-demo.stamp-config';
 const CRYPTO_SCRIPTS = {
-  cryptopro: 'https://www.cryptopro.ru/sites/default/files/products/cades/cadesplugin_api.js',
-  rutoken: './vendor/rutoken-plugin.min.js',
+  cryptopro: {
+    src: './vendor/cadesplugin_api.js',
+    integrity: 'sha384-5w5a3gj2rEglmho8SnY3toHnjMQcHhMaXB5mtbfOLeQlxELCBi7zLlvwgG5pvUwT',
+  },
+  rutoken: {
+    src: './vendor/rutoken-plugin.min.js',
+    integrity: 'sha384-Lu5PgN+MfVF7y+8cpsOnSbHd03PcEWEAJPQYmsRlhDX3u1NuI/eR3N4r9z16f8YQ',
+  },
 };
 
 const STAMP_POSITION_PRESETS = {
@@ -430,8 +436,8 @@ function getScriptElementId(mode) {
 }
 
 function loadExternalScript(mode) {
-  const src = CRYPTO_SCRIPTS[mode];
-  if (!src) {
+  const asset = CRYPTO_SCRIPTS[mode];
+  if (!asset) {
     return Promise.reject(new Error(`Неизвестный криптоплагин: ${mode}`));
   }
 
@@ -449,7 +455,9 @@ function loadExternalScript(mode) {
   return new Promise((resolve, reject) => {
     const script = existing || document.createElement('script');
     script.id = getScriptElementId(mode);
-    script.src = src;
+    script.src = asset.src;
+    script.integrity = asset.integrity;
+    script.crossOrigin = 'anonymous';
     script.async = true;
     script.dataset.loading = 'true';
     script.addEventListener('load', () => {
@@ -662,9 +670,66 @@ async function setProp(object, asyncSetterName, syncSetterName, value) {
   object[syncSetterName] = value;
 }
 
-function isCertificateDateValid(validToDate) {
-  const parsed = new Date(validToDate);
-  return !Number.isNaN(parsed.getTime()) && parsed.getTime() > Date.now();
+function isCertificateDateWindowValid(validFromDate, validToDate, now = Date.now()) {
+  const validFrom = new Date(validFromDate);
+  const validTo = new Date(validToDate);
+  return !Number.isNaN(validFrom.getTime())
+    && !Number.isNaN(validTo.getTime())
+    && validFrom.getTime() <= now
+    && validTo.getTime() > now;
+}
+
+function isSigningKeyUsageAllowed({
+  present,
+  digitalSignature,
+  nonRepudiation,
+}) {
+  return present === false || digitalSignature === true || nonRepudiation === true;
+}
+
+function collectKeyUsageTokens(value, result = []) {
+  if (typeof value === 'string' || typeof value === 'number') {
+    result.push(String(value));
+    return result;
+  }
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectKeyUsageTokens(item, result));
+    return result;
+  }
+  if (value && typeof value === 'object') {
+    Object.entries(value).forEach(([key, item]) => {
+      if (item === true) {
+        result.push(key);
+      } else if (item !== false && item !== null && item !== undefined) {
+        collectKeyUsageTokens(item, result);
+      }
+    });
+  }
+  return result;
+}
+
+async function inspectCryptoProSigningCapability(certificate) {
+  const validFromDate = await getProp(certificate, 'ValidFromDate', 'ValidFromDate');
+  const validToDate = await getProp(certificate, 'ValidToDate', 'ValidToDate');
+  const hasPrivateKey = Boolean(
+    await getProp(certificate, 'HasPrivateKey', 'HasPrivateKey'),
+  );
+  const keyUsage = await getProp(certificate, 'KeyUsage', 'KeyUsage');
+  const usage = {
+    present: Boolean(await getProp(keyUsage, 'IsPresent', 'IsPresent')),
+    digitalSignature: Boolean(
+      await getProp(keyUsage, 'IsDigitalSignatureEnabled', 'IsDigitalSignatureEnabled'),
+    ),
+    nonRepudiation: Boolean(
+      await getProp(keyUsage, 'IsNonRepudiationEnabled', 'IsNonRepudiationEnabled'),
+    ),
+  };
+  return {
+    validFromDate,
+    validToDate,
+    hasPrivateKey,
+    keyUsageAllowed: isSigningKeyUsageAllowed(usage),
+  };
 }
 
 function parseDistinguishedName(value) {
@@ -711,6 +776,9 @@ function formatCertificateDate(value) {
 }
 
 function closeActiveDialog() {
+  state.activeDialog?.querySelectorAll?.('[data-sensitive-input]').forEach((input) => {
+    input.value = '';
+  });
   state.activeDialog?.remove();
   state.activeDialog = null;
 }
@@ -762,8 +830,20 @@ async function enumerateCertificates() {
       const issuerName = await getProp(certificate, 'IssuerName', 'IssuerName');
       const thumbprint = await getProp(certificate, 'Thumbprint', 'Thumbprint');
       const serialNumber = await getProp(certificate, 'SerialNumber', 'SerialNumber');
-      const validToDate = await getProp(certificate, 'ValidToDate', 'ValidToDate');
-      if (!isCertificateDateValid(validToDate)) {
+      let capability;
+      try {
+        capability = await inspectCryptoProSigningCapability(certificate);
+      } catch (_error) {
+        continue;
+      }
+      if (
+        !isCertificateDateWindowValid(
+          capability.validFromDate,
+          capability.validToDate,
+        )
+        || !capability.hasPrivateKey
+        || !capability.keyUsageAllowed
+      ) {
         continue;
       }
       const publicKey = await certificate.PublicKey();
@@ -777,7 +857,10 @@ async function enumerateCertificates() {
         issuerLabel: getCertificateIssuerLabel(issuerName),
         thumbprint,
         serialNumber,
-        validToDate,
+        validFromDate: capability.validFromDate,
+        validToDate: capability.validToDate,
+        hasPrivateKey: true,
+        keyUsageAllowed: true,
         algorithm: friendlyName,
         certificate,
       });
@@ -1008,8 +1091,8 @@ async function enumerateRutokenCertificates(plugin) {
       // ignore label lookup failure
     }
 
-    const categories = [plugin.CERT_CATEGORY_USER, plugin.CERT_CATEGORY_UNSPEC]
-      .filter((value, index, array) => value !== undefined && array.indexOf(value) === index);
+    // USER certificates are the Rutoken category linked to a private key.
+    const categories = [plugin.CERT_CATEGORY_USER].filter((value) => value !== undefined);
     const seenCertIds = new Set();
 
     for (const category of categories) {
@@ -1022,8 +1105,34 @@ async function enumerateRutokenCertificates(plugin) {
 
         const pem = await plugin.getCertificate(deviceId, certId);
         const parsed = await plugin.parseCertificateFromString(pem);
-        const validToDate = parseRutokenDate(parsed?.notAfter || parsed?.validTo || parsed?.validNotAfter);
-        if (validToDate && !isCertificateDateValid(validToDate.toISOString())) {
+        const validFromDate = parseRutokenDate(
+          parsed?.notBefore || parsed?.validFrom || parsed?.validNotBefore,
+        );
+        const validToDate = parseRutokenDate(
+          parsed?.notAfter || parsed?.validTo || parsed?.validNotAfter,
+        );
+        if (
+          !validFromDate
+          || !validToDate
+          || !isCertificateDateWindowValid(
+            validFromDate.toISOString(),
+            validToDate.toISOString(),
+          )
+        ) {
+          continue;
+        }
+        const keyUsageSource = parsed?.keyUsages ?? parsed?.keyUsage;
+        const normalizedKeyUsages = collectKeyUsageTokens(keyUsageSource)
+          .map((usage) => String(usage).toLowerCase().replace(/[^a-zа-я0-9]/g, ''));
+        const keyUsageAllowed = keyUsageSource === undefined
+          || keyUsageSource === null
+          || normalizedKeyUsages.some((usage) => (
+            usage.includes('digitalsignature')
+            || usage.includes('nonrepudiation')
+            || usage.includes('contentcommitment')
+            || usage.includes('цифроваяподпись')
+          ));
+        if (!keyUsageAllowed) {
           continue;
         }
 
@@ -1042,7 +1151,10 @@ async function enumerateRutokenCertificates(plugin) {
           issuerLabel: issuerCommonName,
           thumbprint: parsed?.thumbprint || parsed?.fingerprint || certId,
           serialNumber: parsed?.serialNumber || certId,
-          validToDate: validToDate ? validToDate.toISOString() : '',
+          validFromDate: validFromDate.toISOString(),
+          validToDate: validToDate.toISOString(),
+          hasPrivateKey: true,
+          keyUsageAllowed: true,
           algorithm,
           certificateBase64: normalizeCmsBase64(pem),
           certId,
@@ -1275,15 +1387,17 @@ function openRutokenPinDialog({ title = 'Введите PIN-код токена.
 
     const close = () => closeActiveDialog();
     const submit = () => {
-      const pin = String(input.value || '').replace(/\D+/g, '');
+      let pin = String(input.value || '').replace(/\D+/g, '');
       if (!pin) {
         error.textContent = 'PIN-код пустой.';
         error.classList.remove('hidden');
         input.focus();
         return;
       }
+      input.value = '';
       close();
       resolve(pin);
+      pin = '';
     };
 
     fragment.querySelectorAll('.pin-key').forEach((button) => {
@@ -1362,23 +1476,90 @@ async function ensureRutokenLogin(deviceId) {
 
   let errorMessage = '';
   while (true) {
-    const pin = await openRutokenPinDialog({
-      title: 'Рутокен не запрашивает PIN сам. Введите PIN-код токена, чтобы продолжить подпись.',
-      errorMessage,
-    });
+    let pin = '';
+    let loginError = null;
     try {
+      pin = await openRutokenPinDialog({
+        title: 'Рутокен не запрашивает PIN сам. Введите PIN-код токена, чтобы продолжить подпись.',
+        errorMessage,
+      });
       await withOperationalCryptoBusyOverlay('Проверяю PIN-код на Рутокене…', () => plugin.login(deviceId, pin), { mode: 'rutoken' });
       return;
     } catch (error) {
+      if (error?.message === 'Ввод PIN-кода отменён.') {
+        throw error;
+      }
       if (isRutokenAlreadyLoggedInError(error, plugin)) {
         return;
       }
-      const message = getRutokenErrorMessage(error, plugin);
-      const retriesLeft = await getRutokenPinRetriesLeft(plugin, deviceId);
-      const retriesSuffix = Number.isFinite(Number(retriesLeft)) ? ` Осталось попыток: ${retriesLeft}.` : '';
-      errorMessage = `Не удалось авторизоваться: ${message}.${retriesSuffix}`;
+      loginError = error;
+    } finally {
+      pin = '';
+      document.querySelectorAll('[data-sensitive-input]').forEach((input) => {
+        input.value = '';
+      });
     }
+    const message = getRutokenErrorMessage(loginError, plugin);
+    const retriesLeft = await getRutokenPinRetriesLeft(plugin, deviceId);
+    const retriesSuffix = Number.isFinite(Number(retriesLeft))
+      ? ` Осталось попыток: ${retriesLeft}.`
+      : '';
+    errorMessage = `Не удалось авторизоваться: ${message}.${retriesSuffix}`;
   }
+}
+
+async function sha256HexFromBase64(base64) {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  const digest = await window.crypto.subtle.digest('SHA-256', bytes);
+  bytes.fill(0);
+  return Array.from(
+    new Uint8Array(digest),
+    (byte) => byte.toString(16).padStart(2, '0'),
+  ).join('');
+}
+
+function openSigningConfirmationDialog({
+  documentName,
+  documentDigest,
+  certificate,
+}) {
+  return new Promise((resolve, reject) => {
+    closeActiveDialog();
+    const fragment = document
+      .getElementById('signingConfirmationDialogTemplate')
+      .content
+      .cloneNode(true);
+    const backdrop = fragment.querySelector('.dialog-backdrop');
+    fragment.querySelector('#confirmationDocumentName').textContent = documentName;
+    fragment.querySelector('#confirmationDocumentDigest').textContent = documentDigest;
+    fragment.querySelector('#confirmationCertificateName').textContent = (
+      certificate.commonName || certificate.label || '—'
+    );
+    fragment.querySelector('#confirmationCertificateFingerprint').textContent = (
+      certificate.thumbprint || '—'
+    );
+    const confirm = fragment.querySelector('#confirmSigning');
+    const cancel = fragment.querySelector('#cancelSigning');
+    state.activeDialog = backdrop;
+    confirm.addEventListener('click', () => {
+      closeActiveDialog();
+      resolve();
+    });
+    cancel.addEventListener('click', () => {
+      rejectDialog(reject, 'Подписание отменено пользователем.');
+    });
+    backdrop.addEventListener('click', (event) => {
+      if (event.target === backdrop) {
+        rejectDialog(reject, 'Подписание отменено пользователем.');
+      }
+    });
+    document.body.appendChild(backdrop);
+    requestAnimationFrame(() => confirm.focus());
+  });
 }
 
 function openCertificateDialog(certificates, preselectedCertificate = null) {
@@ -2305,6 +2486,12 @@ async function prepareAndSign() {
   }
 
   const selectedCertificate = state.selectedCertificate;
+  const documentDigest = await sha256HexFromBase64(state.uploadedPdfBase64);
+  await openSigningConfirmationDialog({
+    documentName: state.uploadedPdfName || 'Документ.pdf',
+    documentDigest,
+    certificate: selectedCertificate,
+  });
   const certificateBase64 = await exportSelectedCertificateBase64(selectedCertificate);
 
   setStatus('Подготавливаю PDF под PAdES…');
