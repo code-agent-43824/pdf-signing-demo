@@ -455,6 +455,32 @@ trust и qualified остаются явно непроверенными до �
   trust anchors, источника статусов отзыва и формальной политики и не
   должна подменяться UI-текстом.
 
+Проверка и rollout:
+
+- локально и на production runtime: 19 тестов успешно, 0 ошибок,
+  0 TODO; `npm audit --omit=dev` — 0 известных уязвимостей;
+- реализация зафиксирована commit `4c4bbf7`, найденное browser smoke
+  мобильное переполнение длинного status badge исправлено follow-up
+  commit `38f74bb`;
+- GitHub Actions runs
+  [`30570139319`](https://github.com/code-agent-43824/pdf-signing-demo/actions/runs/30570139319)
+  и
+  [`30570856699`](https://github.com/code-agent-43824/pdf-signing-demo/actions/runs/30570856699)
+  завершились успешно;
+- production backup:
+  `/home/openclaw/services/pdf-signing-demo/backups/20260730T182413Z-pr5`;
+- публичный HTTPS smoke выполнил полный цикл
+  `prepare → CAdES → complete → download` и подтвердил точный контракт
+  `integrity=valid`, `trust=not_checked`, `qualified=not_checked`;
+  синтетический результат убран из публичного каталога в backup;
+- desktop/mobile browser smoke подтвердил раздельные карточки,
+  отсутствие внутреннего переполнения и ложного утверждения о КЭП;
+  ошибок приложения в console нет, кроме ожидаемых обращений к
+  отсутствующим crypto extensions;
+- исходные 12 generated PDF сохранены побайтово, сервис active,
+  `NRestarts=0`, readiness зелёный, порт слушает только
+  `127.0.0.1:3010`.
+
 ## 6. Фаза 3 — изоляция тяжёлой обработки и жизненный цикл данных (P0/P1)
 
 ### 6.1. Worker-модель
