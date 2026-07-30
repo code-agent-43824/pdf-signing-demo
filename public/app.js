@@ -519,6 +519,59 @@ function setPreviewMode(mode = 'empty') {
     : 'После загрузки PDF-файла его предпросмотр появится здесь';
 }
 
+function getSignatureCountLabel(count) {
+  const absolute = Math.abs(Number(count) || 0) % 100;
+  const lastDigit = absolute % 10;
+  if (absolute > 10 && absolute < 20) return 'подписей';
+  if (lastDigit === 1) return 'подпись';
+  if (lastDigit >= 2 && lastDigit <= 4) return 'подписи';
+  return 'подписей';
+}
+
+function renderVerificationResult(verification) {
+  const trustChecks = verification?.trust?.checks;
+  const trustChecksAreExplicitlyUnknown = trustChecks
+    && ['chain', 'validity', 'revocation', 'keyUsage']
+      .every((name) => trustChecks[name] === 'not_checked');
+  const validContract = (
+    verification?.schemaVersion === 1
+    && verification?.integrity?.status === 'valid'
+    && verification.integrity.code === 'CMS_INTEGRITY_VALID'
+    && verification.integrity.signerCertificateMatched === true
+    && Number.isInteger(verification.integrity.signaturesVerified)
+    && verification.integrity.signaturesVerified > 0
+    && verification?.trust?.status === 'not_checked'
+    && verification.trust.code === 'CERTIFICATE_TRUST_NOT_CHECKED'
+    && trustChecksAreExplicitlyUnknown
+    && verification?.qualified?.status === 'not_checked'
+    && verification.qualified.code === 'QUALIFIED_STATUS_NOT_CHECKED'
+  );
+  if (!validContract) {
+    throw new Error('Сервер не вернул полный и однозначный результат проверки подписи.');
+  }
+
+  const signatureCount = verification.integrity.signaturesVerified;
+  document.getElementById('verificationTitle').textContent = (
+    'Подпись встроена, целостность CMS подтверждена'
+  );
+  document.getElementById('verificationMessage').textContent = (
+    'Доверие сертификату и квалифицированный статус не проверялись.'
+  );
+  document.getElementById('integrityStatusBadge').textContent = 'Подтверждена';
+  document.getElementById('integrityStatusText').textContent = (
+    `Криптографически проверено ${signatureCount} ${getSignatureCountLabel(signatureCount)} в PDF; `
+    + 'сертификат подписанта совпадает с выбранным.'
+  );
+  document.getElementById('trustStatusBadge').textContent = 'Не проверено';
+  document.getElementById('trustStatusText').textContent = (
+    'Цепочка доверия, срок, отзыв и назначение ключа не проверялись.'
+  );
+  document.getElementById('qualifiedStatusBadge').textContent = 'Не подтверждён';
+  document.getElementById('qualifiedStatusText').textContent = (
+    'Проверка по политике квалифицированной электронной подписи не выполнялась.'
+  );
+}
+
 function updateEnvironmentDiagnostics() {
   renderEnvironmentStatusStrip();
 
@@ -2297,6 +2350,7 @@ async function prepareAndSign() {
     }),
   }, 'Не удалось встроить подпись в PDF.');
 
+  renderVerificationResult(completeData.verification);
   const signedPdf = document.getElementById('signedPdf');
   const downloadLink = document.getElementById('downloadLink');
   signedPdf.src = completeData.signedPdfUrl;
@@ -2306,8 +2360,12 @@ async function prepareAndSign() {
     viewerFileName.textContent = 'Подписанный документ';
   }
   downloadLink.href = completeData.signedPdfUrl;
+  downloadLink.download = completeData.downloadName || 'signed-formular.pdf';
   downloadLink.classList.remove('hidden');
-  setStatus('Готово: подписанный PDF собран, встроен в контейнер и показан в области предпросмотра.');
+  setStatus(
+    'Готово: CMS встроена, целостность и сертификат подписанта проверены. '
+    + 'Доверие сертификату и квалифицированный статус не проверялись.',
+  );
 }
 
 document.getElementById('pdfUpload').addEventListener('change', async (event) => {

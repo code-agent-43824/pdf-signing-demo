@@ -55,7 +55,7 @@
       <section class="workspace-grid">
         <aside class="workflow-panel panel-shell">
           <div class="workflow-head">
-            <h2>Подписание PDF квалифицированной подписью</h2>
+            <h2>Подписание PDF электронной подписью</h2>
             <p class="muted">Загрузите документ, проверьте состояние плагина и перейдите к подписанию.</p>
           </div>
 
@@ -164,15 +164,38 @@
         </section>
       </section>
 
-      <div id="successBanner" class="success-banner hidden">
-        <div class="success-banner-copy">
-          <div class="success-icon">✓</div>
+      <div id="successBanner" class="verification-banner hidden" aria-live="polite">
+        <div class="verification-summary">
+          <div class="integrity-icon" aria-hidden="true">✓</div>
           <div>
-            <strong>Документ успешно подписан квалифицированной электронной подписью</strong>
-            <div class="muted">Финальный PDF собран и готов к скачиванию.</div>
+            <strong id="verificationTitle">Подпись встроена, целостность CMS подтверждена</strong>
+            <div id="verificationMessage" class="muted">Доверие сертификату и квалифицированный статус проверяются отдельно.</div>
           </div>
         </div>
-        <a id="downloadLink" class="download hidden success-download" download="signed-formular.pdf">Выгрузить подписанный PDF</a>
+        <div class="verification-grid" role="list" aria-label="Результаты проверки подписи">
+          <div class="verification-item is-valid" role="listitem">
+            <div class="verification-item-head">
+              <strong>Целостность CMS</strong>
+              <span id="integrityStatusBadge" class="verification-badge is-valid">Подтверждена</span>
+            </div>
+            <p id="integrityStatusText">CMS подписывает точные байты PDF.</p>
+          </div>
+          <div class="verification-item is-not-checked" role="listitem">
+            <div class="verification-item-head">
+              <strong>Доверие сертификату</strong>
+              <span id="trustStatusBadge" class="verification-badge is-not-checked">Не проверено</span>
+            </div>
+            <p id="trustStatusText">Цепочка, срок, отзыв и назначение ключа не проверялись.</p>
+          </div>
+          <div class="verification-item is-not-checked" role="listitem">
+            <div class="verification-item-head">
+              <strong>Квалифицированный статус</strong>
+              <span id="qualifiedStatusBadge" class="verification-badge is-not-checked">Не подтверждён</span>
+            </div>
+            <p id="qualifiedStatusText">Проверка по политике квалифицированной подписи не выполнялась.</p>
+          </div>
+        </div>
+        <a id="downloadLink" class="download hidden verification-download" download="signed-formular.pdf">Выгрузить подписанный PDF</a>
       </div>
 
       <div id="busyOverlay" class="busy-overlay hidden" aria-live="assertive" aria-busy="true">

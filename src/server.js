@@ -244,6 +244,44 @@ function createCertificateError(error) {
   );
 }
 
+function createVerificationResult(integrity, embeddedIntegrity) {
+  if (
+    integrity?.ok !== true
+    || !Array.isArray(embeddedIntegrity)
+    || embeddedIntegrity.length === 0
+    || embeddedIntegrity.some((item) => item?.ok !== true)
+  ) {
+    throw new Error('Cannot report a successful verification result');
+  }
+
+  return {
+    schemaVersion: 1,
+    integrity: {
+      status: 'valid',
+      code: 'CMS_INTEGRITY_VALID',
+      signaturesVerified: embeddedIntegrity.length,
+      signerCertificateMatched: true,
+      digestAlgorithm: integrity.digestAlgorithm,
+      signatureAlgorithm: integrity.signatureAlgorithm,
+    },
+    trust: {
+      status: 'not_checked',
+      code: 'CERTIFICATE_TRUST_NOT_CHECKED',
+      checks: {
+        chain: 'not_checked',
+        validity: 'not_checked',
+        revocation: 'not_checked',
+        keyUsage: 'not_checked',
+      },
+    },
+    qualified: {
+      status: 'not_checked',
+      code: 'QUALIFIED_STATUS_NOT_CHECKED',
+      policy: null,
+    },
+  };
+}
+
 function logRequestError(req, res, error, stage, code) {
   const record = {
     timestamp: new Date().toISOString(),
@@ -451,10 +489,7 @@ router.post('/api/sign/complete', (req, res) => {
       ok: true,
       signedPdfUrl: `./generated/${fileName}`,
       downloadName: 'signed-formular.pdf',
-      integrity: {
-        verified: integrity.ok === true,
-        signaturesVerified: embeddedIntegrity.length,
-      },
+      verification: createVerificationResult(integrity, embeddedIntegrity),
     });
   } catch (error) {
     return sendSafeError(req, res, error, 'complete');

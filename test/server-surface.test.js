@@ -502,10 +502,33 @@ test('complete verifies CMS integrity, certificate binding and retry semantics',
   });
   assert.equal(completeResponse.status, 200);
   const completed = await completeResponse.json();
-  assert.deepEqual(completed.integrity, {
-    verified: true,
-    signaturesVerified: 1,
+  assert.deepEqual(completed.verification, {
+    schemaVersion: 1,
+    integrity: {
+      status: 'valid',
+      code: 'CMS_INTEGRITY_VALID',
+      signaturesVerified: 1,
+      signerCertificateMatched: true,
+      digestAlgorithm: '2.16.840.1.101.3.4.2.1',
+      signatureAlgorithm: '1.2.840.113549.1.1.11',
+    },
+    trust: {
+      status: 'not_checked',
+      code: 'CERTIFICATE_TRUST_NOT_CHECKED',
+      checks: {
+        chain: 'not_checked',
+        validity: 'not_checked',
+        revocation: 'not_checked',
+        keyUsage: 'not_checked',
+      },
+    },
+    qualified: {
+      status: 'not_checked',
+      code: 'QUALIFIED_STATUS_NOT_CHECKED',
+      policy: null,
+    },
   });
+  assert.equal(Object.hasOwn(completed, 'integrity'), false);
   const signedPdfResponse = await fetch(
     new URL(completed.signedPdfUrl, baseUrl),
   );
