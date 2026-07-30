@@ -595,8 +595,7 @@ timeouts реализованы; private result storage/TTL остаются в 
 ### Ход выполнения PR-7 — 2026-07-30
 
 Статус: **private result storage, конечный lifecycle, TTL и cleanup
-реализованы; production rollout фиксируется отдельным commit после
-проверки**.
+реализованы и развёрнуты в production**.
 
 Выполнено:
 
@@ -625,6 +624,40 @@ timeouts реализованы; private result storage/TTL остаются в 
   логируются;
 - frontend fail-closed проверяет оба capability URL и expiry, использует
   отдельную одноразовую download-ссылку и сообщает пользователю retention.
+
+Проверка и rollout:
+
+- локально и на production runtime: 33 теста успешно, 0 ошибок,
+  0 TODO; `npm audit --omit=dev` — 0 известных уязвимостей;
+- реализация зафиксирована commit `6a61d43`; GitHub Actions run
+  [`30575409334`](https://github.com/code-agent-43824/pdf-signing-demo/actions/runs/30575409334)
+  завершился успешно;
+- production backup кода, unit, полных копий и SHA-256 manifest всех
+  прежних результатов:
+  `/home/openclaw/services/pdf-signing-demo/backups/20260730T193544Z-pr7`;
+- 12 прежних PDF побайтово сверены с backup и перенесены из web-root в
+  `/home/openclaw/services/pdf-signing-demo/legacy-results/pre-pr7-20260730T193544Z`
+  с правами каталогов `0700` и файлов `0600`; прежний публичный URL
+  возвращает `404 RESULT_NOT_FOUND`;
+- публичный HTTPS smoke выполнил полный
+  `prepare -> CAdES -> complete -> preview x2 -> download -> replay`:
+  verification `valid / not_checked / not_checked`, preview повторяем до
+  TTL, `HEAD` не расходует download capability, download игнорирует Range
+  и отдаёт полный PDF как attachment, повторный GET возвращает 404;
+- полученный smoke PDF (44 472 байта) независимо проверен pyHanko:
+  подпись intact/valid/trusted, покрытие `ENTIRE_FILE`;
+- до рестарта приватный result существовал с mode `0600`, session buffers
+  были освобождены (`memoryBytes=0`); после рестарта result storage
+  автоматически стал пустым, прежний preview capability вернул 404;
+- browser smoke подтвердил загрузку production UI, работу диалога
+  настроек, отсутствие filesystem paths и старых `/generated` ссылок.
+  Единственные console errors относятся к ожидаемо отсутствующему
+  crypto-extension в изолированном браузере, не к приложению;
+- Caddy access log для сайта не включён; structured application log
+  подтвердил редактирование capability до
+  `/api/results/:capability`;
+- после финального рестарта сервис active, `NRestarts=0`, readiness
+  зелёный, result counters нулевые, socket только `127.0.0.1:3010`.
 
 ## 7. Фаза 4 — защита браузерного криптоконтура (P1)
 
