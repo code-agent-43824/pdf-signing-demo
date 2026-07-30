@@ -224,6 +224,68 @@ loopback bind, rate limits и timeouts остаются в PR-3/PR-6**.
   console нет; есть только ожидаемые ошибки отсутствующих crypto
   extensions в изолированном браузере.
 
+### Ход выполнения PR-3 — 2026-07-30
+
+Статус фазы: **PR-3 завершён и развёрнут; rate limiting, request/worker
+timeouts и concurrency control остаются в PR-6**.
+
+Выполнено:
+
+- добавлены общие strict JSON Schema на Ajv для `prepare`, `complete`,
+  `signer` и полного `stampConfig`; неизвестные поля запрещены на каждом
+  уровне;
+- до запуска Python проверяются типы, обязательные поля и границы строк,
+  DN, строк штампа, шрифтов, размеров, координат, страниц,
+  `bytesReserved`, правил размещения и `maxSignatures`;
+- JSON body ограничен 15 MiB; требуется `Content-Type:
+  application/json`;
+- PDF ограничен 10 MiB после строгого base64 decode, должен начинаться с
+  `%PDF-`, содержать 1–200 страниц и не превышать 14 400 pt по каждой
+  стороне страницы;
+- настройки штампа не могут ссылаться на отсутствующие страницы PDF;
+- rendered stamp ограничен 4096 px по каждой стороне и 16 777 216 px
+  суммарно, что блокирует опасные сочетания `width × height ×
+  imageScale`;
+- CMS ограничена 128 KiB после строгого base64 decode, а её размер
+  дополнительно сверяется с резервом `/Contents`;
+- клиент больше не может отправить файловый путь шрифта: сервер принимает
+  только opaque ID из собственного каталога; frontend однократно
+  мигрирует старый сохранённый путь по точному имени разрешённого шрифта
+  либо сбрасывает его к серверному значению;
+- внешние ошибки имеют фиксированные `code`/`message`, не содержат
+  exception/path details и включают `requestId`; тот же ID возвращается
+  в `X-Request-Id`, а технические сведения пишутся структурированно в
+  server log без request body;
+- отключён `x-powered-by`; Node явно слушает только `127.0.0.1`;
+- Ajv зафиксирован на `8.20.0`; транзитивные `body-parser` и `qs`
+  обновлены до исправленных версий, итоговый production dependency audit
+  содержит 0 уязвимостей.
+
+Проверка и rollout:
+
+- локально после чистого `npm ci`: 15 тестов успешно, 0 ошибок,
+  1 ожидаемый TODO фазы 2; committed fixtures воспроизведены без diff,
+  syntax checks и dependency audit прошли;
+- commit `f2c95d7` запушен; GitHub Actions run
+  [`30521004680`](https://github.com/code-agent-43824/pdf-signing-demo/actions/runs/30521004680)
+  завершился успешно;
+- production backup:
+  `/home/openclaw/services/pdf-signing-demo/backups/20260730T065358Z-pr3`;
+- полный тестовый набор на production runtime: 15 pass, 0 fail,
+  1 ожидаемый TODO;
+- после рестарта сервис active, `NRestarts=0`, socket виден только как
+  `127.0.0.1:3010`, существующие 12 generated PDF сохранены;
+- публичный HTTPS smoke успешно выполнил реальный `prepare`, а unknown
+  field, файловый путь шрифта, PDF размером 10 MiB + 1 byte и
+  отсутствующая session получили ожидаемые безопасные `400/413/404`
+  ответы с correlation IDs;
+- browser smoke подтвердил миграцию сохранённого legacy font path в
+  opaque ID, работу диалога и отсутствие filesystem paths. Ошибок
+  приложения в console нет; присутствуют только ожидаемые ошибки
+  отсутствующих crypto extensions в изолированном браузере;
+- production journal подтвердил структурированные validation records без
+  содержимого PDF, CMS и request body.
+
 ## 5. Фаза 2 — проверка CMS и честная семантика результата (P0)
 
 ### 5.1. Разделить уровни проверки
