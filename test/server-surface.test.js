@@ -19,6 +19,9 @@ let testKeyPath;
 let testCertificateBase64;
 let otherCertPath;
 let otherKeyPath;
+let publicLeakProbePath;
+let testResultsDir;
+let serverStderr = '';
 
 function reservePort() {
   return new Promise((resolve, reject) => {
@@ -37,13 +40,12 @@ function reservePort() {
 
 function waitForServer(child) {
   return new Promise((resolve, reject) => {
-    let stderr = '';
     const timeout = setTimeout(() => {
-      reject(new Error(`Server startup timed out. ${stderr}`));
+      reject(new Error(`Server startup timed out. ${serverStderr}`));
     }, 10000);
 
     child.stderr.on('data', (chunk) => {
-      stderr += chunk.toString();
+      serverStderr += chunk.toString();
     });
     child.stdout.on('data', (chunk) => {
       if (chunk.toString().includes('pdf-signing-demo listening')) {
@@ -53,7 +55,7 @@ function waitForServer(child) {
     });
     child.once('exit', (code) => {
       clearTimeout(timeout);
-      reject(new Error(`Server exited during startup with code ${code}. ${stderr}`));
+      reject(new Error(`Server exited during startup with code ${code}. ${serverStderr}`));
     });
   });
 }
@@ -62,8 +64,15 @@ before(async () => {
   tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pdf-signing-surface-'));
   testConfigPath = path.join(tempDir, 'stamp-config.json');
   fs.copyFileSync(path.join(PROJECT_ROOT, 'config', 'stamp-config.json'), testConfigPath);
-  const testGeneratedDir = path.join(tempDir, 'generated');
-  fs.mkdirSync(testGeneratedDir);
+  testResultsDir = path.join(tempDir, 'results');
+  fs.mkdirSync(testResultsDir);
+  const publicGeneratedDir = path.join(PROJECT_ROOT, 'public', 'generated');
+  fs.mkdirSync(publicGeneratedDir, { recursive: true });
+  publicLeakProbePath = path.join(
+    publicGeneratedDir,
+    `surface-leak-probe-${process.pid}.pdf`,
+  );
+  fs.writeFileSync(publicLeakProbePath, '%PDF-public-leak-probe');
   testCertPath = path.join(tempDir, 'surface-cert.pem');
   testKeyPath = path.join(tempDir, 'surface-key.pem');
   const testCertDerPath = path.join(tempDir, 'surface-cert.der');
@@ -119,11 +128,16 @@ before(async () => {
       BASE_PATH,
       PORT: String(serverPort),
       STAMP_CONFIG_PATH: testConfigPath,
-      GENERATED_DIR: testGeneratedDir,
+      RESULTS_DIR: testResultsDir,
       PREPARE_RATE_LIMIT: '1000',
       COMPLETE_RATE_LIMIT: '1000',
       SIGNING_CONCURRENCY: '1',
       SIGNING_MAX_QUEUE: '1',
+      SIGNING_MAX_SESSIONS: '128',
+      SIGNING_MAX_SESSIONS_PER_IP: '32',
+      SIGNING_SESSION_MEMORY_BYTES: String(256 * 1024 * 1024),
+      SIGNING_RESULT_TTL_MS: '1000',
+      STORAGE_CLEANUP_INTERVAL_MS: '100',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -135,6 +149,7 @@ after(async () => {
     serverProcess.kill('SIGTERM');
     await new Promise((resolve) => serverProcess.once('exit', resolve));
   }
+  if (publicLeakProbePath) fs.rmSync(publicLeakProbePath, { force: true });
   fs.rmSync(tempDir, { recursive: true, force: true });
 });
 
@@ -576,14 +591,68 @@ test('complete verifies CMS integrity, certificate binding and retry semantics',
     },
   });
   assert.equal(Object.hasOwn(completed, 'integrity'), false);
+  assert.match(completed.signedPdfUrl, /^\.\/api\/results\/[A-Za-z0-9_-]{43}$/);
+  assert.match(completed.downloadUrl, /^\.\/api\/results\/[A-Za-z0-9_-]{43}$/);
+  assert.notEqual(completed.signedPdfUrl, completed.downloadUrl);
+  assert.ok(Date.parse(completed.resultExpiresAt) > Date.now());
   const signedPdfResponse = await fetch(
     new URL(completed.signedPdfUrl, baseUrl),
   );
   assert.equal(signedPdfResponse.status, 200);
   assert.equal(
+    signedPdfResponse.headers.get('content-disposition'),
+    'inline; filename="signed-formular.pdf"',
+  );
+  assert.match(
+    signedPdfResponse.headers.get('cache-control'),
+    /no-store/,
+  );
+  assert.equal(
     Buffer.from(await signedPdfResponse.arrayBuffer()).subarray(0, 5).toString(),
     '%PDF-',
   );
+  const repeatedPreview = await fetch(
+    new URL(completed.signedPdfUrl, baseUrl),
+  );
+  assert.equal(repeatedPreview.status, 200);
+  await repeatedPreview.arrayBuffer();
+
+  const downloadHead = await fetch(
+    new URL(completed.downloadUrl, baseUrl),
+    { method: 'HEAD' },
+  );
+  assert.equal(downloadHead.status, 405);
+  const downloadResponse = await fetch(
+    new URL(completed.downloadUrl, baseUrl),
+    { headers: { range: 'bytes=0-9' } },
+  );
+  assert.equal(downloadResponse.status, 200);
+  assert.equal(downloadResponse.headers.has('accept-ranges'), false);
+  assert.equal(
+    downloadResponse.headers.get('content-disposition'),
+    'attachment; filename="signed-formular.pdf"',
+  );
+  assert.match(downloadResponse.headers.get('cache-control'), /no-store/);
+  assert.equal(
+    Buffer.from(await downloadResponse.arrayBuffer()).subarray(0, 5).toString(),
+    '%PDF-',
+  );
+  await assertSafeError(
+    await fetch(new URL(completed.downloadUrl, baseUrl)),
+    404,
+    'RESULT_NOT_FOUND',
+    'download',
+  );
+  await new Promise((resolve) => setTimeout(resolve, 1100));
+  await assertSafeError(
+    await fetch(new URL(completed.signedPdfUrl, baseUrl)),
+    404,
+    'RESULT_NOT_FOUND',
+    'download',
+  );
+  assert.deepEqual(fs.readdirSync(testResultsDir), []);
+  assert.equal(serverStderr.includes(completed.signedPdfUrl.slice(14)), false);
+  assert.equal(serverStderr.includes(completed.downloadUrl.slice(14)), false);
 
   await assertSafeError(
     await postJson('api/sign/complete', {
@@ -594,6 +663,16 @@ test('complete verifies CMS integrity, certificate binding and retry semantics',
     'SESSION_NOT_FOUND',
     'complete',
   );
+});
+
+test('legacy public generated files are not served by either static route', async () => {
+  const response = await fetch(
+    new URL(`generated/${path.basename(publicLeakProbePath)}`, baseUrl),
+  );
+  assert.equal(response.status, 404);
+  assert.match(response.headers.get('cache-control'), /no-store/);
+  const payload = await response.json();
+  assert.equal(payload.code, 'RESULT_NOT_FOUND');
 });
 
 test('prepare rejects malformed certificate DER before PDF preparation', async () => {
@@ -680,7 +759,13 @@ test('liveness and readiness are available only through the production base path
 
   const readyResponse = await fetch(new URL('health/ready', baseUrl));
   assert.equal(readyResponse.status, 200);
-  assert.deepEqual(await readyResponse.json(), {
+  const ready = await readyResponse.json();
+  assert.deepEqual({
+    ok: ready.ok,
+    service: ready.service,
+    checks: ready.checks,
+    workers: ready.workers,
+  }, {
     ok: true,
     service: 'pdf-signing-demo',
     checks: {
@@ -697,6 +782,11 @@ test('liveness and readiness are available only through the production base path
       maxQueue: 1,
     },
   });
+  assert.equal(ready.storage.sessions.maxSessions, 128);
+  assert.equal(ready.storage.sessions.maxSessionsPerOwner, 32);
+  assert.equal(ready.storage.sessions.maxMemoryBytes, 256 * 1024 * 1024);
+  assert.equal(ready.storage.results.maxResults, 32);
+  assert.equal(ready.storage.results.maxDiskBytes, 128 * 1024 * 1024);
 
   const rootHealth = await fetch(new URL('/health', baseUrl));
   assert.equal(rootHealth.status, 404);

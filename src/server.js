@@ -3,7 +3,7 @@ const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
 const fsp = require('fs/promises');
-const { createPreparedPdf, embedCmsSignature, createSessionStore } = require('./signing/pades');
+const { createPreparedPdf, embedCmsSignature } = require('./signing/pades');
 const {
   CmsVerificationError,
   inspectCertificate,
@@ -34,6 +34,11 @@ const {
   WorkerProcessError,
   runIsolatedProcess,
 } = require('./runtime/process-runner');
+const {
+  StorageLimitError,
+  createResultStore,
+  createSessionStore,
+} = require('./storage/lifecycle');
 
 const app = express();
 const PORT = process.env.PORT || 3010;
@@ -44,14 +49,71 @@ const publicDir = path.join(__dirname, '..', 'public');
 const projectRoot = path.join(__dirname, '..');
 const assetsDir = path.join(publicDir, 'assets');
 const localFontsDir = path.join(assetsDir, 'fonts');
-const generatedDir = process.env.GENERATED_DIR
-  ? path.resolve(process.env.GENERATED_DIR)
-  : path.join(publicDir, 'generated');
+const resultsDir = process.env.RESULTS_DIR
+  ? path.resolve(process.env.RESULTS_DIR)
+  : path.join(projectRoot, 'var', 'results');
+const resultsRelativeToPublic = path.relative(publicDir, resultsDir);
+if (
+  resultsRelativeToPublic === ''
+  || (
+    !resultsRelativeToPublic.startsWith(`..${path.sep}`)
+    && resultsRelativeToPublic !== '..'
+    && !path.isAbsolute(resultsRelativeToPublic)
+  )
+) {
+  throw new Error('RESULTS_DIR must be outside the public web root.');
+}
 const formPdfPath = path.join(assetsDir, FORM_PDF_NAME);
 const stampConfigPath = process.env.STAMP_CONFIG_PATH
   ? path.resolve(process.env.STAMP_CONFIG_PATH)
   : path.join(__dirname, '..', 'config', 'stamp-config.json');
-const sessions = createSessionStore({ generatedDir });
+const sessionTtlMs = positiveInteger(
+  process.env.SIGNING_SESSION_TTL_MS,
+  10 * 60 * 1000,
+  1000,
+  60 * 60 * 1000,
+);
+const resultTtlMs = positiveInteger(
+  process.env.SIGNING_RESULT_TTL_MS,
+  10 * 60 * 1000,
+  1000,
+  60 * 60 * 1000,
+);
+const storageCleanupIntervalMs = positiveInteger(
+  process.env.STORAGE_CLEANUP_INTERVAL_MS,
+  30 * 1000,
+  100,
+  10 * 60 * 1000,
+);
+const sessions = createSessionStore({
+  ttlMs: sessionTtlMs,
+  tombstoneTtlMs: sessionTtlMs,
+  maxSessions: positiveInteger(process.env.SIGNING_MAX_SESSIONS, 16, 1, 256),
+  maxSessionsPerOwner: positiveInteger(
+    process.env.SIGNING_MAX_SESSIONS_PER_IP,
+    3,
+    1,
+    32,
+  ),
+  maxMemoryBytes: positiveInteger(
+    process.env.SIGNING_SESSION_MEMORY_BYTES,
+    64 * 1024 * 1024,
+    1024 * 1024,
+    1024 * 1024 * 1024,
+  ),
+});
+const results = createResultStore({
+  resultsDir,
+  ttlMs: resultTtlMs,
+  maxResults: positiveInteger(process.env.SIGNING_MAX_RESULTS, 32, 1, 256),
+  maxDiskBytes: positiveInteger(
+    process.env.SIGNING_RESULT_DISK_BYTES,
+    128 * 1024 * 1024,
+    1024 * 1024,
+    2 * 1024 * 1024 * 1024,
+  ),
+});
+const storageOwnerSecret = crypto.randomBytes(32);
 const operationQueue = new OperationQueue({
   concurrency: positiveInteger(process.env.SIGNING_CONCURRENCY, 1, 1, 8),
   maxQueue: positiveInteger(process.env.SIGNING_MAX_QUEUE, 8, 1, 64),
@@ -94,7 +156,6 @@ const FONT_DIRS = [
   path.join(process.env.HOME || '', '.local', 'share', 'fonts'),
 ].filter(Boolean);
 
-fs.mkdirSync(generatedDir, { recursive: true });
 app.disable('x-powered-by');
 app.set('trust proxy', 'loopback');
 app.use((req, res, next) => {
@@ -262,7 +323,7 @@ async function computeReadiness() {
   } catch {}
 
   try {
-    fs.accessSync(generatedDir, fs.constants.W_OK);
+    fs.accessSync(resultsDir, fs.constants.W_OK);
     checks.storage = true;
   } catch {}
 
@@ -303,6 +364,10 @@ async function getReadiness() {
       workerQueue,
     },
     workers: queueStats,
+    storage: {
+      sessions: sessions.stats(),
+      results: results.stats(),
+    },
   };
 }
 
@@ -350,6 +415,20 @@ function createCertificateError(error) {
 }
 
 function createOperationError(error) {
+  if (error instanceof StorageLimitError) {
+    if (error.code === 'SESSION_OWNER_LIMIT') {
+      return new HttpError(
+        429,
+        'SESSION_LIMIT_REACHED',
+        'Для этого адреса уже создано слишком много активных сессий.',
+      );
+    }
+    return new HttpError(
+      503,
+      'STORAGE_CAPACITY_REACHED',
+      'Временное хранилище занято. Повторите попытку позже.',
+    );
+  }
   if (error instanceof OperationControlError) {
     if (error.code === 'OPERATION_TIMEOUT') {
       return new HttpError(
@@ -430,13 +509,16 @@ function createVerificationResult(integrity, embeddedIntegrity) {
 }
 
 function logRequestError(req, res, error, stage, code) {
+  const requestPath = req.path.startsWith('/api/results/')
+    ? '/api/results/:capability'
+    : req.path;
   const record = {
     timestamp: new Date().toISOString(),
     level: error instanceof HttpError ? 'warn' : 'error',
     event: 'request_failed',
     requestId: res.locals.requestId,
     method: req.method,
-    path: req.path,
+    path: requestPath,
     stage,
     code,
     error: {
@@ -469,6 +551,25 @@ function sendSafeError(req, res, error, stage = null) {
 }
 
 const router = express.Router();
+
+function ownerKeyForRequest(req) {
+  return crypto
+    .createHmac('sha256', storageOwnerSecret)
+    .update(req.ip)
+    .digest('hex');
+}
+
+function resultHeaders(kind) {
+  return {
+    'Cache-Control': 'no-store, private, max-age=0',
+    Pragma: 'no-cache',
+    Expires: '0',
+    'Referrer-Policy': 'no-referrer',
+    'X-Content-Type-Options': 'nosniff',
+    'Cross-Origin-Resource-Policy': 'same-origin',
+    'Content-Disposition': `${kind === 'download' ? 'attachment' : 'inline'}; filename="signed-formular.pdf"`,
+  };
+}
 
 router.get('/health/live', (_req, res) => {
   res.json({ ok: true, service: 'pdf-signing-demo' });
@@ -519,6 +620,41 @@ router.get('/api/form', (req, res) => {
   } catch (error) {
     sendSafeError(req, res, error);
   }
+});
+
+router.head('/api/results/:token', (_req, res) => {
+  res.set(resultHeaders('download')).status(405).end();
+});
+
+router.get('/api/results/:token', (req, res) => {
+  const result = results.resolve(req.params.token);
+  if (!result) {
+    return sendSafeError(
+      req,
+      res,
+      new HttpError(
+        404,
+        'RESULT_NOT_FOUND',
+        'Результат не найден, уже скачан или срок ссылки истёк.',
+      ),
+      'download',
+    );
+  }
+  return res.sendFile(
+    result.filePath,
+    {
+      acceptRanges: result.kind !== 'download',
+      headers: resultHeaders(result.kind),
+    },
+    (error) => {
+      if (!error) return;
+      if (!res.headersSent) {
+        sendSafeError(req, res, error, 'download');
+      } else {
+        res.destroy(error);
+      }
+    },
+  );
 });
 
 const prepareRateLimitMiddleware = createRateLimitMiddleware({
@@ -574,10 +710,13 @@ router.post('/api/sign/prepare', prepareRateLimit, async (req, res) => {
         requestedStampPosition,
         signal,
       });
-      const sessionId = sessions.create({
-        ...prepared,
-        expectedCertificateSha256: signer.certificateSha256,
-      });
+      const sessionId = sessions.create(
+        {
+          ...prepared,
+          expectedCertificateSha256: signer.certificateSha256,
+        },
+        ownerKeyForRequest(req),
+      );
       return { prepared, sessionId };
     }, {
       key: `prepare:${req.ip}`,
@@ -604,7 +743,7 @@ router.post('/api/sign/complete', completeRateLimit, async (req, res) => {
     const { sessionId, cmsSignatureBase64 } = req.body;
     const decodedCms = decodeCmsBase64(cmsSignatureBase64);
     const completed = await operationQueue.run(async (signal) => {
-      const session = sessions.get(sessionId);
+      const session = sessions.getPrepared(sessionId);
       if (!session) {
         throw new HttpError(
           404,
@@ -612,74 +751,90 @@ router.post('/api/sign/complete', completeRateLimit, async (req, res) => {
           'Сессия подписания не найдена или истекла.',
         );
       }
-      if (decodedCms.length * 2 > session.placeholderLength) {
-        throw new HttpError(
-          400,
-          'CMS_TOO_LARGE',
-          'Размер CMS-подписи превышает допустимый лимит.',
-          {
-            decodedBytes: decodedCms.length,
-            placeholderLength: session.placeholderLength,
-          },
-        );
-      }
-
-      let normalizedCmsSignatureBase64;
-      let normalizedCms;
-      let integrity;
       try {
-        normalizedCmsSignatureBase64 = await normalizeCmsSignatureBase64(
-          cmsSignatureBase64,
-          { signal },
-        );
-        normalizedCms = decodeCmsBase64(normalizedCmsSignatureBase64);
-        if (normalizedCms.length * 2 > session.placeholderLength) {
-          throw new CmsVerificationError('CMS_EXCEEDS_PLACEHOLDER');
+        if (decodedCms.length * 2 > session.placeholderLength) {
+          throw new HttpError(
+            400,
+            'CMS_TOO_LARGE',
+            'Размер CMS-подписи превышает допустимый лимит.',
+            {
+              decodedBytes: decodedCms.length,
+              placeholderLength: session.placeholderLength,
+            },
+          );
         }
-        integrity = await verifyCmsSignature({
-          cmsDer: normalizedCms,
-          content: session.contentToSign,
-          expectedCertificateSha256: session.expectedCertificateSha256,
-          signal,
+
+        let normalizedCmsSignatureBase64;
+        let normalizedCms;
+        let integrity;
+        try {
+          normalizedCmsSignatureBase64 = await normalizeCmsSignatureBase64(
+            cmsSignatureBase64,
+            { signal },
+          );
+          normalizedCms = decodeCmsBase64(normalizedCmsSignatureBase64);
+          if (normalizedCms.length * 2 > session.placeholderLength) {
+            throw new CmsVerificationError('CMS_EXCEEDS_PLACEHOLDER');
+          }
+          integrity = await verifyCmsSignature({
+            cmsDer: normalizedCms,
+            content: session.contentToSign,
+            expectedCertificateSha256: session.expectedCertificateSha256,
+            signal,
+          });
+        } catch (error) {
+          if (error instanceof CmsVerificationError || error instanceof HttpError) {
+            throw createCmsIntegrityError(error);
+          }
+          throw error;
+        }
+
+        const signedPdf = embedCmsSignature({
+          preparedPdf: session.preparedPdf,
+          byteRange: session.byteRange,
+          cmsBase64: normalizedCmsSignatureBase64,
+          placeholderLength: session.placeholderLength,
         });
-      } catch (error) {
-        if (error instanceof CmsVerificationError || error instanceof HttpError) {
-          throw createCmsIntegrityError(error);
+
+        let embeddedIntegrity;
+        try {
+          embeddedIntegrity = await verifyEveryEmbeddedSignature(signedPdf, {
+            expectedLastCertificateSha256: session.expectedCertificateSha256,
+            signal,
+          });
+        } catch (error) {
+          if (error instanceof CmsVerificationError) {
+            throw createCmsIntegrityError(error);
+          }
+          throw error;
         }
+
+        const storedResult = await results.save(signedPdf);
+        sessions.complete(sessionId);
+        return {
+          storedResult,
+          integrity,
+          embeddedIntegrity,
+        };
+      } catch (error) {
+        const retryable = error instanceof StorageLimitError
+          || (
+            error instanceof HttpError
+            && ['CMS_INTEGRITY_FAILED', 'CMS_TOO_LARGE'].includes(error.code)
+          );
+        if (!retryable) sessions.fail(sessionId);
         throw error;
       }
-
-      const signedPdf = embedCmsSignature({
-        preparedPdf: session.preparedPdf,
-        byteRange: session.byteRange,
-        cmsBase64: normalizedCmsSignatureBase64,
-        placeholderLength: session.placeholderLength,
-      });
-
-      let embeddedIntegrity;
-      try {
-        embeddedIntegrity = await verifyEveryEmbeddedSignature(signedPdf, {
-          expectedLastCertificateSha256: session.expectedCertificateSha256,
-          signal,
-        });
-      } catch (error) {
-        if (error instanceof CmsVerificationError) {
-          throw createCmsIntegrityError(error);
-        }
-        throw error;
-      }
-
-      const fileName = sessions.saveSignedPdf(signedPdf);
-      sessions.consume(sessionId);
-      return { fileName, integrity, embeddedIntegrity };
     }, {
       key: `complete:${sessionId}`,
       signal: res.locals.requestSignal,
     });
     return res.json({
       ok: true,
-      signedPdfUrl: `./generated/${completed.fileName}`,
+      signedPdfUrl: `./api/results/${completed.storedResult.previewToken}`,
+      downloadUrl: `./api/results/${completed.storedResult.downloadToken}`,
       downloadName: 'signed-formular.pdf',
+      resultExpiresAt: new Date(completed.storedResult.expiresAt).toISOString(),
       verification: createVerificationResult(
         completed.integrity,
         completed.embeddedIntegrity,
@@ -691,7 +846,20 @@ router.post('/api/sign/complete', completeRateLimit, async (req, res) => {
   }
 });
 
-router.use('/generated', express.static(generatedDir));
+router.use('/generated', (req, res) => {
+  res
+    .set({
+      'Cache-Control': 'no-store',
+      'X-Content-Type-Options': 'nosniff',
+    })
+    .status(404)
+    .json({
+      ok: false,
+      code: 'RESULT_NOT_FOUND',
+      message: 'Публичное хранилище результатов отключено.',
+      requestId: res.locals.requestId,
+    });
+});
 router.use(express.static(publicDir, { extensions: ['html'] }));
 app.use(BASE_PATH, router);
 app.use((error, req, res, _next) => {
@@ -722,9 +890,20 @@ app.use((error, req, res, _next) => {
 
 setInterval(() => {
   sessions.cleanup();
+  void results.cleanup().catch((error) => {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'error',
+      event: 'result_cleanup_failed',
+      error: {
+        name: error?.name || 'Error',
+        message: String(error?.message || 'Unknown error').slice(0, 1000),
+      },
+    }));
+  });
   prepareRateLimiter.cleanup();
   completeRateLimiter.cleanup();
-}, 10 * 60 * 1000).unref();
+}, storageCleanupIntervalMs).unref();
 
 const server = app.listen(PORT, '127.0.0.1', () => {
   console.log(`pdf-signing-demo listening on http://127.0.0.1:${PORT}${BASE_PATH}`);

@@ -1,8 +1,6 @@
-const fs = require('fs');
 const fsp = require('fs/promises');
 const os = require('os');
 const path = require('path');
-const crypto = require('crypto');
 const { runIsolatedProcess } = require('../runtime/process-runner');
 
 const PREPARE_PYHANKO_SCRIPT_PATH = path.join(__dirname, '..', '..', 'scripts', 'prepare-pyhanko.py');
@@ -109,41 +107,8 @@ function embedCmsSignature({ preparedPdf, byteRange, cmsBase64, placeholderLengt
   ]);
 }
 
-function createSessionStore({ generatedDir }) {
-  const sessions = new Map();
-
-  return {
-    create(prepared) {
-      const id = crypto.randomUUID();
-      sessions.set(id, { ...prepared, createdAt: Date.now() });
-      return id;
-    },
-    get(id) {
-      return sessions.get(id);
-    },
-    consume(id) {
-      const value = sessions.get(id);
-      sessions.delete(id);
-      return value;
-    },
-    saveSignedPdf(buffer) {
-      const fileName = `signed-${crypto.randomUUID()}.pdf`;
-      const filePath = path.join(generatedDir, fileName);
-      fs.writeFileSync(filePath, buffer);
-      return fileName;
-    },
-    cleanup(maxAgeMs = 60 * 60 * 1000) {
-      const now = Date.now();
-      for (const [id, session] of sessions.entries()) {
-        if (now - session.createdAt > maxAgeMs) sessions.delete(id);
-      }
-    },
-  };
-}
-
 module.exports = {
   createPreparedPdf,
   embedCmsSignature,
-  createSessionStore,
   DEFAULT_SIGNATURE_LENGTH,
 };

@@ -2351,6 +2351,15 @@ async function prepareAndSign() {
   }, 'Не удалось встроить подпись в PDF.');
 
   renderVerificationResult(completeData.verification);
+  const resultExpiresAt = new Date(completeData.resultExpiresAt);
+  if (
+    !/^\.\/api\/results\/[A-Za-z0-9_-]{43}$/.test(completeData.signedPdfUrl)
+    || !/^\.\/api\/results\/[A-Za-z0-9_-]{43}$/.test(completeData.downloadUrl)
+    || Number.isNaN(resultExpiresAt.getTime())
+    || resultExpiresAt.getTime() <= Date.now()
+  ) {
+    throw new Error('Сервер вернул некорректную ссылку на результат.');
+  }
   const signedPdf = document.getElementById('signedPdf');
   const downloadLink = document.getElementById('downloadLink');
   signedPdf.src = completeData.signedPdfUrl;
@@ -2359,12 +2368,16 @@ async function prepareAndSign() {
   if (viewerFileName) {
     viewerFileName.textContent = 'Подписанный документ';
   }
-  downloadLink.href = completeData.signedPdfUrl;
+  downloadLink.href = completeData.downloadUrl;
   downloadLink.download = completeData.downloadName || 'signed-formular.pdf';
   downloadLink.classList.remove('hidden');
   setStatus(
     'Готово: CMS встроена, целостность и сертификат подписанта проверены. '
-    + 'Доверие сертификату и квалифицированный статус не проверялись.',
+    + 'Доверие сертификату и квалифицированный статус не проверялись. '
+    + `Ссылка на результат действует до ${resultExpiresAt.toLocaleTimeString('ru-RU', {
+      hour: '2-digit',
+      minute: '2-digit',
+    })}; выгрузка одноразовая.`,
   );
 }
 

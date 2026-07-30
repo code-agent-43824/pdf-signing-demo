@@ -592,6 +592,40 @@ timeouts реализованы; private result storage/TTL остаются в 
 - исходные 12 generated PDF сохранены побайтово; синтетический smoke
   artifact удалён из публичного каталога и оставлен только в backup.
 
+### Ход выполнения PR-7 — 2026-07-30
+
+Статус: **private result storage, конечный lifecycle, TTL и cleanup
+реализованы; production rollout фиксируется отдельным commit после
+проверки**.
+
+Выполнено:
+
+- signing session переведена в конечный автомат
+  `prepared -> completed|failed|expired`; terminal transition немедленно
+  освобождает PDF/content buffers, оставляя только короткоживущий
+  обезличенный tombstone против replay;
+- TTL подготовленной сессии — 10 минут; установлены лимиты 16 активных
+  sessions, 3 с одного IP и 64 MiB суммарных буферов;
+- готовые PDF вынесены из web-root в приватный `RESULTS_DIR`, создаются
+  с mode `0600`, каталог — `0700`; лимиты — 32 результата и 128 MiB;
+- API выдаёт раздельные 32-byte random capability: короткоживущий
+  preview и одноразовый download. В памяти хранятся только SHA-256
+  токенов, а не сами capability;
+- обе ссылки и файл истекают через 10 минут; download получает
+  `Content-Disposition: attachment`, preview — `inline`, оба —
+  `Cache-Control: no-store`, `Referrer-Policy: no-referrer` и
+  `X-Content-Type-Options: nosniff`;
+- `/generated` явно закрыт до общего static middleware; `RESULTS_DIR`
+  fail-closed запрещено размещать внутри `public`;
+- background cleanup запускается каждые 30 секунд. На старте процесса
+  все orphan result/temp files удаляются, поскольку после рестарта
+  in-memory capability уже невосстановимы;
+- пути capability редактируются в structured errors до
+  `/api/results/:capability`; содержимое PDF/CMS/PIN и токены не
+  логируются;
+- frontend fail-closed проверяет оба capability URL и expiry, использует
+  отдельную одноразовую download-ссылку и сообщает пользователю retention.
+
 ## 7. Фаза 4 — защита браузерного криптоконтура (P1)
 
 - Добавить CSP с минимальным `script-src`, запретом inline-кода и

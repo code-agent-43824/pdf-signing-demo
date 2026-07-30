@@ -34,6 +34,8 @@ test('UI separates integrity, trust and qualified status without false success c
   assert.match(app, /verification\?\.integrity\?\.status === 'valid'/);
   assert.match(app, /verification\?\.trust\?\.status === 'not_checked'/);
   assert.match(app, /verification\?\.qualified\?\.status === 'not_checked'/);
+  assert.match(app, /downloadLink\.href = completeData\.downloadUrl/);
+  assert.match(app, /Ссылка на результат действует до.*выгрузка одноразовая/s);
   assert.match(
     app,
     /Доверие сертификату и квалифицированный статус не проверялись/,

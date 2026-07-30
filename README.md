@@ -39,8 +39,8 @@ python -m pip install --requirement requirements.txt
 - `PORT` — порт сервера (по умолчанию `3010`)
 - `BASE_PATH` — базовый путь за reverse proxy (по умолчанию `/`)
 - `STAMP_CONFIG_PATH` — необязательный путь к JSON-конфигу штампа/размещения подписи
-- `GENERATED_DIR` — необязательный каталог результатов (по умолчанию
-  `public/generated`; тесты используют отдельный временный каталог)
+- `RESULTS_DIR` — приватный каталог результатов вне web-root (по умолчанию
+  `var/results`; production использует отдельный каталог сервиса)
 - `SIGNING_CONCURRENCY` — число одновременно выполняемых signing
   operations (по умолчанию `1`);
 - `SIGNING_MAX_QUEUE` — максимальная очередь ожидающих операций
@@ -51,6 +51,18 @@ python -m pip install --requirement requirements.txt
   на IP за окно `SIGNING_RATE_WINDOW_MS` (`12` / `30` за 60 секунд);
 - `PDF_WORKER_MEMORY_BYTES` / `PDF_WORKER_CPU_SECONDS` — лимиты отдельного
   Python worker через `prlimit` (512 MiB / 60 CPU seconds).
+- `SIGNING_SESSION_TTL_MS` — TTL подготовленной signing session
+  (10 минут);
+- `SIGNING_MAX_SESSIONS` / `SIGNING_MAX_SESSIONS_PER_IP` — общий и
+  per-IP лимиты активных сессий (16 / 3);
+- `SIGNING_SESSION_MEMORY_BYTES` — общий лимит RAM для подготовленных
+  сессий (64 MiB);
+- `SIGNING_RESULT_TTL_MS` — TTL готового PDF и capability-ссылок
+  (10 минут);
+- `SIGNING_MAX_RESULTS` / `SIGNING_RESULT_DISK_BYTES` — общий лимит
+  результатов и диска (32 / 128 MiB).
+- `STORAGE_CLEANUP_INTERVAL_MS` — период фоновой очистки истёкших
+  sessions/results (30 секунд).
 
 Health endpoints при `BASE_PATH=/pdf-signing/`:
 
@@ -81,6 +93,26 @@ HTTP-сервер слушает только `127.0.0.1`; внешний дос
 Liveness не запускает Python и остаётся доступным под нагрузкой.
 Readiness коалесцирует и кэширует проверку Python на пять секунд, но
 возвращает актуальные `workers.active/queued` при каждом запросе.
+
+## Жизненный цикл документов
+
+Подготовленная signing session живёт не более 10 минут и имеет конечные
+состояния `prepared`, `completed`, `failed`, `expired`. После terminal
+transition PDF-буферы немедленно освобождаются; одновременно допускается
+не более 16 сессий, не более трёх с одного IP и не более 64 MiB их
+суммарных буферов.
+
+Готовые PDF никогда не публикуются через static middleware. Они
+записываются с правами `0600` в приватный `RESULTS_DIR`; API возвращает
+отдельную короткоживущую ссылку preview и одноразовую ссылку download.
+Обе истекают через 10 минут, download отдаётся с
+`Content-Disposition: attachment` и `Cache-Control: no-store`. После TTL
+файл удаляется автоматически. При рестарте все файлы результата
+удаляются на старте, поскольку capability-токены хранятся только в
+памяти процесса.
+
+Сервис не пишет в логи содержимое PDF, CMS, PIN или capability-токены.
+Для пути результата логируется только шаблон `/api/results/:capability`.
 
 ## Настройка штампа подписи
 

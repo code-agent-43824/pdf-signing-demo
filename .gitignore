@@ -3,5 +3,6 @@ node_modules/
 .DS_Store
 *.log
 public/generated/
+var/results/
 __pycache__/
 *.py[cod]

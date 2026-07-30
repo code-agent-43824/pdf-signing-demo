@@ -20,6 +20,15 @@ Environment=HTTP_HEADERS_TIMEOUT_MS=10000
 Environment=HTTP_REQUEST_TIMEOUT_MS=70000
 Environment=PDF_WORKER_MEMORY_BYTES=536870912
 Environment=PDF_WORKER_CPU_SECONDS=60
+Environment=RESULTS_DIR=/home/openclaw/services/pdf-signing-demo/results
+Environment=SIGNING_SESSION_TTL_MS=600000
+Environment=SIGNING_MAX_SESSIONS=16
+Environment=SIGNING_MAX_SESSIONS_PER_IP=3
+Environment=SIGNING_SESSION_MEMORY_BYTES=67108864
+Environment=SIGNING_RESULT_TTL_MS=600000
+Environment=SIGNING_MAX_RESULTS=32
+Environment=SIGNING_RESULT_DISK_BYTES=134217728
+Environment=STORAGE_CLEANUP_INTERVAL_MS=30000
 ExecStart=/home/openclaw/runtime/node/bin/node src/server.js
 Restart=always
 RestartSec=3
@@ -28,6 +37,7 @@ TimeoutStopSec=15
 TasksMax=64
 MemoryMax=768M
 CPUQuota=100%
+UMask=0077
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=full
