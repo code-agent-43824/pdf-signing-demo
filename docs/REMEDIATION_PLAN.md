@@ -558,6 +558,40 @@ timeouts реализованы; private result storage/TTL остаются в 
   health под двумя параллельными prepare и отсутствие дочернего процесса
   после timeout.
 
+Проверка и rollout:
+
+- локально и на production runtime: 26 тестов успешно, 0 ошибок,
+  0 TODO; `npm audit --omit=dev` — 0 известных уязвимостей;
+- реализация зафиксирована commit `3b9d985`; несовместимый с данным
+  user manager `ProtectKernelModules` удалён follow-up commit `da2be25`
+  после отдельной проверки каждого sandbox-флага;
+- GitHub Actions runs
+  [`30573220712`](https://github.com/code-agent-43824/pdf-signing-demo/actions/runs/30573220712)
+  и
+  [`30573542220`](https://github.com/code-agent-43824/pdf-signing-demo/actions/runs/30573542220)
+  завершились успешно;
+- production backup кода, unit и manifest существующих результатов:
+  `/home/openclaw/services/pdf-signing-demo/backups/20260730T190532Z-pr6`;
+- первый restart с несовместимым sandbox-флагом получил
+  `218/CAPABILITIES`; автоматический rollback полностью восстановил
+  прежний код/unit и green readiness. После точной диагностики compound
+  transient unit с оставшимися ограничениями прошёл, повторный rollout
+  завершился успешно;
+- публичный HTTPS smoke выполнил полный
+  `prepare → CAdES → complete → download`; сохранённый в backup
+  синтетический результат повторно прошёл серверный CMS-валидатор;
+- при 10 одновременных `prepare` один worker обработал 5 запросов, ещё 5
+  получили контролируемый `503 SERVER_BUSY` по queue limits; liveness
+  ответил за 4,8 ms, остаточных Python-процессов нет;
+- публичный reverse-proxy contour пропустил 12 запросов за окно и вернул
+  `429 RATE_LIMITED` с `Retry-After` ровно на 13-м;
+- после очистительного рестарта сервис active, `NRestarts=0`, readiness
+  зелёный, socket только `127.0.0.1:3010`; cgroup фиксирует один CPU,
+  `MemoryMax=768 MiB`, `TasksMax=64`, `PrivateTmp`, `NoNewPrivileges` и
+  `KillMode=control-group`;
+- исходные 12 generated PDF сохранены побайтово; синтетический smoke
+  artifact удалён из публичного каталога и оставлен только в backup.
+
 ## 7. Фаза 4 — защита браузерного криптоконтура (P1)
 
 - Добавить CSP с минимальным `script-src`, запретом inline-кода и
