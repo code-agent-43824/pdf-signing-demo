@@ -114,6 +114,28 @@ transition PDF-буферы немедленно освобождаются; о�
 Сервис не пишет в логи содержимое PDF, CMS, PIN или capability-токены.
 Для пути результата логируется только шаблон `/api/results/:capability`.
 
+## Защита браузерного криптоконтура
+
+Все ответы приложения получают enforcing CSP с `frame-ancestors 'none'`,
+`script-src 'self' chrome-extension:`, запретом inline-script/event
+handlers, а также `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`,
+`X-Content-Type-Options: nosniff`, ограниченным `Permissions-Policy` и
+`Cache-Control: no-store`. Узкие разрешения `chrome-extension:`,
+`object-src 'self'` и `cpnp-js-call:` необходимы официальным browser
+adapter-ам CryptoPro и Рутокен; произвольные Internet script origins не
+разрешены.
+
+CryptoPro loader и `@aktivco/rutoken-plugin@1.0.9` загружаются только из
+локального `public/vendor`. Их SHA-256, SHA-384 SRI, происхождение и
+процедура обновления описаны в `docs/VENDOR_ASSETS.md`.
+
+До показа сертификата как пригодного клиент проверяет `notBefore`,
+`notAfter`, наличие связанного private key и назначение key usage.
+Непосредственно перед `prepare` пользователь подтверждает имя документа,
+его SHA-256 и fingerprint выбранного сертификата. PIN Рутокен не
+попадает в `state` или логи; поле очищается до закрытия диалога, а
+локальная ссылка на строку — в `finally` сразу после попытки `login`.
+
 ## Настройка штампа подписи
 
 Весь текущий конфиг штампа лежит в одном месте:

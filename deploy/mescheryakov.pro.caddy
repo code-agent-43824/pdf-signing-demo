@@ -1,15 +1,7 @@
 mescheryakov.pro, www.mescheryakov.pro {
     handle /pdf-signing/* {
-        header {
-            Content-Security-Policy "default-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; script-src 'self' chrome-extension:; script-src-attr 'none'; style-src 'self'; style-src-attr 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; frame-src 'self' blob: cpnp-js-call:; object-src 'self'; media-src 'none'; manifest-src 'none'; worker-src 'self' blob:"
-            X-Frame-Options "DENY"
-            X-Content-Type-Options "nosniff"
-            Referrer-Policy "no-referrer"
-            Permissions-Policy "camera=(), display-capture=(), geolocation=(), microphone=(), payment=(), usb=(), serial=(), hid=()"
-            Cache-Control "no-store, private, max-age=0"
-            Pragma "no-cache"
-            Expires "0"
-        }
+        # CSP and browser response headers are emitted by the application.
+        header Strict-Transport-Security "max-age=31536000; includeSubDomains"
         reverse_proxy 127.0.0.1:3010
     }
 

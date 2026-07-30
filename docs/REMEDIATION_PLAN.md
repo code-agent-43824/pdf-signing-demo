@@ -685,6 +685,86 @@ timeouts реализованы; private result storage/TTL остаются в 
 - PIN отсутствует в DOM, памяти состояния и логах после операции настолько,
   насколько это контролируется приложением.
 
+### Ход выполнения PR-8 — 2026-07-30
+
+Статус: **browser crypto boundary, CSP, vendor provenance и
+anti-clickjacking реализованы и развёрнуты в production**.
+
+Выполнено:
+
+- все ответы приложения получают enforcing CSP:
+  `default-src 'self'`, `script-src 'self' chrome-extension:`,
+  `script-src-attr 'none'`, `frame-ancestors 'none'`,
+  `form-action 'none'`; Internet script origins, inline scripts и event
+  handlers не разрешены;
+- для совместимости с реальными browser adapter-ами оставлены только
+  необходимые узкие исключения: `chrome-extension:` для CryptoPro,
+  `object-src 'self'` для plugin objects и `cpnp-js-call:` для Safari
+  bridge; произвольные внешние script/frame/object origins запрещены;
+- добавлены `X-Frame-Options: DENY`,
+  `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`,
+  ограниченный `Permissions-Policy` и
+  `Cache-Control: no-store, private, max-age=0` с legacy no-cache
+  заголовками;
+- production Caddy перестал добавлять к `/pdf-signing/*` общий
+  `Referrer-Policy: strict-origin-when-cross-origin`: путь исключён из
+  site-wide header matcher. Browser security headers принадлежат
+  приложению, Caddy отдельно сохраняет HSTS; публичный ответ содержит
+  ровно по одному значению каждого security header;
+- CryptoPro `cadesplugin_api.js` перенесён с runtime URL в локальный
+  vendor: 42 363 байта, SHA-256
+  `d54cfe9186c4b6dbe9ed73d83f289d31da7b50000b48ba3e7c278e820578086b`;
+- локальный Rutoken adapter точно сопоставлен с
+  `@aktivco/rutoken-plugin@1.0.9`: 2 897 байт, SHA-256
+  `612514f867c0b54db498edf470908696e1eec3389914db5740e0c2252b339ce2`;
+  BSD-2-Clause license сохранена рядом;
+- оба runtime vendor asset имеют SHA-384 SRI; SHA-256 manifest
+  проверяется тестами. Источники, дата получения, checksum и процедура
+  ручного обновления зафиксированы в `docs/VENDOR_ASSETS.md`;
+- неиспользуемый публичный `@qiwitech/cryptopro` bundle удалён из
+  web-root;
+- CryptoPro до показа сертификата fail-closed проверяет `notBefore`,
+  `notAfter`, `HasPrivateKey`, `KeyUsage.IsPresent`,
+  `IsDigitalSignatureEnabled` и `IsNonRepudiationEnabled`;
+- Rutoken показывает только `CERT_CATEGORY_USER`, которая связана с
+  закрытым ключом, и дополнительно проверяет обе границы срока и
+  `keyUsage` из parsed certificate;
+- перед `prepare` появился обязательный confirm с именем PDF, SHA-256
+  исходного документа, именем сертификата и fingerprint; данные
+  вставляются через `textContent`;
+- PIN не хранится в global state, очищается в input до удаления диалога,
+  а локальная ссылка обнуляется в `finally` непосредственно после
+  `login`; browser smoke подтвердил пустые live DOM и template после
+  cancel. Логи после smoke не содержат тестового PIN.
+
+Проверка и rollout:
+
+- локально и на production runtime: 38 тестов успешно, 0 ошибок,
+  0 TODO; `npm audit --omit=dev` — 0 известных уязвимостей;
+- реализация зафиксирована commit `efd707a`; GitHub Actions run
+  [`30578509794`](https://github.com/code-agent-43824/pdf-signing-demo/actions/runs/30578509794)
+  завершился успешно;
+- production backup кода, systemd unit, исходного Caddy config и
+  manifest 12 прежних PDF:
+  `/home/openclaw/services/pdf-signing-demo/backups/20260730T201945Z-pr8`;
+- Caddy candidate и итоговый `/etc/caddy/Caddyfile` прошли
+  `caddy validate`; reload выполнен без restart, Caddy остаётся active,
+  `NRestarts=0`;
+- публичные CryptoPro/Rutoken vendor bytes совпали с pinned SHA-256;
+  `app.js` не содержит runtime third-party URL;
+- публичный full-cycle
+  `prepare -> CAdES -> complete -> preview x2 -> download -> replay`
+  вернул `valid / not_checked / not_checked`, одноразовый replay —
+  `404`; итоговый PDF 44 460 байт независимо проверен pyHanko как
+  intact/valid/trusted с покрытием `ENTIRE_FILE`;
+- production browser smoke загрузил оба локальных adapter-а с ожидаемым
+  SRI, открыл настройки и confirm, подтвердил очистку PIN и блокировку
+  iframe. CSP violations отсутствовали; console errors относятся только
+  к намеренно отсутствующим crypto extensions в изолированном браузере
+  и к тестовой блокировке frame;
+- все 12 прежних персональных PDF повторно сверены по SHA-256; файлы и
+  сертификаты не возвращались в web-root или репозиторий.
+
 ## 8. Фаза 5 — воспроизводимость и зависимости (P1)
 
 - Добавить `requirements.txt`/lock или `pyproject.toml` с точными версиями
