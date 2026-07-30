@@ -10,6 +10,7 @@ const PROJECT_ROOT = path.resolve(__dirname, '..');
 const BASE_PATH = '/pdf-signing/';
 
 let serverProcess;
+let serverPort;
 let baseUrl;
 let tempDir;
 let testConfigPath;
@@ -57,14 +58,14 @@ before(async () => {
   testConfigPath = path.join(tempDir, 'stamp-config.json');
   fs.copyFileSync(path.join(PROJECT_ROOT, 'config', 'stamp-config.json'), testConfigPath);
 
-  const port = await reservePort();
-  baseUrl = `http://127.0.0.1:${port}${BASE_PATH}`;
+  serverPort = await reservePort();
+  baseUrl = `http://127.0.0.1:${serverPort}${BASE_PATH}`;
   serverProcess = spawn(process.execPath, ['src/server.js'], {
     cwd: PROJECT_ROOT,
     env: {
       ...process.env,
       BASE_PATH,
-      PORT: String(port),
+      PORT: String(serverPort),
       STAMP_CONFIG_PATH: testConfigPath,
     },
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -79,6 +80,47 @@ after(async () => {
   }
   fs.rmSync(tempDir, { recursive: true, force: true });
 });
+
+function clone(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+async function postJson(relativePath, body) {
+  return fetch(new URL(relativePath, baseUrl), {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+async function assertSafeError(response, status, code, stage = null) {
+  assert.equal(response.status, status);
+  assert.equal(response.headers.has('x-powered-by'), false);
+  const requestId = response.headers.get('x-request-id');
+  assert.match(requestId, /^[0-9a-f-]{36}$/);
+  const payload = await response.json();
+  assert.equal(payload.ok, false);
+  assert.equal(payload.code, code);
+  assert.equal(payload.requestId, requestId);
+  if (stage) assert.equal(payload.stage, stage);
+  assert.equal(typeof payload.message, 'string');
+  assert.equal(/\/(?:tmp|home|usr|var)\//.test(JSON.stringify(payload)), false);
+  assert.equal(Object.hasOwn(payload, 'details'), false);
+  return payload;
+}
+
+function canConnect(host, port) {
+  return new Promise((resolve) => {
+    const socket = net.connect({ host, port });
+    const finish = (connected) => {
+      socket.destroy();
+      resolve(connected);
+    };
+    socket.setTimeout(1000, () => finish(false));
+    socket.once('connect', () => finish(true));
+    socket.once('error', () => finish(false));
+  });
+}
 
 test('stamp configuration is read-only and does not disclose server paths', async () => {
   const beforeConfig = fs.readFileSync(testConfigPath);
@@ -145,9 +187,267 @@ test('client-facing font identifiers resolve during PDF preparation', async () =
   assert.equal(payload.byteRange.length, 4);
 });
 
+test('prepare rejects unknown fields, paths and extreme stamp settings', async () => {
+  const configResponse = await fetch(new URL('api/stamp-config', baseUrl));
+  const { config } = await configResponse.json();
+  const pdfBase64 = fs.readFileSync(
+    path.join(PROJECT_ROOT, 'test', 'fixtures', 'pdf', 'simple.pdf'),
+  ).toString('base64');
+  const validBody = {
+    pdfBase64,
+    stampConfig: config,
+    signer: {},
+  };
+
+  await assertSafeError(
+    await postJson('api/sign/prepare', { ...validBody, unexpected: true }),
+    400,
+    'INVALID_REQUEST',
+    'prepare',
+  );
+
+  const pathConfig = clone(config);
+  pathConfig.appearance.fonts.title.path = '/etc/passwd';
+  await assertSafeError(
+    await postJson('api/sign/prepare', { ...validBody, stampConfig: pathConfig }),
+    400,
+    'INVALID_REQUEST',
+    'prepare',
+  );
+
+  const hugeStampConfig = clone(config);
+  hugeStampConfig.appearance.width = 1200;
+  hugeStampConfig.appearance.height = 1200;
+  hugeStampConfig.appearance.imageScale = 8;
+  await assertSafeError(
+    await postJson('api/sign/prepare', { ...validBody, stampConfig: hugeStampConfig }),
+    400,
+    'STAMP_TOO_LARGE',
+    'prepare',
+  );
+});
+
+test('stamp, signer and placement limits reject every bounded field class', async () => {
+  const configResponse = await fetch(new URL('api/stamp-config', baseUrl));
+  const { config } = await configResponse.json();
+  const pdfBase64 = fs.readFileSync(
+    path.join(PROJECT_ROOT, 'test', 'fixtures', 'pdf', 'simple.pdf'),
+  ).toString('base64');
+
+  const cases = [
+    {
+      name: 'unknown signer field',
+      signer: { unexpected: true },
+      mutate: () => {},
+    },
+    {
+      name: 'oversized distinguished name',
+      signer: { subjectName: 'x'.repeat(4097) },
+      mutate: () => {},
+    },
+    {
+      name: 'font size',
+      signer: {},
+      mutate: (draft) => { draft.appearance.fonts.title.size = 73; },
+    },
+    {
+      name: 'row count',
+      signer: {},
+      mutate: (draft) => {
+        draft.content.rows = Array.from(
+          { length: 21 },
+          () => ({
+            label: 'label',
+            value: 'value',
+            maxLines: 1,
+            breakAnywhere: false,
+          }),
+        );
+      },
+    },
+    {
+      name: 'CMS reservation',
+      signer: {},
+      mutate: (draft) => { draft.signatureObject.bytesReserved = 262145; },
+    },
+    {
+      name: 'placement coordinate',
+      signer: {},
+      mutate: (draft) => { draft.placements.rules[0].placement.offsetX = 20001; },
+    },
+    {
+      name: 'signature count',
+      signer: {},
+      mutate: (draft) => { draft.limits.maxSignatures = 21; },
+    },
+    {
+      name: 'configured page number',
+      signer: {},
+      mutate: (draft) => {
+        draft.placements.rules[0].pages = {
+          mode: 'single',
+          page: 201,
+          widgetPageMode: 'first',
+        };
+      },
+    },
+  ];
+
+  for (const item of cases) {
+    const stampConfig = clone(config);
+    item.mutate(stampConfig);
+    const response = await postJson('api/sign/prepare', {
+      pdfBase64,
+      stampConfig,
+      signer: item.signer,
+    });
+    await assertSafeError(response, 400, 'INVALID_REQUEST', 'prepare');
+  }
+});
+
+test('prepare enforces strict base64, decoded size, magic bytes and page limits', async () => {
+  await assertSafeError(
+    await postJson('api/sign/prepare', {
+      pdfBase64: '%%%not-base64%%%',
+      signer: {},
+    }),
+    400,
+    'INVALID_BASE64',
+    'prepare',
+  );
+
+  await assertSafeError(
+    await postJson('api/sign/prepare', {
+      pdfBase64: Buffer.from('not a pdf').toString('base64'),
+      signer: {},
+    }),
+    400,
+    'INVALID_PDF',
+    'prepare',
+  );
+
+  await assertSafeError(
+    await postJson('api/sign/prepare', {
+      pdfBase64: Buffer.alloc((10 * 1024 * 1024) + 1).toString('base64'),
+      signer: {},
+    }),
+    413,
+    'PAYLOAD_TOO_LARGE',
+    'prepare',
+  );
+
+  const { PDFDocument } = require('pdf-lib');
+  const tooManyPages = await PDFDocument.create();
+  for (let index = 0; index < 201; index += 1) {
+    tooManyPages.addPage([100, 100]);
+  }
+  await assertSafeError(
+    await postJson('api/sign/prepare', {
+      pdfBase64: Buffer.from(await tooManyPages.save()).toString('base64'),
+      signer: {},
+    }),
+    400,
+    'PDF_PAGE_LIMIT',
+    'prepare',
+  );
+
+  const oversizedPage = await PDFDocument.create();
+  oversizedPage.addPage([15000, 100]);
+  await assertSafeError(
+    await postJson('api/sign/prepare', {
+      pdfBase64: Buffer.from(await oversizedPage.save()).toString('base64'),
+      signer: {},
+    }),
+    400,
+    'PDF_PAGE_DIMENSIONS',
+    'prepare',
+  );
+});
+
+test('prepare rejects stamp page references outside the uploaded document', async () => {
+  const configResponse = await fetch(new URL('api/stamp-config', baseUrl));
+  const { config } = await configResponse.json();
+  config.placements.rules[0].pages = {
+    mode: 'single',
+    page: 2,
+    widgetPageMode: 'first',
+  };
+  const pdfBase64 = fs.readFileSync(
+    path.join(PROJECT_ROOT, 'test', 'fixtures', 'pdf', 'simple.pdf'),
+  ).toString('base64');
+
+  await assertSafeError(
+    await postJson('api/sign/prepare', {
+      pdfBase64,
+      stampConfig: config,
+      signer: {},
+    }),
+    400,
+    'STAMP_PAGE_OUT_OF_RANGE',
+    'prepare',
+  );
+});
+
+test('complete has a strict schema and safe session errors', async () => {
+  await assertSafeError(
+    await postJson('api/sign/complete', {
+      sessionId: 'not-a-session',
+      cmsSignatureBase64: 'AAAA',
+      unexpected: true,
+    }),
+    400,
+    'INVALID_REQUEST',
+    'complete',
+  );
+
+  await assertSafeError(
+    await postJson('api/sign/complete', {
+      sessionId: '00000000-0000-4000-8000-000000000000',
+      cmsSignatureBase64: '%%%%',
+    }),
+    400,
+    'INVALID_BASE64',
+    'complete',
+  );
+
+  await assertSafeError(
+    await postJson('api/sign/complete', {
+      sessionId: '00000000-0000-4000-8000-000000000000',
+      cmsSignatureBase64: 'AAAA',
+    }),
+    404,
+    'SESSION_NOT_FOUND',
+    'complete',
+  );
+});
+
+test('malformed and oversized JSON receive fixed safe errors', async () => {
+  const wrongContentType = await fetch(new URL('api/sign/prepare', baseUrl), {
+    method: 'POST',
+    headers: { 'content-type': 'text/plain' },
+    body: '{}',
+  });
+  await assertSafeError(wrongContentType, 415, 'UNSUPPORTED_MEDIA_TYPE');
+
+  const malformed = await fetch(new URL('api/sign/prepare', baseUrl), {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: '{"signer":',
+  });
+  await assertSafeError(malformed, 400, 'INVALID_JSON');
+
+  const oversized = await fetch(new URL('api/sign/prepare', baseUrl), {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ padding: 'x'.repeat(16 * 1024 * 1024) }),
+  });
+  await assertSafeError(oversized, 413, 'REQUEST_TOO_LARGE');
+});
+
 test('liveness and readiness are available only through the production base path', async () => {
   const liveResponse = await fetch(new URL('health/live', baseUrl));
   assert.equal(liveResponse.status, 200);
+  assert.equal(liveResponse.headers.has('x-powered-by'), false);
   assert.deepEqual(await liveResponse.json(), {
     ok: true,
     service: 'pdf-signing-demo',
@@ -167,4 +467,16 @@ test('liveness and readiness are available only through the production base path
 
   const rootHealth = await fetch(new URL('/health', baseUrl));
   assert.equal(rootHealth.status, 404);
+});
+
+test('server socket is bound only to loopback', async (context) => {
+  const externalAddress = Object.values(os.networkInterfaces())
+    .flat()
+    .find((entry) => entry?.family === 'IPv4' && !entry.internal)?.address;
+  if (!externalAddress) {
+    context.skip('No non-loopback IPv4 address is available in this environment.');
+    return;
+  }
+  assert.equal(await canConnect(externalAddress, serverPort), false);
+  assert.equal(await canConnect('127.0.0.1', serverPort), true);
 });

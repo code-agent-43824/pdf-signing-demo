@@ -582,6 +582,7 @@ async function boot() {
   bindRutokenRefreshEvents();
 
   await Promise.all([fetchStampConfig(), fetchAvailableFonts()]);
+  migrateLegacyStampFontReferences();
   showSourceEmptyState();
   setUploadState('PDF ещё не выбран.', { empty: true });
   await initActiveCryptoStack({ force: true });
@@ -1435,6 +1436,38 @@ function resolveEffectiveStampConfig(serverConfig) {
     return ensureStampConfigShape(serverConfig);
   }
   return ensureStampConfigShape(mergeConfig(serverConfig, saved));
+}
+
+function migrateLegacyStampFontReferences() {
+  let changed = false;
+  const saved = hasPersonalStampConfig();
+  const effectiveFonts = state.stampConfig?.appearance?.fonts || {};
+  const defaultFonts = state.defaultStampConfig?.appearance?.fonts || {};
+
+  for (const role of ['title', 'label', 'value']) {
+    const current = effectiveFonts[role];
+    if (!current) continue;
+    if (state.availableFonts.some((font) => font.id === current.path)) {
+      continue;
+    }
+
+    const legacyLabel = String(current.path || '')
+      .split(/[\\/]/)
+      .pop()
+      .replace(/\.(ttf|otf|ttc)$/i, '')
+      .toLowerCase();
+    const matches = state.availableFonts.filter(
+      (font) => font.label.toLowerCase() === legacyLabel,
+    );
+    current.path = matches.length === 1
+      ? matches[0].id
+      : defaultFonts[role]?.path;
+    changed = true;
+  }
+
+  if (changed && saved) {
+    savePersonalStampConfig(state.stampConfig);
+  }
 }
 
 function ensureStampConfigShape(config) {

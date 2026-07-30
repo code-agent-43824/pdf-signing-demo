@@ -25,6 +25,7 @@
     "@signpdf/placeholder-pdf-lib": "^3.3.0",
     "@signpdf/signpdf": "^3.3.0",
     "@signpdf/utils": "^3.3.0",
+    "ajv": "8.20.0",
     "express": "^5.2.1",
     "pdf-lib": "^1.17.1"
   }
