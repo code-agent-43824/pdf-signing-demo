@@ -5,7 +5,14 @@ const fs = require('fs');
 const { execFileSync } = require('child_process');
 const { createPreparedPdf, embedCmsSignature, createSessionStore } = require('./signing/pades');
 const {
+  CmsVerificationError,
+  inspectCertificate,
+  verifyCmsSignature,
+  verifyEveryEmbeddedSignature,
+} = require('./signing/cms-verifier');
+const {
   HttpError,
+  decodeCertificateBase64,
   decodeCmsBase64,
   decodePdfBase64,
   validateCompleteBody,
@@ -213,9 +220,26 @@ function normalizeCmsSignatureBase64(cmsSignatureBase64) {
       maxBuffer: 10 * 1024 * 1024,
     }).trim() || payload;
   } catch (error) {
-    console.warn('CMS normalization skipped:', error.message);
-    return payload;
+    throw new CmsVerificationError('CMS_NORMALIZATION_FAILED', error);
   }
+}
+
+function createCmsIntegrityError(error) {
+  return new HttpError(
+    400,
+    'CMS_INTEGRITY_FAILED',
+    'CMS-подпись не прошла обязательную проверку целостности.',
+    { verifierCode: error.code || 'CMS_VERIFIER_FAILED' },
+  );
+}
+
+function createCertificateError(error) {
+  return new HttpError(
+    400,
+    'INVALID_SIGNER_CERTIFICATE',
+    'Не удалось проверить выбранный сертификат.',
+    { verifierCode: error.code || 'CERTIFICATE_INSPECTION_FAILED' },
+  );
 }
 
 function logRequestError(req, res, error, stage, code) {
@@ -309,7 +333,18 @@ router.get('/api/form', (req, res) => {
 router.post('/api/sign/prepare', async (req, res) => {
   try {
     validatePrepareBody(req.body);
-    const signer = req.body.signer;
+    const certificateDer = decodeCertificateBase64(
+      req.body.signer.certificateBase64,
+    );
+    let signer;
+    try {
+      signer = inspectCertificate(certificateDer);
+    } catch (error) {
+      if (error instanceof CmsVerificationError) {
+        throw createCertificateError(error);
+      }
+      throw error;
+    }
     const sourceBuffer = req.body.pdfBase64
       ? decodePdfBase64(req.body.pdfBase64)
       : fs.readFileSync(formPdfPath);
@@ -325,7 +360,10 @@ router.post('/api/sign/prepare', async (req, res) => {
       stampConfig,
       requestedStampPosition,
     });
-    const sessionId = sessions.create(prepared);
+    const sessionId = sessions.create({
+      ...prepared,
+      expectedCertificateSha256: signer.certificateSha256,
+    });
     res.json({
       ok: true,
       sessionId,
@@ -345,7 +383,7 @@ router.post('/api/sign/complete', (req, res) => {
     const { sessionId, cmsSignatureBase64 } = req.body;
     const decodedCms = decodeCmsBase64(cmsSignatureBase64);
 
-    const session = sessions.consume(sessionId);
+    const session = sessions.get(sessionId);
     if (!session) {
       throw new HttpError(
         404,
@@ -365,7 +403,26 @@ router.post('/api/sign/complete', (req, res) => {
       );
     }
 
-    const normalizedCmsSignatureBase64 = normalizeCmsSignatureBase64(cmsSignatureBase64);
+    let normalizedCmsSignatureBase64;
+    let normalizedCms;
+    let integrity;
+    try {
+      normalizedCmsSignatureBase64 = normalizeCmsSignatureBase64(cmsSignatureBase64);
+      normalizedCms = decodeCmsBase64(normalizedCmsSignatureBase64);
+      if (normalizedCms.length * 2 > session.placeholderLength) {
+        throw new CmsVerificationError('CMS_EXCEEDS_PLACEHOLDER');
+      }
+      integrity = verifyCmsSignature({
+        cmsDer: normalizedCms,
+        content: session.contentToSign,
+        expectedCertificateSha256: session.expectedCertificateSha256,
+      });
+    } catch (error) {
+      if (error instanceof CmsVerificationError || error instanceof HttpError) {
+        throw createCmsIntegrityError(error);
+      }
+      throw error;
+    }
 
     const signedPdf = embedCmsSignature({
       preparedPdf: session.preparedPdf,
@@ -374,11 +431,28 @@ router.post('/api/sign/complete', (req, res) => {
       placeholderLength: session.placeholderLength,
     });
 
+    let embeddedIntegrity;
+    try {
+      embeddedIntegrity = verifyEveryEmbeddedSignature(signedPdf, {
+        expectedLastCertificateSha256: session.expectedCertificateSha256,
+      });
+    } catch (error) {
+      if (error instanceof CmsVerificationError) {
+        throw createCmsIntegrityError(error);
+      }
+      throw error;
+    }
+
     const fileName = sessions.saveSignedPdf(signedPdf);
+    sessions.consume(sessionId);
     return res.json({
       ok: true,
       signedPdfUrl: `./generated/${fileName}`,
       downloadName: 'signed-formular.pdf',
+      integrity: {
+        verified: integrity.ok === true,
+        signaturesVerified: embeddedIntegrity.length,
+      },
     });
   } catch (error) {
     return sendSafeError(req, res, error, 'complete');

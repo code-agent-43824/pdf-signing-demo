@@ -79,8 +79,38 @@ def needs_gost_signature_parameter_fix(signer_info):
     return isinstance(parameters, core.Null)
 
 
+def select_signer_certificate(certificates, signer_info):
+    sid = signer_info['sid']
+    candidates = [
+        item.chosen
+        for item in certificates
+        if item.name == 'certificate'
+    ]
+    if sid.name == 'issuer_and_serial_number':
+        issuer_and_serial = sid.chosen
+        matches = [
+            certificate
+            for certificate in candidates
+            if (
+                certificate.serial_number == issuer_and_serial['serial_number'].native
+                and certificate.issuer.dump() == issuer_and_serial['issuer'].dump()
+            )
+        ]
+    elif sid.name == 'subject_key_identifier':
+        matches = [
+            certificate
+            for certificate in candidates
+            if certificate.key_identifier == sid.chosen.native
+        ]
+    else:
+        matches = []
+    return matches[0] if len(matches) == 1 else None
+
+
 def normalize_cms_signature(cms_der):
-    content_info = cms.ContentInfo.load(cms_der)
+    content_info = cms.ContentInfo.load(cms_der, strict=True)
+    if content_info.dump() != cms_der:
+        raise ValueError('CMS must use canonical DER')
     signed_data = content_info['content']
     certificates = signed_data['certificates']
     signer_infos = signed_data['signer_infos']
@@ -88,15 +118,18 @@ def normalize_cms_signature(cms_der):
     if len(certificates) == 0 or len(signer_infos) == 0:
         return cms_der, False
 
-    cert_der = certificates[0].chosen.dump()
-    algorithm_parameters = extract_spki_algorithm_parameters(cert_der)
-    if not algorithm_parameters:
-        return cms_der, False
-
     changed = False
     for signer_info in signer_infos:
         if not needs_gost_signature_parameter_fix(signer_info):
             continue
+        signer_certificate = select_signer_certificate(certificates, signer_info)
+        if signer_certificate is None:
+            raise ValueError('Signer certificate is missing or ambiguous')
+        algorithm_parameters = extract_spki_algorithm_parameters(
+            signer_certificate.dump(),
+        )
+        if not algorithm_parameters:
+            raise ValueError('Signer certificate algorithm parameters are missing')
         signer_info['signature_algorithm']['parameters'] = core.load(algorithm_parameters)
         changed = True
 

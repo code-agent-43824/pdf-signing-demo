@@ -3,11 +3,13 @@ const { PDFDocument } = require('pdf-lib');
 
 const MAX_PDF_BYTES = 10 * 1024 * 1024;
 const MAX_CMS_BYTES = 128 * 1024;
+const MAX_CERTIFICATE_BYTES = 64 * 1024;
 const MAX_PDF_PAGES = 200;
 const MAX_PAGE_DIMENSION = 14400;
 const MAX_STAMP_PIXELS = 4096 * 4096;
 const MAX_BASE64_PDF_LENGTH = 14 * 1024 * 1024;
 const MAX_BASE64_CMS_LENGTH = 256 * 1024;
+const MAX_BASE64_CERTIFICATE_LENGTH = 128 * 1024;
 const FONT_ID_PATTERN = '^font-[0-9a-f]{16}$';
 const COLOR_PATTERN = '^#[0-9A-Fa-f]{6}$';
 
@@ -368,12 +370,9 @@ const signerSchema = {
   $id: 'https://pdf-signing-demo.local/schemas/signer.json',
   type: 'object',
   additionalProperties: false,
+  required: ['certificateBase64'],
   properties: {
-    subjectName: boundedString(4096),
-    issuerName: boundedString(4096),
-    thumbprint: boundedString(256),
-    serialNumber: boundedString(256),
-    validToDate: boundedString(128),
+    certificateBase64: boundedString(MAX_BASE64_CERTIFICATE_LENGTH, 4),
   },
 };
 
@@ -528,14 +527,6 @@ function validateStampConfig(config) {
 
 function validatePrepareBody(body) {
   assertSchema(validatePrepareSchema, body, 'prepare');
-  if (Object.values(body.signer).some((value) => value.includes('\0'))) {
-    throw new HttpError(
-      400,
-      'INVALID_SIGNER',
-      'Некорректные данные сертификата.',
-      { reason: 'NUL byte in signer metadata' },
-    );
-  }
   if (body.stampConfig) {
     validateStampConfig(body.stampConfig);
   }
@@ -584,6 +575,14 @@ function decodePdfBase64(value) {
 
 function decodeCmsBase64(value) {
   return decodeStrictBase64(value, MAX_CMS_BYTES, 'cmsSignatureBase64');
+}
+
+function decodeCertificateBase64(value) {
+  return decodeStrictBase64(
+    value,
+    MAX_CERTIFICATE_BYTES,
+    'signer.certificateBase64',
+  );
 }
 
 async function validatePdfBuffer(pdf) {
@@ -657,8 +656,10 @@ async function validatePdfBuffer(pdf) {
 module.exports = {
   HttpError,
   MAX_CMS_BYTES,
+  MAX_CERTIFICATE_BYTES,
   MAX_PDF_BYTES,
   MAX_PDF_PAGES,
+  decodeCertificateBase64,
   decodeCmsBase64,
   decodePdfBase64,
   validateCompleteBody,

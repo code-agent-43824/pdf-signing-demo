@@ -10,6 +10,11 @@ const {
   createPreparedPdf,
   embedCmsSignature,
 } = require('../src/signing/pades');
+const {
+  CmsVerificationError,
+  verifyCmsSignature,
+  verifyEveryEmbeddedSignature,
+} = require('../src/signing/cms-verifier');
 
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 const FIXTURE_ROOT = path.join(__dirname, 'fixtures');
@@ -111,9 +116,24 @@ function validatePdfWithPyHanko(pdfPath) {
   return JSON.parse(raw);
 }
 
-function createCms(content, index) {
+function createCms(content, index, { attached = false } = {}) {
   const contentPath = path.join(tempDir, `content-${index}.bin`);
   const cmsPath = path.join(tempDir, `signature-${index}.der`);
+  fs.writeFileSync(contentPath, content);
+  run('python3', [
+    path.join('test', 'create_cms.py'),
+    contentPath,
+    certPath,
+    keyPath,
+    cmsPath,
+    ...(attached ? ['--attached'] : []),
+  ]);
+  return fs.readFileSync(cmsPath);
+}
+
+function createNonCadesCms(content, index) {
+  const contentPath = path.join(tempDir, `non-cades-content-${index}.bin`);
+  const cmsPath = path.join(tempDir, `non-cades-signature-${index}.der`);
   fs.writeFileSync(contentPath, content);
   run('openssl', [
     'cms',
@@ -243,6 +263,13 @@ test('one through four incremental signatures preserve and validate every signat
     );
 
     const cms = createCms(prepared.contentToSign, signatureIndex);
+    assert.equal(
+      verifyCmsSignature({
+        cmsDer: cms,
+        content: prepared.contentToSign,
+      }).ok,
+      true,
+    );
     currentPdf = embedCmsSignature({
       preparedPdf: prepared.preparedPdf,
       byteRange: prepared.byteRange,
@@ -259,6 +286,10 @@ test('one through four incremental signatures preserve and validate every signat
       `signed-${signatureIndex}`,
     );
     assert.equal(opensslResults.length, signatureIndex);
+    assert.equal(
+      verifyEveryEmbeddedSignature(currentPdf).length,
+      signatureIndex,
+    );
 
     const pyhankoResult = validatePdfWithPyHanko(signedPdfPath);
     assert.equal(pyhankoResult.ok, true);
@@ -288,4 +319,69 @@ test('malformed PDF is rejected by the preparation pipeline', async () => {
   assert.equal(fs.existsSync(outputPath), false);
 });
 
-test.todo('complete endpoint rejects malformed CMS before embedding (phase 2)');
+test('CMS verifier rejects malformed CMS and content or signature tampering', async () => {
+  const source = fs.readFileSync(SIMPLE_PDF);
+  const prepared = await createPreparedPdf({
+    sourceBuffer: source,
+    signer: {
+      subjectName: 'CN=PDF Signing Golden Test Signer',
+      issuerName: 'CN=PDF Signing Golden Test Signer',
+      thumbprint: 'GOLDEN-TEST',
+      serialNumber: '01',
+      validToDate: '2030-01-01T00:00:00Z',
+    },
+  });
+  const cms = createCms(prepared.contentToSign, 'negative');
+
+  assert.throws(
+    () => verifyCmsSignature({
+      cmsDer: fs.readFileSync(
+        path.join(FIXTURE_ROOT, 'invalid', 'malformed-cms.der'),
+      ),
+      content: prepared.contentToSign,
+    }),
+    CmsVerificationError,
+  );
+
+  const tamperedContent = Buffer.from(prepared.contentToSign);
+  tamperedContent[0] ^= 0x01;
+  assert.throws(
+    () => verifyCmsSignature({ cmsDer: cms, content: tamperedContent }),
+    (error) => (
+      error instanceof CmsVerificationError
+      && error.code === 'CONTENT_DIGEST_MISMATCH'
+    ),
+  );
+
+  const tamperedCms = Buffer.from(cms);
+  tamperedCms[tamperedCms.length - 1] ^= 0x01;
+  assert.throws(
+    () => verifyCmsSignature({
+      cmsDer: tamperedCms,
+      content: prepared.contentToSign,
+    }),
+    CmsVerificationError,
+  );
+
+  assert.throws(
+    () => verifyCmsSignature({
+      cmsDer: createCms(prepared.contentToSign, 'attached', { attached: true }),
+      content: prepared.contentToSign,
+    }),
+    (error) => (
+      error instanceof CmsVerificationError
+      && error.code === 'CMS_MUST_BE_DETACHED'
+    ),
+  );
+
+  assert.throws(
+    () => verifyCmsSignature({
+      cmsDer: createNonCadesCms(prepared.contentToSign, 'missing-ess'),
+      content: prepared.contentToSign,
+    }),
+    (error) => (
+      error instanceof CmsVerificationError
+      && error.code === 'INVALID_SIGNED_ATTRIBUTES'
+    ),
+  );
+});

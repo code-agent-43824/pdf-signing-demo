@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const net = require('node:net');
 const os = require('node:os');
 const path = require('node:path');
-const { spawn } = require('node:child_process');
+const { execFileSync, spawn } = require('node:child_process');
 const { after, before, test } = require('node:test');
 
 const PROJECT_ROOT = path.resolve(__dirname, '..');
@@ -14,6 +14,11 @@ let serverPort;
 let baseUrl;
 let tempDir;
 let testConfigPath;
+let testCertPath;
+let testKeyPath;
+let testCertificateBase64;
+let otherCertPath;
+let otherKeyPath;
 
 function reservePort() {
   return new Promise((resolve, reject) => {
@@ -57,6 +62,51 @@ before(async () => {
   tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pdf-signing-surface-'));
   testConfigPath = path.join(tempDir, 'stamp-config.json');
   fs.copyFileSync(path.join(PROJECT_ROOT, 'config', 'stamp-config.json'), testConfigPath);
+  testCertPath = path.join(tempDir, 'surface-cert.pem');
+  testKeyPath = path.join(tempDir, 'surface-key.pem');
+  const testCertDerPath = path.join(tempDir, 'surface-cert.der');
+  execFileSync('openssl', [
+    'req',
+    '-x509',
+    '-newkey',
+    'rsa:2048',
+    '-nodes',
+    '-subj',
+    '/CN=PDF Signing Surface Test Signer',
+    '-keyout',
+    testKeyPath,
+    '-out',
+    testCertPath,
+    '-days',
+    '2',
+  ], { stdio: 'ignore' });
+  execFileSync('openssl', [
+    'x509',
+    '-in',
+    testCertPath,
+    '-outform',
+    'DER',
+    '-out',
+    testCertDerPath,
+  ]);
+  testCertificateBase64 = fs.readFileSync(testCertDerPath).toString('base64');
+  otherCertPath = path.join(tempDir, 'other-cert.pem');
+  otherKeyPath = path.join(tempDir, 'other-key.pem');
+  execFileSync('openssl', [
+    'req',
+    '-x509',
+    '-newkey',
+    'rsa:2048',
+    '-nodes',
+    '-subj',
+    '/CN=Unexpected Surface Test Signer',
+    '-keyout',
+    otherKeyPath,
+    '-out',
+    otherCertPath,
+    '-days',
+    '2',
+  ], { stdio: 'ignore' });
 
   serverPort = await reservePort();
   baseUrl = `http://127.0.0.1:${serverPort}${BASE_PATH}`;
@@ -83,6 +133,27 @@ after(async () => {
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
+}
+
+function validSigner() {
+  return { certificateBase64: testCertificateBase64 };
+}
+
+function createTestCms(content, label, {
+  certPath = testCertPath,
+  keyPath = testKeyPath,
+} = {}) {
+  const contentPath = path.join(tempDir, `${label}.bin`);
+  const cmsPath = path.join(tempDir, `${label}.der`);
+  fs.writeFileSync(contentPath, content);
+  execFileSync('python3', [
+    path.join(PROJECT_ROOT, 'test', 'create_cms.py'),
+    contentPath,
+    certPath,
+    keyPath,
+    cmsPath,
+  ]);
+  return fs.readFileSync(cmsPath);
 }
 
 async function postJson(relativePath, body) {
@@ -170,13 +241,7 @@ test('client-facing font identifiers resolve during PDF preparation', async () =
     body: JSON.stringify({
       pdfBase64,
       stampConfig: config,
-      signer: {
-        subjectName: 'CN=Surface Test',
-        issuerName: 'CN=Surface Test',
-        thumbprint: 'SURFACE-TEST',
-        serialNumber: '01',
-        validToDate: '2030-01-01T00:00:00Z',
-      },
+      signer: validSigner(),
     }),
   });
   assert.equal(response.status, 200);
@@ -196,7 +261,7 @@ test('prepare rejects unknown fields, paths and extreme stamp settings', async (
   const validBody = {
     pdfBase64,
     stampConfig: config,
-    signer: {},
+    signer: validSigner(),
   };
 
   await assertSafeError(
@@ -241,18 +306,18 @@ test('stamp, signer and placement limits reject every bounded field class', asyn
       mutate: () => {},
     },
     {
-      name: 'oversized distinguished name',
-      signer: { subjectName: 'x'.repeat(4097) },
+      name: 'oversized certificate',
+      signer: { certificateBase64: 'A'.repeat((128 * 1024) + 4) },
       mutate: () => {},
     },
     {
       name: 'font size',
-      signer: {},
+      signer: validSigner(),
       mutate: (draft) => { draft.appearance.fonts.title.size = 73; },
     },
     {
       name: 'row count',
-      signer: {},
+      signer: validSigner(),
       mutate: (draft) => {
         draft.content.rows = Array.from(
           { length: 21 },
@@ -267,22 +332,22 @@ test('stamp, signer and placement limits reject every bounded field class', asyn
     },
     {
       name: 'CMS reservation',
-      signer: {},
+      signer: validSigner(),
       mutate: (draft) => { draft.signatureObject.bytesReserved = 262145; },
     },
     {
       name: 'placement coordinate',
-      signer: {},
+      signer: validSigner(),
       mutate: (draft) => { draft.placements.rules[0].placement.offsetX = 20001; },
     },
     {
       name: 'signature count',
-      signer: {},
+      signer: validSigner(),
       mutate: (draft) => { draft.limits.maxSignatures = 21; },
     },
     {
       name: 'configured page number',
-      signer: {},
+      signer: validSigner(),
       mutate: (draft) => {
         draft.placements.rules[0].pages = {
           mode: 'single',
@@ -309,7 +374,7 @@ test('prepare enforces strict base64, decoded size, magic bytes and page limits'
   await assertSafeError(
     await postJson('api/sign/prepare', {
       pdfBase64: '%%%not-base64%%%',
-      signer: {},
+      signer: validSigner(),
     }),
     400,
     'INVALID_BASE64',
@@ -319,7 +384,7 @@ test('prepare enforces strict base64, decoded size, magic bytes and page limits'
   await assertSafeError(
     await postJson('api/sign/prepare', {
       pdfBase64: Buffer.from('not a pdf').toString('base64'),
-      signer: {},
+      signer: validSigner(),
     }),
     400,
     'INVALID_PDF',
@@ -329,7 +394,7 @@ test('prepare enforces strict base64, decoded size, magic bytes and page limits'
   await assertSafeError(
     await postJson('api/sign/prepare', {
       pdfBase64: Buffer.alloc((10 * 1024 * 1024) + 1).toString('base64'),
-      signer: {},
+      signer: validSigner(),
     }),
     413,
     'PAYLOAD_TOO_LARGE',
@@ -344,7 +409,7 @@ test('prepare enforces strict base64, decoded size, magic bytes and page limits'
   await assertSafeError(
     await postJson('api/sign/prepare', {
       pdfBase64: Buffer.from(await tooManyPages.save()).toString('base64'),
-      signer: {},
+      signer: validSigner(),
     }),
     400,
     'PDF_PAGE_LIMIT',
@@ -356,7 +421,7 @@ test('prepare enforces strict base64, decoded size, magic bytes and page limits'
   await assertSafeError(
     await postJson('api/sign/prepare', {
       pdfBase64: Buffer.from(await oversizedPage.save()).toString('base64'),
-      signer: {},
+      signer: validSigner(),
     }),
     400,
     'PDF_PAGE_DIMENSIONS',
@@ -380,10 +445,97 @@ test('prepare rejects stamp page references outside the uploaded document', asyn
     await postJson('api/sign/prepare', {
       pdfBase64,
       stampConfig: config,
-      signer: {},
+      signer: validSigner(),
     }),
     400,
     'STAMP_PAGE_OUT_OF_RANGE',
+    'prepare',
+  );
+});
+
+test('complete verifies CMS integrity, certificate binding and retry semantics', async () => {
+  const pdfBase64 = fs.readFileSync(
+    path.join(PROJECT_ROOT, 'test', 'fixtures', 'pdf', 'simple.pdf'),
+  ).toString('base64');
+  const prepareResponse = await postJson('api/sign/prepare', {
+    pdfBase64,
+    signer: validSigner(),
+  });
+  assert.equal(prepareResponse.status, 200);
+  const prepared = await prepareResponse.json();
+  const content = Buffer.from(prepared.contentToSignBase64, 'base64');
+
+  const wrongContent = Buffer.from(content);
+  wrongContent[0] ^= 0x01;
+  const wrongDigestCms = createTestCms(wrongContent, 'wrong-digest');
+  await assertSafeError(
+    await postJson('api/sign/complete', {
+      sessionId: prepared.sessionId,
+      cmsSignatureBase64: wrongDigestCms.toString('base64'),
+    }),
+    400,
+    'CMS_INTEGRITY_FAILED',
+    'complete',
+  );
+
+  const wrongCertificateCms = createTestCms(content, 'wrong-certificate', {
+    certPath: otherCertPath,
+    keyPath: otherKeyPath,
+  });
+  await assertSafeError(
+    await postJson('api/sign/complete', {
+      sessionId: prepared.sessionId,
+      cmsSignatureBase64: wrongCertificateCms.toString('base64'),
+    }),
+    400,
+    'CMS_INTEGRITY_FAILED',
+    'complete',
+  );
+
+  const validCms = createTestCms(content, 'valid-complete');
+  const completeResponse = await postJson('api/sign/complete', {
+    sessionId: prepared.sessionId,
+    cmsSignatureBase64: validCms.toString('base64'),
+  });
+  assert.equal(completeResponse.status, 200);
+  const completed = await completeResponse.json();
+  assert.deepEqual(completed.integrity, {
+    verified: true,
+    signaturesVerified: 1,
+  });
+  const signedPdfResponse = await fetch(
+    new URL(completed.signedPdfUrl, `${baseUrl}/`),
+  );
+  assert.equal(signedPdfResponse.status, 200);
+  assert.equal(
+    Buffer.from(await signedPdfResponse.arrayBuffer()).subarray(0, 5).toString(),
+    '%PDF-',
+  );
+
+  await assertSafeError(
+    await postJson('api/sign/complete', {
+      sessionId: prepared.sessionId,
+      cmsSignatureBase64: validCms.toString('base64'),
+    }),
+    404,
+    'SESSION_NOT_FOUND',
+    'complete',
+  );
+});
+
+test('prepare rejects malformed certificate DER before PDF preparation', async () => {
+  const pdfBase64 = fs.readFileSync(
+    path.join(PROJECT_ROOT, 'test', 'fixtures', 'pdf', 'simple.pdf'),
+  ).toString('base64');
+  await assertSafeError(
+    await postJson('api/sign/prepare', {
+      pdfBase64,
+      signer: {
+        certificateBase64: Buffer.from('not a certificate').toString('base64'),
+      },
+    }),
+    400,
+    'INVALID_SIGNER_CERTIFICATE',
     'prepare',
   );
 });

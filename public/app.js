@@ -991,6 +991,7 @@ async function enumerateRutokenCertificates(plugin) {
           serialNumber: parsed?.serialNumber || certId,
           validToDate: validToDate ? validToDate.toISOString() : '',
           algorithm,
+          certificateBase64: normalizeCmsBase64(pem),
           certId,
           deviceId,
           tokenLabel,
@@ -2219,6 +2220,23 @@ function fileToBase64(file) {
   });
 }
 
+async function exportSelectedCertificateBase64(certificate) {
+  if (certificate.certificateBase64) {
+    return normalizeCmsBase64(certificate.certificateBase64);
+  }
+  if (!certificate.certificate) {
+    throw new Error('Выбранный сертификат нельзя экспортировать для серверной проверки.');
+  }
+  const exported = await certificate.certificate.Export(
+    window.cadesplugin.CADESCOM_ENCODE_BASE64,
+  );
+  const normalized = normalizeCmsBase64(exported);
+  if (!normalized) {
+    throw new Error('Не удалось экспортировать выбранный сертификат.');
+  }
+  return normalized;
+}
+
 async function prepareAndSign() {
   if (state.activeCryptoStack === 'rutoken') {
     await withOperationalCryptoBusyOverlay('Проверяю состояние Рутокена…', () => requestRutokenEnvironmentRefresh({ silentStatus: true }));
@@ -2234,6 +2252,7 @@ async function prepareAndSign() {
   }
 
   const selectedCertificate = state.selectedCertificate;
+  const certificateBase64 = await exportSelectedCertificateBase64(selectedCertificate);
 
   setStatus('Подготавливаю PDF под PAdES…');
   const prepareData = await fetchJsonOk('./api/sign/prepare', {
@@ -2244,11 +2263,7 @@ async function prepareAndSign() {
       stampConfig: state.stampConfig,
       requestedStampPosition: state.selectedStampPosition,
       signer: {
-        subjectName: selectedCertificate.subjectName,
-        issuerName: selectedCertificate.issuerName,
-        thumbprint: selectedCertificate.thumbprint,
-        serialNumber: selectedCertificate.serialNumber,
-        validToDate: selectedCertificate.validToDate,
+        certificateBase64,
       },
     }),
   }, 'Не удалось подготовить PDF.');
