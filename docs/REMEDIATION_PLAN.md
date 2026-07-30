@@ -393,6 +393,32 @@ UI остаётся в PR-5**.
 - проверка цепочки доверия, отзыва и квалифицированного статуса, а также
   их раздельное отображение пользователю выполняются в PR-5.
 
+Проверка и rollout:
+
+- локально: 18 тестов успешно, 0 ошибок, 0 TODO; `npm audit --omit=dev` —
+  0 известных уязвимостей;
+- реализация зафиксирована commit `def0b57`, изоляция generated-артефактов
+  тестового сервера — follow-up commit `08702a3`;
+- GitHub Actions runs
+  [`30567173614`](https://github.com/code-agent-43824/pdf-signing-demo/actions/runs/30567173614)
+  и
+  [`30567755557`](https://github.com/code-agent-43824/pdf-signing-demo/actions/runs/30567755557)
+  завершились успешно;
+- production backup:
+  `/home/openclaw/services/pdf-signing-demo/backups/20260730T174436Z-pr4`;
+- на production runtime (Node 22, Python 3.14) полный набор прошёл:
+  18 pass, 0 fail, 0 TODO; test output направлен во временный каталог,
+  существующие 12 generated PDF сохранены без изменений;
+- публичный HTTPS smoke подтвердил новый certificate-DER `prepare`,
+  точный ByteRange, безопасный отказ `CMS_INTEGRITY_FAILED` для malformed
+  CMS и отказ strict schema при попытке передать подменённые signer
+  metadata;
+- browser smoke подтвердил загрузку production UI и открытие настроек
+  штампа без ошибок приложения; присутствуют только ожидаемые ошибки
+  отсутствующих crypto extensions в изолированном браузере;
+- сервис после рестарта active, `NRestarts=0`, readiness зелёный, порт
+  слушает только `127.0.0.1:3010`.
+
 ## 6. Фаза 3 — изоляция тяжёлой обработки и жизненный цикл данных (P0/P1)
 
 ### 6.1. Worker-модель
