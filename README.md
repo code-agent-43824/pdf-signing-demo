@@ -39,6 +39,8 @@ python -m pip install --requirement requirements.txt
 - `PORT` — порт сервера (по умолчанию `3010`)
 - `BASE_PATH` — базовый путь за reverse proxy (по умолчанию `/`)
 - `STAMP_CONFIG_PATH` — необязательный путь к JSON-конфигу штампа/размещения подписи
+- `GENERATED_DIR` — необязательный каталог результатов (по умолчанию
+  `public/generated`; тесты используют отдельный временный каталог)
 
 Health endpoints при `BASE_PATH=/pdf-signing/`:
 

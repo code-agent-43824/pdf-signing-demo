@@ -62,6 +62,8 @@ before(async () => {
   tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pdf-signing-surface-'));
   testConfigPath = path.join(tempDir, 'stamp-config.json');
   fs.copyFileSync(path.join(PROJECT_ROOT, 'config', 'stamp-config.json'), testConfigPath);
+  const testGeneratedDir = path.join(tempDir, 'generated');
+  fs.mkdirSync(testGeneratedDir);
   testCertPath = path.join(tempDir, 'surface-cert.pem');
   testKeyPath = path.join(tempDir, 'surface-key.pem');
   const testCertDerPath = path.join(tempDir, 'surface-cert.der');
@@ -117,6 +119,7 @@ before(async () => {
       BASE_PATH,
       PORT: String(serverPort),
       STAMP_CONFIG_PATH: testConfigPath,
+      GENERATED_DIR: testGeneratedDir,
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -504,7 +507,7 @@ test('complete verifies CMS integrity, certificate binding and retry semantics',
     signaturesVerified: 1,
   });
   const signedPdfResponse = await fetch(
-    new URL(completed.signedPdfUrl, `${baseUrl}/`),
+    new URL(completed.signedPdfUrl, baseUrl),
   );
   assert.equal(signedPdfResponse.status, 200);
   assert.equal(

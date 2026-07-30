@@ -31,7 +31,9 @@ const publicDir = path.join(__dirname, '..', 'public');
 const projectRoot = path.join(__dirname, '..');
 const assetsDir = path.join(publicDir, 'assets');
 const localFontsDir = path.join(assetsDir, 'fonts');
-const generatedDir = path.join(publicDir, 'generated');
+const generatedDir = process.env.GENERATED_DIR
+  ? path.resolve(process.env.GENERATED_DIR)
+  : path.join(publicDir, 'generated');
 const formPdfPath = path.join(assetsDir, FORM_PDF_NAME);
 const stampConfigPath = process.env.STAMP_CONFIG_PATH
   ? path.resolve(process.env.STAMP_CONFIG_PATH)
@@ -459,6 +461,7 @@ router.post('/api/sign/complete', (req, res) => {
   }
 });
 
+router.use('/generated', express.static(generatedDir));
 router.use(express.static(publicDir, { extensions: ['html'] }));
 app.use(BASE_PATH, router);
 app.use((error, req, res, _next) => {
