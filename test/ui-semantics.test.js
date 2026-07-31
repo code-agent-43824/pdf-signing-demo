@@ -41,6 +41,14 @@ test('UI separates integrity, trust and qualified status without false success c
     /Доверие сертификату и квалифицированный статус не проверялись/,
   );
   assert.match(
+    app,
+    /const cmsSignature = await oSignedData\.SignHash\([\s\S]*?return normalizeCmsBase64\(cmsSignature\);/,
+  );
+  assert.match(
+    app,
+    /const cmsSignature = await plugin\.sign\([\s\S]*?return normalizeCmsBase64\(cmsSignature\);/,
+  );
+  assert.match(
     styles,
     /@media \(max-width: 980px\)[\s\S]*?\.verification-item-head\s*\{\s*flex-direction: column;/,
   );

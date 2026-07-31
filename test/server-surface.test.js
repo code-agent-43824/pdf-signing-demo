@@ -761,6 +761,16 @@ test('complete has a strict schema and safe session errors', async () => {
     'SESSION_NOT_FOUND',
     'complete',
   );
+
+  await assertSafeError(
+    await postJson('api/sign/complete', {
+      sessionId: '00000000-0000-4000-8000-000000000000',
+      cmsSignatureBase64: 'AA\r\nAA',
+    }),
+    404,
+    'SESSION_NOT_FOUND',
+    'complete',
+  );
 });
 
 test('malformed and oversized JSON receive fixed safe errors', async () => {

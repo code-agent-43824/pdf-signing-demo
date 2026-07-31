@@ -2433,11 +2433,12 @@ async function signPreparedContent(selectedCertificate, contentToSignBase64) {
     await setProp(oSigner, 'propset_Certificate', 'Certificate', selectedCertificate.certificate);
 
     const oSignedData = await createObject('CAdESCOM.CadesSignedData');
-    return oSignedData.SignHash(
+    const cmsSignature = await oSignedData.SignHash(
       oHashedData,
       oSigner,
       window.cadesplugin.CADESCOM_CADES_BES,
     );
+    return normalizeCmsBase64(cmsSignature);
   });
 }
 

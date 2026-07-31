@@ -574,7 +574,11 @@ function decodePdfBase64(value) {
 }
 
 function decodeCmsBase64(value) {
-  return decodeStrictBase64(value, MAX_CMS_BYTES, 'cmsSignatureBase64');
+  // CryptoPro CAdES Browser Plug-in may wrap its Base64 result with CR/LF.
+  // Canonicalize only ASCII whitespace here; the decoded payload still goes
+  // through strict Base64, DER and CMS integrity validation afterwards.
+  const canonicalValue = String(value).replace(/[\t\n\f\r ]+/g, '');
+  return decodeStrictBase64(canonicalValue, MAX_CMS_BYTES, 'cmsSignatureBase64');
 }
 
 function decodeCertificateBase64(value) {
