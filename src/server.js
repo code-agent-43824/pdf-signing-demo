@@ -810,7 +810,7 @@ router.post('/api/sign/complete', completeRateLimit, async (req, res) => {
         let integrity;
         try {
           normalizedCmsSignatureBase64 = await normalizeCmsSignatureBase64(
-            cmsSignatureBase64,
+            decodedCms.toString('base64'),
             { signal },
           );
           normalizedCms = decodeCmsBase64(normalizedCmsSignatureBase64);

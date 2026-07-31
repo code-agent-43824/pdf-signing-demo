@@ -596,9 +596,13 @@ test('complete verifies CMS integrity, certificate binding and retry semantics',
   );
 
   const validCms = createTestCms(content, 'valid-complete');
+  const wrappedValidCmsBase64 = validCms
+    .toString('base64')
+    .match(/.{1,64}/g)
+    .join('\r\n');
   const completeResponse = await postJson('api/sign/complete', {
     sessionId: prepared.sessionId,
-    cmsSignatureBase64: validCms.toString('base64'),
+    cmsSignatureBase64: wrappedValidCmsBase64,
   });
   assert.equal(completeResponse.status, 200);
   const completed = await completeResponse.json();
