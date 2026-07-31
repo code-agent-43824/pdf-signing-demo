@@ -508,7 +508,7 @@ trust и qualified остаются явно непроверенными до �
   - лимит на пользователя/IP;
   - гарантированную очистку после завершения и рестарта.
 - Не раздавать `public/generated` через общий static middleware.
-- Выдавать результат через одноразовый или короткоживущий capability URL,
+- Выдавать результат через короткоживущий capability URL,
   с `Content-Disposition: attachment`, `Cache-Control: no-store` и
   авторизацией, если появятся учётные записи.
 - Документировать retention policy и не писать содержимое PDF/CMS/PIN в
@@ -858,6 +858,19 @@ anti-clickjacking реализованы и развёрнуты в production**
 - после финального restart service active, `NRestarts=0`, readiness
   зелёный, session/result counters нулевые, socket только
   `127.0.0.1:3010`, warning/error journal пуст.
+
+### Follow-up lifecycle/UX — 2026-07-31
+
+- по решению владельца preview и download capability стали многократными;
+  обе ссылки и приватный PDF действуют ровно 15 минут, после чего API
+  отказывает, а файл и metadata удаляются;
+- SHA-256 capability-токенов и expiry сохраняются рядом с PDF с правами
+  `0600`, поэтому штатный restart не сокращает обещанный пользователю TTL;
+- preview получает узкое исключение `frame-ancestors 'self'` и
+  `X-Frame-Options: SAMEORIGIN`; общий UI/API по-прежнему защищён от
+  framing через `frame-ancestors 'none'` / `DENY`;
+- подробные статусы integrity/trust/qualified скрыты по умолчанию и
+  раскрываются только кнопкой «Информация о подписанном файле».
 
 ## 9. Фаза 6 — безопасная декомпозиция (P2)
 

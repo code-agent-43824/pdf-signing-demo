@@ -536,6 +536,13 @@ function getSignatureCountLabel(count) {
   return 'подписей';
 }
 
+function setVerificationDetailsExpanded(expanded) {
+  const toggle = document.getElementById('resultInfoToggle');
+  const details = document.getElementById('verificationDetails');
+  toggle.setAttribute('aria-expanded', String(expanded));
+  details.classList.toggle('hidden', !expanded);
+}
+
 function renderVerificationResult(verification) {
   const trustChecks = verification?.trust?.checks;
   const trustChecksAreExplicitlyUnknown = trustChecks
@@ -559,11 +566,9 @@ function renderVerificationResult(verification) {
   }
 
   const signatureCount = verification.integrity.signaturesVerified;
-  document.getElementById('verificationTitle').textContent = (
-    'Подпись встроена, целостность CMS подтверждена'
-  );
+  document.getElementById('verificationTitle').textContent = 'Подписанный файл готов';
   document.getElementById('verificationMessage').textContent = (
-    'Доверие сертификату и квалифицированный статус не проверялись.'
+    'Документ доступен для просмотра и скачивания в течение 15 минут.'
   );
   document.getElementById('integrityStatusBadge').textContent = 'Подтверждена';
   document.getElementById('integrityStatusText').textContent = (
@@ -578,6 +583,7 @@ function renderVerificationResult(verification) {
   document.getElementById('qualifiedStatusText').textContent = (
     'Проверка по политике квалифицированной электронной подписи не выполнялась.'
   );
+  setVerificationDetailsExpanded(false);
 }
 
 function updateEnvironmentDiagnostics() {
@@ -808,6 +814,7 @@ function resetSignedPdfPreview() {
   setPreviewMode(state.uploadedPdfBase64 ? 'source' : 'empty');
   downloadLink.classList.add('hidden');
   downloadLink.removeAttribute('href');
+  setVerificationDetailsExpanded(false);
   updatePrimaryActionState();
 }
 
@@ -2560,12 +2567,11 @@ async function prepareAndSign() {
   downloadLink.download = completeData.downloadName || 'signed-formular.pdf';
   downloadLink.classList.remove('hidden');
   setStatus(
-    'Готово: CMS встроена, целостность и сертификат подписанта проверены. '
-    + 'Доверие сертификату и квалифицированный статус не проверялись. '
-    + `Ссылка на результат действует до ${resultExpiresAt.toLocaleTimeString('ru-RU', {
+    'Готово. Подписанный PDF можно просматривать и скачивать несколько раз '
+    + `до ${resultExpiresAt.toLocaleTimeString('ru-RU', {
       hour: '2-digit',
       minute: '2-digit',
-    })}; выгрузка одноразовая.`,
+    })} (15 минут).`,
   );
 }
 
@@ -2651,6 +2657,11 @@ document.getElementById('signButton').addEventListener('click', async () => {
   } finally {
     updatePrimaryActionState();
   }
+});
+
+document.getElementById('resultInfoToggle').addEventListener('click', () => {
+  const toggle = document.getElementById('resultInfoToggle');
+  setVerificationDetailsExpanded(toggle.getAttribute('aria-expanded') !== 'true');
 });
 
 document.getElementById('stampSettingsButton').addEventListener('click', async () => {

@@ -103,7 +103,7 @@ const sessionTtlMs = positiveInteger(
 );
 const resultTtlMs = positiveInteger(
   process.env.SIGNING_RESULT_TTL_MS,
-  10 * 60 * 1000,
+  15 * 60 * 1000,
   1000,
   60 * 60 * 1000,
 );
@@ -601,7 +601,7 @@ function ownerKeyForRequest(req) {
 }
 
 function resultHeaders(kind) {
-  return {
+  const headers = {
     'Cache-Control': 'no-store, private, max-age=0',
     Pragma: 'no-cache',
     Expires: '0',
@@ -610,6 +610,11 @@ function resultHeaders(kind) {
     'Cross-Origin-Resource-Policy': 'same-origin',
     'Content-Disposition': `${kind === 'download' ? 'attachment' : 'inline'}; filename="signed-formular.pdf"`,
   };
+  if (kind === 'preview') {
+    headers['Content-Security-Policy'] = "default-src 'none'; frame-ancestors 'self'";
+    headers['X-Frame-Options'] = 'SAMEORIGIN';
+  }
+  return headers;
 }
 
 router.get('/health/live', (_req, res) => {
@@ -676,7 +681,7 @@ router.get('/api/results/:token', (req, res) => {
       new HttpError(
         404,
         'RESULT_NOT_FOUND',
-        'Результат не найден, уже скачан или срок ссылки истёк.',
+        'Результат не найден или истёк 15-минутный срок хранения.',
       ),
       'download',
     );

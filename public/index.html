@@ -168,34 +168,39 @@
         <div class="verification-summary">
           <div class="integrity-icon" aria-hidden="true">✓</div>
           <div>
-            <strong id="verificationTitle">Подпись встроена, целостность CMS подтверждена</strong>
-            <div id="verificationMessage" class="muted">Доверие сертификату и квалифицированный статус проверяются отдельно.</div>
+            <strong id="verificationTitle">Подписанный файл готов</strong>
+            <div id="verificationMessage" class="muted">Документ доступен для просмотра и скачивания в течение 15 минут.</div>
           </div>
         </div>
-        <div class="verification-grid" role="list" aria-label="Результаты проверки подписи">
-          <div class="verification-item is-valid" role="listitem">
-            <div class="verification-item-head">
-              <strong>Целостность CMS</strong>
-              <span id="integrityStatusBadge" class="verification-badge is-valid">Подтверждена</span>
+        <div class="verification-actions">
+          <a id="downloadLink" class="download hidden verification-download" download="signed-formular.pdf">Скачать подписанный PDF</a>
+          <button id="resultInfoToggle" class="secondary verification-info-toggle" type="button" aria-expanded="false" aria-controls="verificationDetails">Информация о подписанном файле</button>
+        </div>
+        <div id="verificationDetails" class="verification-details hidden">
+          <div class="verification-grid" role="list" aria-label="Результаты проверки подписи">
+            <div class="verification-item is-valid" role="listitem">
+              <div class="verification-item-head">
+                <strong>Целостность CMS</strong>
+                <span id="integrityStatusBadge" class="verification-badge is-valid">Подтверждена</span>
+              </div>
+              <p id="integrityStatusText">CMS подписывает точные байты PDF.</p>
             </div>
-            <p id="integrityStatusText">CMS подписывает точные байты PDF.</p>
-          </div>
-          <div class="verification-item is-not-checked" role="listitem">
-            <div class="verification-item-head">
-              <strong>Доверие сертификату</strong>
-              <span id="trustStatusBadge" class="verification-badge is-not-checked">Не проверено</span>
+            <div class="verification-item is-not-checked" role="listitem">
+              <div class="verification-item-head">
+                <strong>Доверие сертификату</strong>
+                <span id="trustStatusBadge" class="verification-badge is-not-checked">Не проверено</span>
+              </div>
+              <p id="trustStatusText">Цепочка, срок, отзыв и назначение ключа не проверялись.</p>
             </div>
-            <p id="trustStatusText">Цепочка, срок, отзыв и назначение ключа не проверялись.</p>
-          </div>
-          <div class="verification-item is-not-checked" role="listitem">
-            <div class="verification-item-head">
-              <strong>Квалифицированный статус</strong>
-              <span id="qualifiedStatusBadge" class="verification-badge is-not-checked">Не подтверждён</span>
+            <div class="verification-item is-not-checked" role="listitem">
+              <div class="verification-item-head">
+                <strong>Квалифицированный статус</strong>
+                <span id="qualifiedStatusBadge" class="verification-badge is-not-checked">Не подтверждён</span>
+              </div>
+              <p id="qualifiedStatusText">Проверка по политике квалифицированной подписи не выполнялась.</p>
             </div>
-            <p id="qualifiedStatusText">Проверка по политике квалифицированной подписи не выполнялась.</p>
           </div>
         </div>
-        <a id="downloadLink" class="download hidden verification-download" download="signed-formular.pdf">Выгрузить подписанный PDF</a>
       </div>
 
       <div id="busyOverlay" class="busy-overlay hidden" aria-live="assertive" aria-busy="true">

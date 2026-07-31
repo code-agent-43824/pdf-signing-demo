@@ -26,6 +26,9 @@ test('UI separates integrity, trust and qualified status without false success c
   assert.match(html, /Целостность CMS/);
   assert.match(html, /Доверие сертификату/);
   assert.match(html, /Квалифицированный статус/);
+  assert.match(html, /id="resultInfoToggle"[^>]*aria-expanded="false"/);
+  assert.match(html, /Информация о подписанном файле/);
+  assert.match(html, /id="verificationDetails" class="verification-details hidden"/);
   assert.doesNotMatch(
     html,
     /успешно подписан[а-яё\s]*квалифицированной электронной подписью/i,
@@ -35,10 +38,12 @@ test('UI separates integrity, trust and qualified status without false success c
   assert.match(app, /verification\?\.trust\?\.status === 'not_checked'/);
   assert.match(app, /verification\?\.qualified\?\.status === 'not_checked'/);
   assert.match(app, /downloadLink\.href = completeData\.downloadUrl/);
-  assert.match(app, /Ссылка на результат действует до.*выгрузка одноразовая/s);
+  assert.match(app, /можно просматривать и скачивать несколько раз/);
+  assert.match(app, /setVerificationDetailsExpanded\(false\)/);
+  assert.match(app, /resultInfoToggle.*addEventListener\('click'/s);
   assert.match(
     app,
-    /Доверие сертификату и квалифицированный статус не проверялись/,
+    /Цепочка доверия, срок, отзыв и назначение ключа не проверялись/,
   );
   assert.match(
     app,

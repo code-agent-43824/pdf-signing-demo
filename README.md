@@ -81,7 +81,7 @@ Python workers.
 - `SIGNING_SESSION_MEMORY_BYTES` — общий лимит RAM для подготовленных
   сессий (64 MiB);
 - `SIGNING_RESULT_TTL_MS` — TTL готового PDF и capability-ссылок
-  (10 минут);
+  (15 минут);
 - `SIGNING_MAX_RESULTS` / `SIGNING_RESULT_DISK_BYTES` — общий лимит
   результатов и диска (32 / 128 MiB).
 - `STORAGE_CLEANUP_INTERVAL_MS` — период фоновой очистки истёкших
@@ -127,19 +127,20 @@ transition PDF-буферы немедленно освобождаются; о�
 
 Готовые PDF никогда не публикуются через static middleware. Они
 записываются с правами `0600` в приватный `RESULTS_DIR`; API возвращает
-отдельную короткоживущую ссылку preview и одноразовую ссылку download.
-Обе истекают через 10 минут, download отдаётся с
-`Content-Disposition: attachment` и `Cache-Control: no-store`. После TTL
-файл удаляется автоматически. При рестарте все файлы результата
-удаляются на старте, поскольку capability-токены хранятся только в
-памяти процесса.
+отдельные capability-ссылки для preview и download. Обе можно использовать
+многократно в течение ровно 15 минут; download отдаётся с
+`Content-Disposition: attachment`, preview разрешает встраивание только в
+страницу того же origin, оба ответа имеют `Cache-Control: no-store`. После
+TTL файл и служебная metadata удаляются автоматически. На диске хранятся
+только SHA-256 capability-токенов, поэтому ссылки переживают штатный
+рестарт сервиса, но не раскрываются через файловое хранилище.
 
 Сервис не пишет в логи содержимое PDF, CMS, PIN или capability-токены.
 Для пути результата логируется только шаблон `/api/results/:capability`.
 
 ## Защита браузерного криптоконтура
 
-Все ответы приложения получают enforcing CSP с `frame-ancestors 'none'`,
+Все ответы интерфейса и JSON API получают enforcing CSP с `frame-ancestors 'none'`,
 `script-src 'self' chrome-extension:`, запретом inline-script/event
 handlers, а также `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`,
 `X-Content-Type-Options: nosniff`, ограниченным `Permissions-Policy` и
@@ -147,6 +148,9 @@ handlers, а также `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`,
 `object-src 'self'` и `cpnp-js-call:` необходимы официальным browser
 adapter-ам CryptoPro и Рутокен; произвольные Internet script origins не
 разрешены.
+Ответ preview PDF переопределяет только anti-framing границу на
+`frame-ancestors 'self'` / `X-Frame-Options: SAMEORIGIN`, чтобы встроенный
+просмотр работал без разрешения стороннего framing.
 
 CryptoPro loader и `@aktivco/rutoken-plugin@1.0.9` загружаются только из
 локального `public/vendor`. Их SHA-256, SHA-384 SRI, происхождение и
@@ -257,8 +261,8 @@ UI показывает эти статусы раздельно и не наз�
 - `POST /pdf-signing/api/sign/complete` — session ID и detached CMS;
   ответ содержит `verification`, отдельные preview/download capability и
   их expiry;
-- `GET|HEAD /pdf-signing/api/results/:capability` — short-lived preview
-  или одноразовый attachment download;
+- `GET /pdf-signing/api/results/:capability` — многократный preview
+  или attachment download в пределах общего 15-минутного TTL;
 - `GET /pdf-signing/health/live|ready` — liveness/readiness.
 
 Неизвестные поля отклоняются. Ошибки имеют стабильные `code`, безопасный

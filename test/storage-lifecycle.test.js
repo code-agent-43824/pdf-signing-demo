@@ -103,7 +103,7 @@ test('session store enforces total memory and active-session limits', () => {
   );
 });
 
-test('result capabilities expire, download is one-time and cleanup removes files', async () => {
+test('result capabilities are reusable until expiry and cleanup removes files', async () => {
   let timestamp = 5000;
   const resultsDir = makeTempDir();
   fs.writeFileSync(path.join(resultsDir, 'orphan.pdf'), 'orphan');
@@ -122,7 +122,7 @@ test('result capabilities expire, download is one-time and cleanup removes files
   assert.equal(preview.kind, 'preview');
   assert.equal(store.resolve(saved.previewToken).kind, 'preview');
   assert.equal(store.resolve(saved.downloadToken).kind, 'download');
-  assert.equal(store.resolve(saved.downloadToken), null);
+  assert.equal(store.resolve(saved.downloadToken).kind, 'download');
   assert.equal(fs.statSync(preview.filePath).mode & 0o777, 0o600);
 
   timestamp += 101;
@@ -137,6 +137,34 @@ test('result capabilities expire, download is one-time and cleanup removes files
     maxResults: 2,
     maxDiskBytes: 16,
   });
+});
+
+test('result capabilities survive restart and remain valid for the full TTL', async () => {
+  let timestamp = 8000;
+  const resultsDir = makeTempDir();
+  const options = {
+    resultsDir,
+    ttlMs: 1000,
+    maxResults: 2,
+    maxDiskBytes: 32,
+    now: () => timestamp,
+  };
+  const firstStore = createResultStore(options);
+  const saved = await firstStore.save(Buffer.from('%PDF-restart'));
+  firstStore.close();
+
+  const restoredStore = createResultStore(options);
+  assert.equal(restoredStore.resolve(saved.previewToken).kind, 'preview');
+  assert.equal(restoredStore.resolve(saved.downloadToken).kind, 'download');
+  timestamp += 999;
+  assert.equal(restoredStore.resolve(saved.previewToken).kind, 'preview');
+  assert.equal(restoredStore.resolve(saved.downloadToken).kind, 'download');
+
+  timestamp += 1;
+  assert.equal(restoredStore.resolve(saved.previewToken), null);
+  await restoredStore.cleanup();
+  assert.deepEqual(fs.readdirSync(resultsDir), []);
+  restoredStore.close();
 });
 
 test('concurrent result writes reserve capacity before touching disk', async () => {

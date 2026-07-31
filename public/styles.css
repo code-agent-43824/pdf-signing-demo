@@ -222,6 +222,7 @@ body {
 }
 .workflow-panel,
 .preview-panel {
+  min-width: 0;
   margin-top: 0;
   padding: 14px;
   display: flex;
@@ -731,11 +732,24 @@ h1, h2, h3 { margin: 0; }
   margin-bottom: 4px;
 }
 .verification-download {
-  flex: 0 0 auto;
-  min-width: 260px;
+  min-width: 240px;
   padding-left: 18px;
   padding-right: 18px;
-  align-self: center;
+}
+.verification-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.verification-info-toggle {
+  min-height: 44px;
+  white-space: nowrap;
+}
+.verification-details {
+  grid-column: 1 / -1;
+  padding-top: 2px;
 }
 .integrity-icon {
   width: 34px;
@@ -748,7 +762,6 @@ h1, h2, h3 { margin: 0; }
   font-weight: 800;
 }
 .verification-grid {
-  grid-column: 1 / -1;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
@@ -1339,6 +1352,10 @@ h1, h2, h3 { margin: 0; }
   .verification-download {
     width: 100%;
     min-width: 0;
+  }
+  .verification-actions,
+  .verification-info-toggle {
+    width: 100%;
   }
   .verification-grid {
     grid-template-columns: 1fr;

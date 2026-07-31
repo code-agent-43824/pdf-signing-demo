@@ -645,6 +645,11 @@ test('complete verifies CMS integrity, certificate binding and retry semantics',
     signedPdfResponse.headers.get('content-disposition'),
     'inline; filename="signed-formular.pdf"',
   );
+  assert.equal(signedPdfResponse.headers.get('x-frame-options'), 'SAMEORIGIN');
+  assert.match(
+    signedPdfResponse.headers.get('content-security-policy'),
+    /frame-ancestors 'self'/,
+  );
   assert.match(
     signedPdfResponse.headers.get('cache-control'),
     /no-store/,
@@ -679,11 +684,11 @@ test('complete verifies CMS integrity, certificate binding and retry semantics',
     Buffer.from(await downloadResponse.arrayBuffer()).subarray(0, 5).toString(),
     '%PDF-',
   );
-  await assertSafeError(
-    await fetch(new URL(completed.downloadUrl, baseUrl)),
-    404,
-    'RESULT_NOT_FOUND',
-    'download',
+  const repeatedDownload = await fetch(new URL(completed.downloadUrl, baseUrl));
+  assert.equal(repeatedDownload.status, 200);
+  assert.equal(
+    Buffer.from(await repeatedDownload.arrayBuffer()).subarray(0, 5).toString(),
+    '%PDF-',
   );
   await new Promise((resolve) => setTimeout(resolve, 1100));
   await assertSafeError(
