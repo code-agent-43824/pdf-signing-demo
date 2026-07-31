@@ -793,6 +793,72 @@ anti-clickjacking реализованы и развёрнуты в production**
 - Python-окружение воспроизводимо из lock-файла.
 - В runtime-дереве нет неиспользуемых зависимостей.
 
+### Ход выполнения PR-9 — 2026-07-31
+
+Статус: **фаза 5 завершена и развёрнута в production**.
+
+Выполнено:
+
+- поддерживаемый Node зафиксирован как `22.22.2` в `.node-version` и
+  диапазоном `>=22.22.2 <23` в `engines`; npm зафиксирован как `10.9.8`,
+  а CI устанавливает именно эту версию;
+- прямые Python runtime dependencies вынесены в `requirements.in`,
+  проверенный production transitive closure — в
+  `requirements.constraints.txt`; полный `requirements.txt` создан
+  `pip-compile` и требует SHA-256 hashes для каждого разрешённого
+  distribution;
+- clean checkout устанавливается и полностью проверяется одной командой
+  `./scripts/bootstrap-and-test.sh`: создаются `.venv`, hashed Python
+  environment и `node_modules` через `npm ci`, затем воспроизводятся
+  fixtures, запускаются все tests, audits и SBOM consistency gate;
+- Node runtime tree сокращён до трёх прямых packages: `ajv`, `express`,
+  `pdf-lib`; удалены неиспользуемые `@qiwitech/cryptopro`,
+  `@signpdf/placeholder-pdf-lib`, `@signpdf/signpdf` и
+  `@signpdf/utils`;
+- удалены неиспользуемые legacy `prepare-multisign.py` и broken sample
+  generator, поэтому добавлять неиспользуемый `@pdf-lib/fontkit` не
+  потребовалось;
+- добавлены детерминированные CycloneDX 1.5 SBOM для полного production
+  Node tree и полного Python lock. CI пересоздаёт manifests и отклоняет
+  stale diff;
+- добавлены regression tests минимальности runtime tree, hashes и
+  соответствия обоих SBOM lockfiles; полный набор вырос до 40 tests;
+- CI дополнительно выполняет `npm audit --omit=dev` и `pip-audit`
+  полного Python lock. Первый audit выявил уже опубликованные advisory в
+  `cryptography 48.0.0`, `Pillow 12.2.0` и `pypdf 6.10.2`; версии
+  подняты до исправленных `48.0.1`, `12.3.0` и `6.14.2`, после чего оба
+  audit дают 0 известных уязвимостей;
+- README дополнен фактической архитектурой, exact bootstrap, API,
+  validation semantics, limits, retention и production deployment;
+  отдельный `docs/SUPPLY_CHAIN.md` фиксирует процедуру обновления locks,
+  audit и SBOM.
+
+Проверка и rollout:
+
+- локальный полный прогон в заново созданном окружении из hashed lock:
+  40 успешно, 0 ошибок, 0 TODO; fixtures и оба SBOM воспроизведены без
+  diff, `npm audit` и `pip-audit` — 0;
+- code commit `da7b8bf` запушен; GitHub Actions run
+  [`30619305434`](https://github.com/code-agent-43824/pdf-signing-demo/actions/runs/30619305434)
+  завершился успешно;
+- production staging на Python `3.14.4` установился только из hashed
+  lock, `pip check` прошёл; полный production-runtime suite:
+  40 успешно, 0 ошибок, 0 TODO;
+- rollout выполнен атомарной заменой подготовленного каталога; полный
+  предыдущий runtime, service unit, environment manifests и контрольные
+  данные сохранены в
+  `/home/openclaw/services/pdf-signing-demo/backups/20260731T091835Z-pr9`;
+- публичный full cycle `prepare -> CAdES -> complete -> preview x2 ->
+  one-time download -> replay` прошёл; новая подпись независимо проверена
+  pyHanko как `intact`, `valid`, `trusted`, `ENTIRE_FILE`, а API вернул
+  честные `valid / not_checked / not_checked`;
+- production headers/vendor hashes, закрытый `/generated`, public
+  health и loopback socket проверены; все 12 прежних персональных PDF
+  повторно совпали по SHA-256 и остались только в private legacy archive;
+- после финального restart service active, `NRestarts=0`, readiness
+  зелёный, session/result counters нулевые, socket только
+  `127.0.0.1:3010`, warning/error journal пуст.
+
 ## 9. Фаза 6 — безопасная декомпозиция (P2)
 
 Рефакторинг начинать только после появления golden tests из фазы 0.
