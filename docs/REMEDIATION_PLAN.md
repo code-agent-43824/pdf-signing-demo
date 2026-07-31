@@ -871,6 +871,20 @@ anti-clickjacking реализованы и развёрнуты в production**
   framing через `frame-ancestors 'none'` / `DENY`;
 - подробные статусы integrity/trust/qualified скрыты по умолчанию и
   раскрываются только кнопкой «Информация о подписанном файле».
+- реализация `7e80d53` прошла локальный и production-runtime suite 41/41,
+  `npm audit`, `pip check`, deterministic SBOM и GitHub Actions
+  [`30633783838`](https://github.com/code-agent-43824/pdf-signing-demo/actions/runs/30633783838);
+- rollout выполнен только после штатного истечения последнего результата
+  старой версии, чтобы restart не оборвал ещё действующую capability;
+  backup и полный прежний runtime сохранены в
+  `/home/openclaw/services/pdf-signing-demo/backups/20260731T131958Z-reusable-results`;
+- публичный synthetic CAdES cycle вернул точный TTL `900000` мс,
+  preview `200` дважды и download `200` дважды с идентичным SHA-256;
+  pyHanko подтвердил `intact/valid/trusted/ENTIRE_FILE`;
+- production browser проверен при 390 px: preview отображается, детали
+  изначально скрыты и раскрываются кнопкой, horizontal overflow отсутствует;
+  deploy hashes совпадают с repo, service active, `NRestarts=0`, readiness
+  зелёный, socket только `127.0.0.1:3010`, warning journal пуст.
 
 ## 9. Фаза 6 — безопасная декомпозиция (P2)
 
