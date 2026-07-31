@@ -1,0 +1,270 @@
+{
+  "$schema": "https://cyclonedx.org/schema/bom-1.5.schema.json",
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
+  "version": 1,
+  "metadata": {
+    "component": {
+      "bom-ref": "pkg:generic/pdf-signing-demo-python@3.0.0",
+      "type": "application",
+      "name": "pdf-signing-demo-python",
+      "version": "3.0.0",
+      "purl": "pkg:generic/pdf-signing-demo-python@3.0.0"
+    },
+    "properties": [
+      {
+        "name": "pdf-signing-demo:source",
+        "value": "requirements.txt (pip-compile, hashes required)"
+      }
+    ]
+  },
+  "components": [
+    {
+      "bom-ref": "pkg:pypi/asn1crypto@1.5.1",
+      "type": "library",
+      "name": "asn1crypto",
+      "version": "1.5.1",
+      "purl": "pkg:pypi/asn1crypto@1.5.1"
+    },
+    {
+      "bom-ref": "pkg:pypi/certifi@2026.4.22",
+      "type": "library",
+      "name": "certifi",
+      "version": "2026.4.22",
+      "purl": "pkg:pypi/certifi@2026.4.22"
+    },
+    {
+      "bom-ref": "pkg:pypi/cffi@2.0.0",
+      "type": "library",
+      "name": "cffi",
+      "version": "2.0.0",
+      "purl": "pkg:pypi/cffi@2.0.0"
+    },
+    {
+      "bom-ref": "pkg:pypi/charset-normalizer@3.4.7",
+      "type": "library",
+      "name": "charset-normalizer",
+      "version": "3.4.7",
+      "purl": "pkg:pypi/charset-normalizer@3.4.7"
+    },
+    {
+      "bom-ref": "pkg:pypi/cryptography@48.0.1",
+      "type": "library",
+      "name": "cryptography",
+      "version": "48.0.1",
+      "purl": "pkg:pypi/cryptography@48.0.1"
+    },
+    {
+      "bom-ref": "pkg:pypi/gostcrypto@1.2.5",
+      "type": "library",
+      "name": "gostcrypto",
+      "version": "1.2.5",
+      "purl": "pkg:pypi/gostcrypto@1.2.5"
+    },
+    {
+      "bom-ref": "pkg:pypi/idna@3.15",
+      "type": "library",
+      "name": "idna",
+      "version": "3.15",
+      "purl": "pkg:pypi/idna@3.15"
+    },
+    {
+      "bom-ref": "pkg:pypi/lxml@6.1.0",
+      "type": "library",
+      "name": "lxml",
+      "version": "6.1.0",
+      "purl": "pkg:pypi/lxml@6.1.0"
+    },
+    {
+      "bom-ref": "pkg:pypi/oscrypto@1.3.0",
+      "type": "library",
+      "name": "oscrypto",
+      "version": "1.3.0",
+      "purl": "pkg:pypi/oscrypto@1.3.0"
+    },
+    {
+      "bom-ref": "pkg:pypi/pillow@12.3.0",
+      "type": "library",
+      "name": "pillow",
+      "version": "12.3.0",
+      "purl": "pkg:pypi/pillow@12.3.0"
+    },
+    {
+      "bom-ref": "pkg:pypi/pycparser@3.0",
+      "type": "library",
+      "name": "pycparser",
+      "version": "3.0",
+      "purl": "pkg:pypi/pycparser@3.0"
+    },
+    {
+      "bom-ref": "pkg:pypi/pyhanko@0.34.1",
+      "type": "library",
+      "name": "pyhanko",
+      "version": "0.34.1",
+      "purl": "pkg:pypi/pyhanko@0.34.1"
+    },
+    {
+      "bom-ref": "pkg:pypi/pyhanko-certvalidator@0.30.2",
+      "type": "library",
+      "name": "pyhanko-certvalidator",
+      "version": "0.30.2",
+      "purl": "pkg:pypi/pyhanko-certvalidator@0.30.2"
+    },
+    {
+      "bom-ref": "pkg:pypi/pypdf@6.14.2",
+      "type": "library",
+      "name": "pypdf",
+      "version": "6.14.2",
+      "purl": "pkg:pypi/pypdf@6.14.2"
+    },
+    {
+      "bom-ref": "pkg:pypi/pyyaml@6.0.3",
+      "type": "library",
+      "name": "pyyaml",
+      "version": "6.0.3",
+      "purl": "pkg:pypi/pyyaml@6.0.3"
+    },
+    {
+      "bom-ref": "pkg:pypi/reportlab@4.4.10",
+      "type": "library",
+      "name": "reportlab",
+      "version": "4.4.10",
+      "purl": "pkg:pypi/reportlab@4.4.10"
+    },
+    {
+      "bom-ref": "pkg:pypi/requests@2.34.2",
+      "type": "library",
+      "name": "requests",
+      "version": "2.34.2",
+      "purl": "pkg:pypi/requests@2.34.2"
+    },
+    {
+      "bom-ref": "pkg:pypi/tzlocal@5.3.1",
+      "type": "library",
+      "name": "tzlocal",
+      "version": "5.3.1",
+      "purl": "pkg:pypi/tzlocal@5.3.1"
+    },
+    {
+      "bom-ref": "pkg:pypi/uritools@6.1.0",
+      "type": "library",
+      "name": "uritools",
+      "version": "6.1.0",
+      "purl": "pkg:pypi/uritools@6.1.0"
+    },
+    {
+      "bom-ref": "pkg:pypi/urllib3@2.7.0",
+      "type": "library",
+      "name": "urllib3",
+      "version": "2.7.0",
+      "purl": "pkg:pypi/urllib3@2.7.0"
+    }
+  ],
+  "dependencies": [
+    {
+      "ref": "pkg:generic/pdf-signing-demo-python@3.0.0",
+      "dependsOn": [
+        "pkg:pypi/asn1crypto@1.5.1",
+        "pkg:pypi/certifi@2026.4.22",
+        "pkg:pypi/cffi@2.0.0",
+        "pkg:pypi/charset-normalizer@3.4.7",
+        "pkg:pypi/cryptography@48.0.1",
+        "pkg:pypi/gostcrypto@1.2.5",
+        "pkg:pypi/idna@3.15",
+        "pkg:pypi/lxml@6.1.0",
+        "pkg:pypi/oscrypto@1.3.0",
+        "pkg:pypi/pillow@12.3.0",
+        "pkg:pypi/pycparser@3.0",
+        "pkg:pypi/pyhanko@0.34.1",
+        "pkg:pypi/pyhanko-certvalidator@0.30.2",
+        "pkg:pypi/pypdf@6.14.2",
+        "pkg:pypi/pyyaml@6.0.3",
+        "pkg:pypi/reportlab@4.4.10",
+        "pkg:pypi/requests@2.34.2",
+        "pkg:pypi/tzlocal@5.3.1",
+        "pkg:pypi/uritools@6.1.0",
+        "pkg:pypi/urllib3@2.7.0"
+      ]
+    },
+    {
+      "ref": "pkg:pypi/asn1crypto@1.5.1",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:pypi/certifi@2026.4.22",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:pypi/cffi@2.0.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:pypi/charset-normalizer@3.4.7",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:pypi/cryptography@48.0.1",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:pypi/gostcrypto@1.2.5",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:pypi/idna@3.15",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:pypi/lxml@6.1.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:pypi/oscrypto@1.3.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:pypi/pillow@12.3.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:pypi/pycparser@3.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:pypi/pyhanko@0.34.1",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:pypi/pyhanko-certvalidator@0.30.2",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:pypi/pypdf@6.14.2",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:pypi/pyyaml@6.0.3",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:pypi/reportlab@4.4.10",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:pypi/requests@2.34.2",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:pypi/tzlocal@5.3.1",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:pypi/uritools@6.1.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:pypi/urllib3@2.7.0",
+      "dependsOn": []
+    }
+  ]
+}

@@ -3,11 +3,18 @@
   "version": "3.0.0",
   "description": "",
   "main": "index.js",
+  "engines": {
+    "node": ">=22.22.2 <23"
+  },
+  "packageManager": "npm@10.9.8",
   "scripts": {
     "test": "node --test --test-concurrency=1",
     "test:golden": "node --test --test-concurrency=1 test/pades-golden.test.js",
     "fixtures:generate": "python3 test/fixtures/generate.py",
-    "baseline:capture": "node scripts/capture-production-baseline.js"
+    "baseline:capture": "node scripts/capture-production-baseline.js",
+    "sbom:generate": "node scripts/generate-sbom.js",
+    "sbom:check": "npm run sbom:generate && git diff --exit-code -- sbom",
+    "verify": "npm run fixtures:generate && git diff --exit-code -- test/fixtures && npm test && npm audit --omit=dev --audit-level=high && npm run sbom:check"
   },
   "repository": {
     "type": "git",
@@ -21,10 +28,6 @@
   },
   "homepage": "https://github.com/code-agent-43824/pdf-signing-demo#readme",
   "dependencies": {
-    "@qiwitech/cryptopro": "^0.1.2",
-    "@signpdf/placeholder-pdf-lib": "^3.3.0",
-    "@signpdf/signpdf": "^3.3.0",
-    "@signpdf/utils": "^3.3.0",
     "ajv": "8.20.0",
     "express": "^5.2.1",
     "pdf-lib": "^1.17.1"

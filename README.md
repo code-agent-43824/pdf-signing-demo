@@ -1,6 +1,7 @@
 # pdf-signing-demo
 
-Демо-проект для веб-сценария подписи PDF-документа через CryptoPro Browser Plugin.
+Демо-проект для веб-сценария подписи PDF-документа через CryptoPro
+Browser Plugin или Рутокен Плагин.
 
 ## Что уже есть
 
@@ -10,29 +11,51 @@
 - двухфазный `prepare`/`complete` PAdES-контур с обязательной серверной
   проверкой CMS до встраивания
 
-## Запуск
+## Архитектура
+
+- `public/` — статический UI и локально закреплённые browser adapters;
+- `src/server.js` — HTTP API, health endpoints и orchestration;
+- `src/signing/` — подготовка incremental PDF и CMS verification;
+- `src/runtime/` — bounded queue и изолированный запуск Python workers;
+- `src/storage/` — TTL, capability-ссылки и приватные результаты;
+- `scripts/prepare-pyhanko.py` — единственный runtime PDF preparation
+  worker; `normalize-cms.py` и `verify-cms.py` обслуживают CMS boundary;
+- `test/` — golden PDF/CMS corpus, API, resource-control, UI и storage
+  regression tests.
+
+Браузер выбирает сертификат и создаёт detached CAdES, но не определяет
+доверенные данные штампа. Сервер сам разбирает сертификат в `prepare`,
+выдаёт точные байты `/ByteRange`, а в `complete` проверяет CMS и все
+подписи итогового PDF до сохранения результата.
+
+## Поддерживаемое окружение и точный bootstrap
+
+Поддерживается Node.js `22.22.2` (зафиксирован в `.node-version`,
+`engines` допускает только Node 22) и Python `3.12–3.14`. Node
+dependencies полностью фиксирует `package-lock.json`. Python lock
+`requirements.txt` содержит полный transitive closure и hashes;
+`requirements.in` перечисляет прямые зависимости, а
+`requirements.constraints.txt` сохраняет проверенные production-версии
+транзитивных пакетов.
+
+Из чистого checkout установка и все проверки выполняются одной командой:
 
 ```bash
-npm install
-node src/server.js
+./scripts/bootstrap-and-test.sh
 ```
 
-Дополнительно для server-side подготовки PDF нужны Python-зависимости:
+Скрипт создаёт `.venv`, устанавливает Python packages с
+`--require-hashes`, выполняет `npm ci`, воспроизводит fixtures, запускает
+полный набор тестов, production `npm audit` и проверяет committed SBOM.
 
-- `pyHanko`
-- `pypdf`
-- `reportlab`
-- `Pillow`
-- `asn1crypto`
-- `gostcrypto`
-
-Для воспроизводимой установки поддерживаемых версий:
+Для обычного локального запуска после bootstrap:
 
 ```bash
-python3 -m venv .venv
-. .venv/bin/activate
-python -m pip install --requirement requirements.txt
+PATH="$PWD/.venv/bin:$PATH" node src/server.js
 ```
+
+Node остаётся системным/runtime binary; `.venv` используется только для
+Python workers.
 
 Переменные окружения:
 
@@ -220,7 +243,29 @@ UI показывает эти статусы раздельно и не наз�
 
 Если правило выбирает несколько страниц, реальный signature widget ставится на одну страницу (`widgetPageMode`: `first` или `last`), а на остальных выбранных страницах рисуются такие же визуальные штампы.
 
-## Deploy contour
+## API
+
+Все JSON endpoints требуют `Content-Type: application/json`. При
+`BASE_PATH=/pdf-signing/` основной контракт:
+
+- `GET /pdf-signing/api/stamp-config` — публичные defaults без путей;
+- `GET /pdf-signing/api/fonts` — opaque font IDs и display names;
+- `GET /pdf-signing/api/form` — исходный серверный PDF;
+- `POST /pdf-signing/api/sign/prepare` — PDF, certificate DER,
+  stamp config и placement; ответ содержит session ID, exact
+  `contentToSignBase64`, `/ByteRange` и размер placeholder;
+- `POST /pdf-signing/api/sign/complete` — session ID и detached CMS;
+  ответ содержит `verification`, отдельные preview/download capability и
+  их expiry;
+- `GET|HEAD /pdf-signing/api/results/:capability` — short-lived preview
+  или одноразовый attachment download;
+- `GET /pdf-signing/health/live|ready` — liveness/readiness.
+
+Неизвестные поля отклоняются. Ошибки имеют стабильные `code`, безопасный
+`message` и `requestId`; внутренние пути, PDF/CMS и персональные данные в
+ответы не попадают.
+
+## Deployment contour
 
 Current production URL:
 
@@ -229,7 +274,18 @@ Current production URL:
 Repo includes reference deployment files:
 
 - `deploy/pdf-signing-demo.service`
+- `deploy/mescheryakov.pro.caddy`
 - `deploy/Caddyfile.snippet`
+
+Production разворачивается из зафиксированного commit в
+`/home/openclaw/services/pdf-signing-demo/current`. Перед заменой
+создаётся timestamped backup кода, venv и service unit. В staging-копии
+выполняются `npm ci --omit=dev`, установка `requirements.txt
+--require-hashes` в venv и полный test suite; только после этого файлы
+переносятся в `current`, service перезапускается и проверяются readiness,
+public HTTPS, полный CAdES cycle и независимая PDF validation. При любой
+неуспешной проверке восстанавливается backup. `RESULTS_DIR` и legacy
+archive не входят в release tree.
 
 ## Проверки golden-корпуса
 
@@ -240,10 +296,26 @@ Golden-корпус фиксирует структурные варианты P
 
 ```bash
 npm ci
-python -m pip install --requirement requirements.txt
-npm test
+python -m pip install --require-hashes --requirement requirements.txt
+npm run verify
 ```
 
 Тестовые сертификат и закрытый ключ создаются во временном каталоге на время
 прогона и не сохраняются в репозитории. Состав корпуса описан в
 `test/fixtures/README.md`.
+
+## Зависимости и SBOM
+
+Runtime Node tree содержит только `express`, `ajv` и `pdf-lib`; прежние
+неиспользуемые `@qiwitech/cryptopro` и `@signpdf/*` удалены.
+Неиспользуемые legacy preparation script и sample generator также
+удалены, поэтому `@pdf-lib/fontkit` не требуется.
+
+Детерминированные CycloneDX 1.5 manifests лежат в
+`sbom/node.cdx.json` и `sbom/python.cdx.json`. Команда
+`npm run sbom:check` пересоздаёт их из lockfiles и запрещает stale diff.
+CI дополнительно запускает `npm audit --omit=dev` и `pip-audit` для
+полного Python lock.
+
+Процедура обновления lockfiles и supply-chain artifacts описана в
+`docs/SUPPLY_CHAIN.md`.
