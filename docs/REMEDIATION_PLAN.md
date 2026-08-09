@@ -904,6 +904,26 @@ anti-clickjacking реализованы и развёрнуты в production**
 - Изолировать чистые функции разбора `/ByteRange` и встраивания CMS и
   покрыть property-based/fuzz tests.
 
+#### PR-10a — первый безопасный backend-срез (2026-08-09)
+
+Статус: **реализован локально; rollout фиксируется отдельно после CI**.
+
+- конфигурация штампа и каталог шрифтов вынесены из `src/server.js` в
+  `src/stamp/configuration.js`; модуль сохраняет прежнее детерминированное
+  построение opaque font ID и выполняет обратное разрешение пути только на
+  сервере;
+- единое отображение storage/queue/worker/CMS/certificate ошибок и
+  безопасная сериализация HTTP-ответов вынесены в `src/http/errors.js`;
+- `src/server.js` сокращён с 970 до 768 строк без изменения signing routes,
+  PDF preparation, CMS normalization/verification или embedding;
+- добавлены отдельные unit-контракты для font boundary, неизвестных font ID,
+  JSON object boundary, стабильных status/code, abort semantics и редактирования
+  capability path; полный suite содержит 48 тестов;
+- при обязательном production audit обнаружена новая advisory
+  `GHSA-7p8r-x3mc-p8w7`; транзитивный `fast-uri` обновлён lockfile-only с
+  `3.1.4` до исправленного `3.1.5`, runtime dependency audit снова даёт 0;
+- криптографические функции и golden fixtures в этом срезе не изменялись.
+
 ### Frontend
 
 - Разделить `public/app.js` на:

@@ -15,6 +15,10 @@ Browser Plugin или Рутокен Плагин.
 
 - `public/` — статический UI и локально закреплённые browser adapters;
 - `src/server.js` — HTTP API, health endpoints и orchestration;
+- `src/http/` — request validation, rate limiting и единое безопасное
+  отображение внутренних ошибок в публичный HTTP-контракт;
+- `src/stamp/` — чтение конфигурации штампа и двусторонняя граница между
+  server-only путями шрифтов и opaque browser IDs;
 - `src/signing/` — подготовка incremental PDF и CMS verification;
 - `src/runtime/` — bounded queue и изолированный запуск Python workers;
 - `src/storage/` — TTL, capability-ссылки и приватные результаты;

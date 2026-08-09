@@ -22,11 +22,17 @@ const {
   validateStampConfigForDocument,
 } = require('./http/validation');
 const {
+  createCertificateError,
+  createCmsIntegrityError,
+  createOperationError,
+  sendSafeError,
+  shouldSkipResponse,
+} = require('./http/errors');
+const {
   FixedWindowRateLimiter,
   createRateLimitMiddleware,
 } = require('./http/rate-limit');
 const {
-  OperationControlError,
   OperationQueue,
   positiveInteger,
 } = require('./runtime/operation-queue');
@@ -39,6 +45,9 @@ const {
   createResultStore,
   createSessionStore,
 } = require('./storage/lifecycle');
+const {
+  createStampConfiguration,
+} = require('./stamp/configuration');
 
 const app = express();
 const PORT = process.env.PORT || 3010;
@@ -176,13 +185,11 @@ const completeRateLimiter = new FixedWindowRateLimiter({
 let readinessValue = null;
 let readinessExpiresAt = 0;
 let readinessInFlight = null;
-const FONT_DIRS = [
+const stampConfiguration = createStampConfiguration({
+  projectRoot,
   localFontsDir,
-  '/usr/share/fonts',
-  '/usr/local/share/fonts',
-  path.join(process.env.HOME || '', '.fonts'),
-  path.join(process.env.HOME || '', '.local', 'share', 'fonts'),
-].filter(Boolean);
+  stampConfigPath,
+});
 
 app.disable('x-powered-by');
 app.set('trust proxy', 'loopback');
@@ -234,106 +241,6 @@ app.use(express.json({
   strict: true,
 }));
 
-function readStampConfig() {
-  return fs.readFileSync(stampConfigPath, 'utf8');
-}
-
-function parseStampConfig(raw) {
-  const parsed = JSON.parse(raw);
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new Error('Stamp config must be a JSON object.');
-  }
-  return parsed;
-}
-
-function collectFontFiles(dirPath, result = []) {
-  if (!dirPath || !fs.existsSync(dirPath)) {
-    return result;
-  }
-
-  for (const entry of fs.readdirSync(dirPath, { withFileTypes: true })) {
-    const fullPath = path.join(dirPath, entry.name);
-    if (entry.isDirectory()) {
-      collectFontFiles(fullPath, result);
-      continue;
-    }
-    if (/\.(ttf|otf|ttc)$/i.test(entry.name)) {
-      result.push(fullPath);
-    }
-  }
-
-  return result;
-}
-
-function resolveConfiguredFontPath(fontPath) {
-  return path.normalize(
-    path.isAbsolute(fontPath) ? fontPath : path.resolve(projectRoot, fontPath),
-  );
-}
-
-function createFontCatalog() {
-  const fonts = Array.from(new Set(FONT_DIRS.flatMap((dir) => collectFontFiles(dir))))
-    .sort((left, right) => left.localeCompare(right, 'ru'))
-    .map((fontPath) => ({
-      id: `font-${crypto.createHash('sha256').update(fontPath).digest('hex').slice(0, 16)}`,
-      serverPath: path.normalize(fontPath),
-      label: path.basename(fontPath).replace(/\.(ttf|otf|ttc)$/i, ''),
-    }));
-
-  return {
-    fonts,
-    byId: new Map(fonts.map((font) => [font.id, font])),
-    byServerPath: new Map(fonts.map((font) => [font.serverPath, font])),
-  };
-}
-
-function visitConfiguredFonts(config, callback) {
-  const fonts = config?.appearance?.fonts;
-  for (const role of ['title', 'label', 'value']) {
-    const entry = fonts?.[role];
-    if (entry?.path) {
-      callback(entry, role);
-    }
-  }
-}
-
-function createClientStampConfig(config, catalog) {
-  const clientConfig = structuredClone(config);
-  visitConfiguredFonts(clientConfig, (entry) => {
-    const serverPath = resolveConfiguredFontPath(entry.path);
-    const font = catalog.byServerPath.get(serverPath);
-    if (!font) {
-      throw new Error('Configured stamp font is unavailable.');
-    }
-    entry.path = font.id;
-  });
-  return clientConfig;
-}
-
-function createServerStampConfig(config, catalog) {
-  const serverConfig = structuredClone(config);
-  visitConfiguredFonts(serverConfig, (entry) => {
-    const font = catalog.byId.get(entry.path);
-    if (!font) {
-      throw new HttpError(
-        400,
-        'UNKNOWN_FONT',
-        'Некорректная конфигурация штампа.',
-        { fontId: entry.path },
-      );
-    }
-    entry.path = font.serverPath;
-  });
-  return serverConfig;
-}
-
-function listAvailableFonts(catalog) {
-  return catalog.fonts.map((font) => ({
-    id: font.id,
-    label: font.label,
-  }));
-}
-
 async function computeReadiness() {
   const checks = {
     python: false,
@@ -357,8 +264,11 @@ async function computeReadiness() {
   } catch {}
 
   try {
-    const config = parseStampConfig(readStampConfig());
-    const clientConfig = createClientStampConfig(config, createFontCatalog());
+    const config = stampConfiguration.parse(stampConfiguration.read());
+    const clientConfig = stampConfiguration.toClient(
+      config,
+      stampConfiguration.createCatalog(),
+    );
     validateStampConfig(clientConfig);
     checks.config = true;
   } catch {}
@@ -437,80 +347,6 @@ async function normalizeCmsSignatureBase64(cmsSignatureBase64, { signal = null }
   }
 }
 
-function createCmsIntegrityError(error) {
-  return new HttpError(
-    400,
-    'CMS_INTEGRITY_FAILED',
-    'CMS-подпись не прошла обязательную проверку целостности.',
-    { verifierCode: error.code || 'CMS_VERIFIER_FAILED' },
-  );
-}
-
-function createCertificateError(error) {
-  return new HttpError(
-    400,
-    'INVALID_SIGNER_CERTIFICATE',
-    'Не удалось проверить выбранный сертификат.',
-    { verifierCode: error.code || 'CERTIFICATE_INSPECTION_FAILED' },
-  );
-}
-
-function createOperationError(error) {
-  if (error instanceof StorageLimitError) {
-    if (error.code === 'SESSION_OWNER_LIMIT') {
-      return new HttpError(
-        429,
-        'SESSION_LIMIT_REACHED',
-        'Для этого адреса уже создано слишком много активных сессий.',
-      );
-    }
-    return new HttpError(
-      503,
-      'STORAGE_CAPACITY_REACHED',
-      'Временное хранилище занято. Повторите попытку позже.',
-    );
-  }
-  if (error instanceof OperationControlError) {
-    if (error.code === 'OPERATION_TIMEOUT') {
-      return new HttpError(
-        504,
-        'OPERATION_TIMEOUT',
-        'Операция подписи превысила допустимое время выполнения.',
-      );
-    }
-    if (['QUEUE_FULL', 'QUEUE_TIMEOUT'].includes(error.code)) {
-      return new HttpError(
-        503,
-        'SERVER_BUSY',
-        'Сервис занят. Повторите попытку позже.',
-      );
-    }
-  }
-  if (error instanceof WorkerProcessError && error.code === 'WORKER_TIMEOUT') {
-    return new HttpError(
-      504,
-      'OPERATION_TIMEOUT',
-      'Операция подписи превысила допустимое время выполнения.',
-    );
-  }
-  return error;
-}
-
-function shouldSkipResponse(res, error) {
-  return (
-    res.destroyed
-    || res.writableEnded
-    || (
-      error instanceof OperationControlError
-      && error.code === 'REQUEST_ABORTED'
-    )
-    || (
-      error instanceof WorkerProcessError
-      && error.code === 'WORKER_ABORTED'
-    )
-  );
-}
-
 function createVerificationResult(integrity, embeddedIntegrity) {
   if (
     integrity?.ok !== true
@@ -547,48 +383,6 @@ function createVerificationResult(integrity, embeddedIntegrity) {
       policy: null,
     },
   };
-}
-
-function logRequestError(req, res, error, stage, code) {
-  const requestPath = req.path.startsWith('/api/results/')
-    ? '/api/results/:capability'
-    : req.path;
-  const record = {
-    timestamp: new Date().toISOString(),
-    level: error instanceof HttpError ? 'warn' : 'error',
-    event: 'request_failed',
-    requestId: res.locals.requestId,
-    method: req.method,
-    path: requestPath,
-    stage,
-    code,
-    error: {
-      name: error?.name || 'Error',
-      message: String(error?.message || 'Unknown error').slice(0, 1000),
-    },
-  };
-  if (error instanceof HttpError && error.details) {
-    record.details = error.details;
-  }
-  console.error(JSON.stringify(record));
-}
-
-function sendSafeError(req, res, error, stage = null) {
-  const known = error instanceof HttpError;
-  const status = known ? error.status : 500;
-  const code = known ? error.code : 'INTERNAL_ERROR';
-  const message = known
-    ? error.publicMessage
-    : 'Сервис временно не может выполнить операцию.';
-  logRequestError(req, res, error, stage, code);
-
-  return res.status(status).json({
-    ok: false,
-    ...(stage ? { stage } : {}),
-    code,
-    message,
-    requestId: res.locals.requestId,
-  });
 }
 
 const router = express.Router();
@@ -632,10 +426,10 @@ router.get('/health/ready', async (req, res) => {
 
 router.get('/api/stamp-config', (_req, res) => {
   try {
-    const raw = readStampConfig();
-    const config = parseStampConfig(raw);
-    const catalog = createFontCatalog();
-    const clientConfig = createClientStampConfig(config, catalog);
+    const raw = stampConfiguration.read();
+    const config = stampConfiguration.parse(raw);
+    const catalog = stampConfiguration.createCatalog();
+    const clientConfig = stampConfiguration.toClient(config, catalog);
     validateStampConfig(clientConfig);
     res.json({ ok: true, config: clientConfig });
   } catch (error) {
@@ -648,7 +442,8 @@ router.get('/api/stamp-config', (_req, res) => {
 
 router.get('/api/fonts', (_req, res) => {
   try {
-    res.json({ ok: true, fonts: listAvailableFonts(createFontCatalog()) });
+    const catalog = stampConfiguration.createCatalog();
+    res.json({ ok: true, fonts: stampConfiguration.listAvailable(catalog) });
   } catch (error) {
     sendSafeError(_req, res, error);
   }
@@ -746,7 +541,10 @@ router.post('/api/sign/prepare', prepareRateLimit, async (req, res) => {
       const pdfInfo = await validatePdfBuffer(sourceBuffer);
       validateStampConfigForDocument(req.body.stampConfig, pdfInfo.pages);
       const stampConfig = req.body.stampConfig
-        ? createServerStampConfig(req.body.stampConfig, createFontCatalog())
+        ? stampConfiguration.toServer(
+          req.body.stampConfig,
+          stampConfiguration.createCatalog(),
+        )
         : null;
       const requestedStampPosition = req.body.requestedStampPosition || null;
       const prepared = await createPreparedPdf({
