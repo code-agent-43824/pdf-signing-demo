@@ -921,7 +921,10 @@ anti-clickjacking реализованы и развёрнуты в production**
   capability path; полный suite содержит 48 тестов;
 - при обязательном production audit обнаружена новая advisory
   `GHSA-7p8r-x3mc-p8w7`; транзитивный `fast-uri` обновлён lockfile-only с
-  `3.1.4` до исправленного `3.1.5`, runtime dependency audit снова даёт 0;
+  `3.1.4` до исправленного `3.1.5`; CI дополнительно обнаружил свежие
+  `PYSEC-2026-3552..3554`, `CVE-2026-71852` и `CVE-2026-71870`, поэтому
+  Python pins подняты до исправленных `cryptography 50.0.0` и
+  `pypdf 6.15.0`;
 - криптографические функции и golden fixtures в этом срезе не изменялись.
 
 ### Frontend
