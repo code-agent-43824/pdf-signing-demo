@@ -906,7 +906,7 @@ anti-clickjacking реализованы и развёрнуты в production**
 
 #### PR-10a — первый безопасный backend-срез (2026-08-09)
 
-Статус: **реализован локально; rollout фиксируется отдельно после CI**.
+Статус: **реализован и развёрнут в production**.
 
 - конфигурация штампа и каталог шрифтов вынесены из `src/server.js` в
   `src/stamp/configuration.js`; модуль сохраняет прежнее детерминированное
@@ -926,6 +926,28 @@ anti-clickjacking реализованы и развёрнуты в production**
   Python pins подняты до исправленных `cryptography 50.0.0` и
   `pypdf 6.15.0`;
 - криптографические функции и golden fixtures в этом срезе не изменялись.
+
+Rollout evidence:
+
+- implementation commits: `39ce684`, dependency-lock follow-up `52b4df2`;
+  финальный GitHub Actions run
+  [`31310431292`](https://github.com/code-agent-43824/pdf-signing-demo/actions/runs/31310431292)
+  прошёл clean bootstrap, 48/48 tests и оба dependency audit;
+- production staging на Python `3.14.4` установился только по hashes;
+  48/48 tests, `npm audit` и `pip check` прошли, SBOM и ключевые runtime
+  files побайтово совпали с repository commit;
+- перед переключением active sessions/results были нулевыми; прежний runtime
+  сохранён в backup
+  `/home/openclaw/services/pdf-signing-demo/backups/20260809T111939Z-pr10a`;
+- public UI/API/health вернули ожидаемые `200`, `/generated` остался `404`,
+  opaque font IDs и enforcing security headers сохранились;
+- отдельный production-runtime contour прошёл полный synthetic cycle
+  `prepare -> CAdES -> complete -> preview x2 -> download x2`; API вернул
+  `valid / not_checked / not_checked`, а pyHanko подтвердил
+  `intact/valid/trusted/ENTIRE_FILE`; contour и synthetic result удалены;
+- финально service active, `NRestarts=0`, readiness зелёный, session/result
+  counters нулевые, socket только `127.0.0.1:3010`, warning journal пуст;
+  12 прежних private legacy PDF остались на месте.
 
 ### Frontend
 
