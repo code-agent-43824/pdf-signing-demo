@@ -949,6 +949,42 @@ Rollout evidence:
   counters нулевые, socket только `127.0.0.1:3010`, warning journal пуст;
   12 прежних private legacy PDF остались на месте.
 
+#### PR-10b — signing routes и orchestration (2026-08-20)
+
+Статус: **реализован и развёрнут в production**.
+
+- оба signing endpoint, rate-limit adapters и orchestration полного цикла
+  `prepare`/`complete` вынесены из `src/server.js` в
+  `src/routes/signing.js` через узкий router factory;
+- в том же модуле локализованы CMS normalization и fail-closed построение
+  публичного verification contract; PDF preparation, CMS verification,
+  embedding, session/result storage и frontend не изменялись;
+- публичные URL, safe error stages/codes, queue keys, retry semantics и
+  reusable 15-minute result capabilities сохранены без изменения;
+- `src/server.js` сокращён с 768 до 500 строк; добавлены два unit-контракта
+  для независимой семантики integrity/trust/qualified и запрета успешного
+  ответа при неполной embedded verification; полный suite содержит 50 тестов.
+
+Rollout evidence:
+
+- implementation commit `d6c8605`; GitHub Actions run
+  [`32342136303`](https://github.com/code-agent-43824/pdf-signing-demo/actions/runs/32342136303)
+  прошёл clean bootstrap, 50/50 tests, SBOM gate и оба dependency audit;
+- production staging на Python `3.14.4` установился только по hashes;
+  50/50 tests и `pip check` прошли, Node/Python locks и SBOM совпали с
+  проверенным release;
+- перед переключением active sessions/results были нулевыми; прежний runtime
+  и service unit сохранены в backup
+  `/home/openclaw/services/pdf-signing-demo/backups/20260820T070349Z-pr10b`;
+- public HTTPS contour прошёл полный synthetic cycle
+  `prepare -> CAdES -> complete -> preview x2 -> download x2`; все четыре
+  результата имели один SHA-256, API вернул
+  `valid / not_checked / not_checked`, а pyHanko подтвердил
+  `intact/valid/trusted/ENTIRE_FILE`; synthetic result удалён;
+- финально deploy hashes совпадают с commit, service active, `NRestarts=0`,
+  readiness зелёный, session/result counters нулевые, socket только
+  `127.0.0.1:3010`, warning journal пуст; 12 private legacy PDF сохранены.
+
 ### Frontend
 
 - Разделить `public/app.js` на:
