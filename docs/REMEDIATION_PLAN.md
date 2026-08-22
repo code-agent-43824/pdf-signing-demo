@@ -985,6 +985,46 @@ Rollout evidence:
   readiness зелёный, session/result counters нулевые, socket только
   `127.0.0.1:3010`, warning journal пуст; 12 private legacy PDF сохранены.
 
+#### PR-10c — health/result routes и bootstrap (2026-08-22)
+
+Статус: **реализован и развёрнут в production**.
+
+- liveness/readiness и их прежний coalesced five-second cache вынесены в
+  `src/routes/health.js`; worker/storage counters по-прежнему вычисляются
+  непосредственно для каждого readiness-ответа;
+- выдача reusable preview/download capabilities и их разные security headers
+  вынесены в `src/routes/results.js` без изменения URL, TTL или HTTP-семантики;
+- loopback listener, HTTP timeouts и periodic storage/rate-limit cleanup
+  вынесены в `src/bootstrap.js`;
+- `src/server.js` сокращён с 500 до 340 строк; signing/PDF/CMS/storage и
+  frontend в этом срезе не менялись;
+- nested result router потребовал укрепить центральное редактирование логов:
+  capability теперь fail-closed распознаётся по полному `originalUrl`, даже
+  когда Express обрезал mount prefix из `req.path`;
+- добавлены два unit-контракта для preview/download headers и loopback/timeout
+  bootstrap, а существующий log-redaction контракт переведён на реальную
+  nested-router форму; полный suite содержит 52 теста.
+
+Rollout evidence:
+
+- implementation commit `0baae13`; GitHub Actions run
+  [`32572880936`](https://github.com/code-agent-43824/pdf-signing-demo/actions/runs/32572880936)
+  прошёл clean bootstrap, 52/52 tests, SBOM gate и оба dependency audit;
+- production staging на Node `22.22.2` / Python `3.14.4` прошёл 52/52 tests
+  и `pip check`; content checksums staging/repository совпали;
+- перед переключением active sessions/results были нулевыми; прежний runtime
+  и service unit сохранены в backup
+  `/home/openclaw/services/pdf-signing-demo/backups/20260822T122848Z-pr10c`;
+- public HTTPS contour прошёл полный synthetic cycle
+  `prepare -> CAdES -> complete -> preview x2 -> download x2`; все четыре
+  результата имели один SHA-256, API вернул
+  `valid / not_checked / not_checked`, а pyHanko подтвердил
+  `intact/valid/trusted/ENTIRE_FILE`;
+- synthetic result перенесён в rollout backup, transient sessions очищены
+  штатным restart; финально service active, `NRestarts=0`, readiness зелёный,
+  session/result counters нулевые, socket только `127.0.0.1:3010`, warning
+  journal пуст; 12 private legacy PDF сохранены.
+
 ### Frontend
 
 - Разделить `public/app.js` на:
