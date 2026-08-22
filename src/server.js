@@ -16,15 +16,17 @@ const {
   OperationQueue,
   positiveInteger,
 } = require('./runtime/operation-queue');
-const { runIsolatedProcess } = require('./runtime/process-runner');
 const {
   createResultStore,
   createSessionStore,
 } = require('./storage/lifecycle');
 const { createSigningRouter } = require('./routes/signing');
+const { createHealthRouter } = require('./routes/health');
+const { createResultsRouter } = require('./routes/results');
 const {
   createStampConfiguration,
 } = require('./stamp/configuration');
+const { startServer } = require('./bootstrap');
 
 const app = express();
 const PORT = process.env.PORT || 3010;
@@ -158,9 +160,6 @@ const completeRateLimiter = new FixedWindowRateLimiter({
   limit: positiveInteger(process.env.COMPLETE_RATE_LIMIT, 30, 1, 10000),
   windowMs: rateLimitWindowMs,
 });
-let readinessValue = null;
-let readinessExpiresAt = 0;
-let readinessInFlight = null;
 const stampConfiguration = createStampConfiguration({
   projectRoot,
   localFontsDir,
@@ -217,87 +216,6 @@ app.use(express.json({
   strict: true,
 }));
 
-async function computeReadiness() {
-  const checks = {
-    python: false,
-    config: false,
-    storage: false,
-    workerLimits: false,
-  };
-
-  try {
-    await runIsolatedProcess('python3', ['--version'], {
-      timeoutMs: 2000,
-      maxBuffer: 64 * 1024,
-      limits: { enabled: false },
-    });
-    checks.python = true;
-  } catch {}
-
-  try {
-    fs.accessSync('/usr/bin/prlimit', fs.constants.X_OK);
-    checks.workerLimits = true;
-  } catch {}
-
-  try {
-    const config = stampConfiguration.parse(stampConfiguration.read());
-    const clientConfig = stampConfiguration.toClient(
-      config,
-      stampConfiguration.createCatalog(),
-    );
-    validateStampConfig(clientConfig);
-    checks.config = true;
-  } catch {}
-
-  try {
-    fs.accessSync(resultsDir, fs.constants.W_OK);
-    checks.storage = true;
-  } catch {}
-
-  return {
-    ok: Object.values(checks).every(Boolean),
-    service: 'pdf-signing-demo',
-    checks,
-  };
-}
-
-async function getReadiness() {
-  const now = Date.now();
-  let base = readinessValue && now < readinessExpiresAt
-    ? readinessValue
-    : null;
-  if (!base) {
-    if (!readinessInFlight) {
-      readinessInFlight = computeReadiness()
-        .then((value) => {
-          readinessValue = value;
-          readinessExpiresAt = Date.now() + 5000;
-          return value;
-        })
-        .finally(() => {
-          readinessInFlight = null;
-        });
-    }
-    base = await readinessInFlight;
-  }
-  const queueStats = operationQueue.stats();
-  const workerQueue = queueStats.concurrency > 0
-    && queueStats.queued <= queueStats.maxQueue;
-  return {
-    ...base,
-    ok: base.ok && workerQueue,
-    checks: {
-      ...base.checks,
-      workerQueue,
-    },
-    workers: queueStats,
-    storage: {
-      sessions: sessions.stats(),
-      results: results.stats(),
-    },
-  };
-}
-
 const router = express.Router();
 
 function ownerKeyForRequest(req) {
@@ -307,35 +225,13 @@ function ownerKeyForRequest(req) {
     .digest('hex');
 }
 
-function resultHeaders(kind) {
-  const headers = {
-    'Cache-Control': 'no-store, private, max-age=0',
-    Pragma: 'no-cache',
-    Expires: '0',
-    'Referrer-Policy': 'no-referrer',
-    'X-Content-Type-Options': 'nosniff',
-    'Cross-Origin-Resource-Policy': 'same-origin',
-    'Content-Disposition': `${kind === 'download' ? 'attachment' : 'inline'}; filename="signed-formular.pdf"`,
-  };
-  if (kind === 'preview') {
-    headers['Content-Security-Policy'] = "default-src 'none'; frame-ancestors 'self'";
-    headers['X-Frame-Options'] = 'SAMEORIGIN';
-  }
-  return headers;
-}
-
-router.get('/health/live', (_req, res) => {
-  res.json({ ok: true, service: 'pdf-signing-demo' });
-});
-
-router.get('/health/ready', async (req, res) => {
-  try {
-    const readiness = await getReadiness();
-    res.status(readiness.ok ? 200 : 503).json(readiness);
-  } catch (error) {
-    sendSafeError(req, res, error);
-  }
-});
+router.use('/health', createHealthRouter({
+  operationQueue,
+  results,
+  resultsDir,
+  sessions,
+  stampConfiguration,
+}));
 
 router.get('/api/stamp-config', (_req, res) => {
   try {
@@ -376,40 +272,7 @@ router.get('/api/form', (req, res) => {
   }
 });
 
-router.head('/api/results/:token', (_req, res) => {
-  res.set(resultHeaders('download')).status(405).end();
-});
-
-router.get('/api/results/:token', (req, res) => {
-  const result = results.resolve(req.params.token);
-  if (!result) {
-    return sendSafeError(
-      req,
-      res,
-      new HttpError(
-        404,
-        'RESULT_NOT_FOUND',
-        'Результат не найден или истёк 15-минутный срок хранения.',
-      ),
-      'download',
-    );
-  }
-  return res.sendFile(
-    result.filePath,
-    {
-      acceptRanges: result.kind !== 'download',
-      headers: resultHeaders(result.kind),
-    },
-    (error) => {
-      if (!error) return;
-      if (!res.headersSent) {
-        sendSafeError(req, res, error, 'download');
-      } else {
-        res.destroy(error);
-      }
-    },
-  );
-});
+router.use('/api/results', createResultsRouter({ results }));
 
 router.use('/api/sign', createSigningRouter({
   completeRateLimiter,
@@ -464,37 +327,13 @@ app.use((error, req, res, _next) => {
   return sendSafeError(req, res, error);
 });
 
-setInterval(() => {
-  sessions.cleanup();
-  void results.cleanup().catch((error) => {
-    console.error(JSON.stringify({
-      timestamp: new Date().toISOString(),
-      level: 'error',
-      event: 'result_cleanup_failed',
-      error: {
-        name: error?.name || 'Error',
-        message: String(error?.message || 'Unknown error').slice(0, 1000),
-      },
-    }));
-  });
-  prepareRateLimiter.cleanup();
-  completeRateLimiter.cleanup();
-}, storageCleanupIntervalMs).unref();
-
-const server = app.listen(PORT, '127.0.0.1', () => {
-  console.log(`pdf-signing-demo listening on http://127.0.0.1:${PORT}${BASE_PATH}`);
+startServer({
+  app,
+  basePath: BASE_PATH,
+  completeRateLimiter,
+  port: PORT,
+  prepareRateLimiter,
+  results,
+  sessions,
+  storageCleanupIntervalMs,
 });
-server.headersTimeout = positiveInteger(
-  process.env.HTTP_HEADERS_TIMEOUT_MS,
-  10000,
-  1000,
-  60000,
-);
-server.requestTimeout = positiveInteger(
-  process.env.HTTP_REQUEST_TIMEOUT_MS,
-  70000,
-  5000,
-  300000,
-);
-server.keepAliveTimeout = 5000;
-server.setTimeout(server.requestTimeout);

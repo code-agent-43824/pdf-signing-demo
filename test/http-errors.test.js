@@ -55,7 +55,8 @@ test('certificate and CMS errors retain only bounded verifier metadata', () => {
 test('safe error responses hide internal details and redact capability paths in logs', () => {
   const req = {
     method: 'GET',
-    path: '/api/results/secret-capability',
+    path: '/secret-capability',
+    originalUrl: '/pdf-signing/api/results/secret-capability?probe=1',
   };
   let status;
   let payload;

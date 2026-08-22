@@ -84,7 +84,10 @@ function shouldSkipResponse(res, error) {
 }
 
 function logRequestError(req, res, error, stage, code) {
-  const requestPath = req.path.startsWith('/api/results/')
+  const requestPath = (
+    req.path.startsWith('/api/results/')
+    || /\/api\/results\/[^/?]+/.test(req.originalUrl || '')
+  )
     ? '/api/results/:capability'
     : req.path;
   const record = {
