@@ -422,8 +422,9 @@ UI остаётся в PR-5**.
 ### Ход выполнения PR-5 — 2026-07-30
 
 Статус: **честная семантика результата и её отображение реализованы;
-trust и qualified остаются явно непроверенными до появления отдельных
-политик и валидаторов**.
+trust и qualified остаются явно непроверенными**. Решением владельца от
+2026-08-24 продукт остаётся средством подписания, а не системой подтверждения
+КЭП; отдельная trust/revocation/qualified policy исключена из scope.
 
 Выполнено:
 
@@ -451,9 +452,9 @@ trust и qualified остаются явно непроверенными до �
 - PR-5 не строит PKI-цепочку и не проверяет срок, отзыв, назначение ключа
   либо соответствие квалифицированной политике; он делает отсутствие
   этих проверок явным и машинно-читаемым;
-- реализация trust/revocation/qualified policy потребует выбранных
-  trust anchors, источника статусов отзыва и формальной политики и не
-  должна подменяться UI-текстом.
+- trust/revocation/qualified policy намеренно не реализуется в текущем
+  продукте; UI и API обязаны сохранять честные `not_checked` и не подменять
+  их утверждением о подтверждённой КЭП.
 
 Проверка и rollout:
 
@@ -1066,7 +1067,73 @@ Rollout evidence:
   session/result counters нулевые, socket только `127.0.0.1:3010`, warning
   journal пуст; все 12 private legacy PDF сохранены побайтово.
 
+#### PR-10e — API client и certificate helpers (2026-08-24)
+
+Статус: **реализован и развёрнут в production**.
+
+- browser API boundary и чистые certificate/date/key-usage/DN helpers вынесены
+  в `public/modules/api-client.js` и `public/modules/certificates.js`;
+- endpoint, payload и safe-error semantics сохранены, `public/app.js`
+  сокращён с 2693 до 2604 строк; добавлены два VM-контракта, suite 56/56;
+- commit `5ecef89`, Actions
+  [`32710718149`](https://github.com/code-agent-43824/pdf-signing-demo/actions/runs/32710718149),
+  production backup `20260824T091903Z-pr10e`;
+- production staging, browser smoke и полный CAdES cycle прошли; preview и
+  download x2 дали единый SHA-256, API — `valid/not_checked/not_checked`,
+  pyHanko — `intact/valid/trusted/ENTIRE_FILE`.
+
+#### PR-10f — CryptoPro и Rutoken adapters (2026-08-24)
+
+Статус: **реализован и развёрнут в production**.
+
+- provider API, certificate enumeration/export, CMS signing, Rutoken errors и
+  retry metadata вынесены в независимые adapters; DOM/state orchestration
+  остался в `app.js`, сократившемся до 2161 строки;
+- mock-тесты подтверждают detached CAdES-BES CryptoPro, detached Rutoken
+  options, RSA hash selection и `ALREADY_LOGGED_IN`; suite 58/58;
+- commit `92757e2`, Actions
+  [`32712252869`](https://github.com/code-agent-43824/pdf-signing-demo/actions/runs/32712252869),
+  production backup `20260824T093758Z-pr10f`;
+- browser namespaces, полный public CAdES cycle и pyHanko validation прошли;
+  synthetic result сохранён только в rollout backup, runtime очищен.
+
+#### PR-10g — signing state machine (2026-08-24)
+
+Статус: **реализован и развёрнут в production**.
+
+- явный workflow `idle -> confirming -> preparing -> signing -> completing ->
+  complete|failed` вынесен в `public/modules/signing-state.js`;
+- невозможные переходы, повторный start, преждевременный/двойной complete и
+  reset активной операции запрещены; upload и primary action учитывают phase;
+- commit `5bcc9f5`, Actions
+  [`32713688678`](https://github.com/code-agent-43824/pdf-signing-demo/actions/runs/32713688678),
+  suite 60/60, production backup `20260824T095134Z-pr10g`;
+- browser transition smoke и полный public CAdES cycle прошли, API и pyHanko
+  сохранили прежнюю семантику и валидность результата.
+
+#### PR-10h — stamp config store и signing dialogs (2026-08-24)
+
+Статус: **реализован и развёрнут в production**.
+
+- clone/merge/shape/localStorage boundary настроек штампа вынесен в
+  `public/modules/stamp-config.js`; PIN, confirmation и certificate dialogs —
+  в `public/modules/dialogs.js` с приватным active-dialog lifecycle и очисткой
+  sensitive inputs;
+- `public/app.js` сокращён до 1894 строк; config store и fail-closed dialog
+  boundary покрыты VM-тестами, полный suite 62/62;
+- commit `b4cbf15`, Actions
+  [`32714591161`](https://github.com/code-agent-43824/pdf-signing-demo/actions/runs/32714591161),
+  production backup `20260824T100116Z-pr10h`;
+- production stamp-dialog browser smoke и полный cycle
+  `prepare -> CAdES -> complete -> preview x2 -> download x2` прошли; API
+  вернул `valid/not_checked/not_checked`, pyHanko —
+  `intact/valid/trusted/ENTIRE_FILE`; runtime очищен, service active,
+  `NRestarts=0`, counters zero, loopback-only, warning journal пуст, все 12
+  legacy PDF сохранены побайтово.
+
 ### Frontend
+
+Статус: **план PR-10e—PR-10h выполнен**.
 
 - Разделить `public/app.js` на:
   - CryptoPro adapter;
@@ -1131,7 +1198,7 @@ Deployment:
 2. **PR-2: Закрытие config write, удаление path leaks, корректный health.**
 3. **PR-3: Строгие схемы, лимиты, safe errors, loopback bind.**
 4. **PR-4: CMS integrity verification и сопоставление сертификата.**
-5. **PR-5: Trust/qualified policy и честные статусы UI.**
+5. **PR-5: Честные независимые статусы UI без утверждения о КЭП.**
 6. **PR-6: Worker isolation, rate limiting и timeouts.**
 7. **PR-7: Private result storage, TTL и cleanup.**
 8. **PR-8: CSP, anti-clickjacking и vendor pinning.**
@@ -1150,7 +1217,8 @@ PR-2 и PR-3 можно готовить параллельно после PR-1.
 - произвольная или чужая CMS не может привести к ответу `ok`;
 - данные штампа извлекаются из проверенной CMS, а не доверяются клиенту;
 - все предыдущие и новая подписи проходят независимую валидацию;
-- статус КЭП показывается только после выполнения заданной trust policy;
+- UI не заявляет о подтверждённой КЭП; trust и qualified остаются честными
+  `not_checked` в соответствии с продуктовой границей;
 - сервис устойчив к ограниченному набору параллельных вредоносных
   PDF/config-запросов;
 - документы и signing sessions гарантированно удаляются по TTL;
