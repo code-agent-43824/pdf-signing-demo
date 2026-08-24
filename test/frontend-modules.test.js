@@ -196,3 +196,38 @@ test('signing state machine rejects duplicate and impossible workflow transition
   workflow.transition('reset');
   assert.equal(workflow.phase, 'idle');
 });
+
+test('stamp configuration store merges browser overrides without mutating defaults', () => {
+  const { PdfSigningStampConfig } = loadBrowserModule('stamp-config.js');
+  const values = new Map();
+  const storage = {
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, value),
+    removeItem: (key) => values.delete(key),
+  };
+  const store = PdfSigningStampConfig.createStampConfigStore(storage, 'stamp');
+  const defaults = {
+    appearance: { width: 128, fonts: {} },
+    content: { title: ['Default'], rows: [] },
+    placements: { rules: [] },
+  };
+  store.save({ appearance: { width: 144 }, content: { title: ['Personal'] } });
+  const resolved = JSON.parse(JSON.stringify(store.resolve(defaults)));
+
+  assert.equal(resolved.appearance.width, 144);
+  assert.deepEqual(resolved.content.title, ['Personal']);
+  assert.equal(resolved.placements.rules.length, 1);
+  assert.equal(defaults.appearance.width, 128);
+  assert.equal(store.has(), true);
+  store.clear();
+  assert.equal(store.has(), false);
+});
+
+test('dialog manager fails closed before touching DOM when no certificate exists', async () => {
+  const { PdfSigningDialogs } = loadBrowserModule('dialogs.js');
+  const manager = PdfSigningDialogs.createDialogManager({}, {
+    formatCertificateDate: String,
+    getCertificateKey: () => '',
+  });
+  await assert.rejects(manager.openCertificate([]), /Не найдено доступных сертификатов/);
+});

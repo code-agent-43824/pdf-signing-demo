@@ -4,7 +4,6 @@ const state = {
   pluginReady: false,
   busyDepth: 0,
   activeCryptoStack: 'cryptopro',
-  activeDialog: null,
   selectedStampPosition: 'right',
   cryptoProviders: {
     cryptopro: {
@@ -118,6 +117,15 @@ const apiClient = window.PdfSigningApi.createApiClient();
 const {
   formatCertificateDate,
 } = window.PdfSigningCertificates;
+const stampConfigStore = window.PdfSigningStampConfig.createStampConfigStore(
+  window.localStorage,
+  STAMP_CONFIG_STORAGE_KEY,
+);
+const { clone: cloneConfig, ensureShape: ensureStampConfigShape } = stampConfigStore;
+const dialogManager = window.PdfSigningDialogs.createDialogManager(document, {
+  formatCertificateDate,
+  getCertificateKey,
+});
 
 function setStatus(message) {
   document.getElementById('statusLog').textContent = message;
@@ -627,7 +635,7 @@ function showSourceEmptyState(message = 'PDF ещё не загружен') {
 async function fetchStampConfig() {
   const data = await apiClient.loadStampConfig();
   state.defaultStampConfig = ensureStampConfigShape(data.config);
-  state.stampConfig = resolveEffectiveStampConfig(state.defaultStampConfig);
+  state.stampConfig = stampConfigStore.resolve(state.defaultStampConfig);
   state.selectedStampPosition = getStampPlacementPresetKey(state.stampConfig, { preferSelected: false });
   updateStampPlacementUi();
   return data;
@@ -660,19 +668,6 @@ async function boot() {
   showSourceEmptyState();
   setUploadState('PDF ещё не выбран.', { empty: true });
   await initActiveCryptoStack({ force: true });
-}
-
-function closeActiveDialog() {
-  state.activeDialog?.querySelectorAll?.('[data-sensitive-input]').forEach((input) => {
-    input.value = '';
-  });
-  state.activeDialog?.remove();
-  state.activeDialog = null;
-}
-
-function rejectDialog(reject, message, close = closeActiveDialog) {
-  close();
-  reject(new Error(message));
 }
 
 function revokeUploadedPdfObjectUrl() {
@@ -902,106 +897,6 @@ async function signPreparedContentRutoken(selectedCertificate, contentToSignBase
   });
 }
 
-function renderCertificateCard(certificate, index, isSelected) {
-  return `
-    <button
-      type="button"
-      class="certificate-card${isSelected ? ' is-selected' : ''}"
-      data-index="${index}"
-      role="option"
-      aria-selected="${isSelected ? 'true' : 'false'}"
-    >
-      <dl class="certificate-meta">
-        <dt>Common Name</dt>
-        <dd>${escapeHtml(certificate.commonName || certificate.label || '—')}</dd>
-        <dt>Issuer</dt>
-        <dd>${escapeHtml(certificate.issuerLabel || certificate.issuerName || '—')}</dd>
-        <dt>Срок действия</dt>
-        <dd>${escapeHtml(formatCertificateDate(certificate.validToDate))}</dd>
-      </dl>
-    </button>
-  `;
-}
-
-function openRutokenPinDialog({ title = 'Введите PIN-код токена.', errorMessage = '' } = {}) {
-  return new Promise((resolve, reject) => {
-    closeActiveDialog();
-
-    const fragment = document.getElementById('rutokenPinDialogTemplate').content.cloneNode(true);
-    const backdrop = fragment.querySelector('.dialog-backdrop');
-    const prompt = fragment.querySelector('#rutokenPinPrompt');
-    const input = fragment.querySelector('#rutokenPinInput');
-    const error = fragment.querySelector('#rutokenPinError');
-    const confirm = fragment.querySelector('#confirmRutokenPin');
-    const cancel = fragment.querySelector('#cancelRutokenPin');
-
-    state.activeDialog = backdrop;
-    prompt.textContent = title;
-    if (errorMessage) {
-      error.textContent = errorMessage;
-      error.classList.remove('hidden');
-    }
-
-    const close = () => closeActiveDialog();
-    const submit = () => {
-      let pin = String(input.value || '').replace(/\D+/g, '');
-      if (!pin) {
-        error.textContent = 'PIN-код пустой.';
-        error.classList.remove('hidden');
-        input.focus();
-        return;
-      }
-      input.value = '';
-      close();
-      resolve(pin);
-      pin = '';
-    };
-
-    fragment.querySelectorAll('.pin-key').forEach((button) => {
-      button.addEventListener('click', () => {
-        const key = button.dataset.key;
-        const action = button.dataset.action;
-        if (key) {
-          input.value = `${input.value}${key}`;
-          error.classList.add('hidden');
-          return;
-        }
-        if (action === 'clear') {
-          input.value = '';
-        }
-        if (action === 'backspace') {
-          input.value = input.value.slice(0, -1);
-        }
-        input.focus();
-      });
-    });
-
-    input.addEventListener('input', () => {
-      input.value = input.value.replace(/\D+/g, '');
-      error.classList.add('hidden');
-    });
-    input.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter') {
-        event.preventDefault();
-        submit();
-      }
-    });
-
-    confirm.addEventListener('click', submit);
-    cancel.addEventListener('click', () => {
-      rejectDialog(reject, 'Ввод PIN-кода отменён.', close);
-    });
-    backdrop.addEventListener('click', (event) => {
-      if (event.target === backdrop) {
-        rejectDialog(reject, 'Ввод PIN-кода отменён.', close);
-      }
-    });
-
-    document.body.appendChild(backdrop);
-    requestAnimationFrame(() => input.focus());
-  });
-}
-
 async function ensureRutokenLogin(deviceId) {
   const plugin = state.cryptoProviders.rutoken.client;
   if (!plugin) {
@@ -1013,7 +908,7 @@ async function ensureRutokenLogin(deviceId) {
     let pin = '';
     let loginError = null;
     try {
-      pin = await openRutokenPinDialog({
+      pin = await dialogManager.openPin({
         title: 'Рутокен не запрашивает PIN сам. Введите PIN-код токена, чтобы продолжить подпись.',
         errorMessage,
       });
@@ -1056,160 +951,9 @@ async function sha256HexFromBase64(base64) {
   ).join('');
 }
 
-function openSigningConfirmationDialog({
-  documentName,
-  documentDigest,
-  certificate,
-}) {
-  return new Promise((resolve, reject) => {
-    closeActiveDialog();
-    const fragment = document
-      .getElementById('signingConfirmationDialogTemplate')
-      .content
-      .cloneNode(true);
-    const backdrop = fragment.querySelector('.dialog-backdrop');
-    fragment.querySelector('#confirmationDocumentName').textContent = documentName;
-    fragment.querySelector('#confirmationDocumentDigest').textContent = documentDigest;
-    fragment.querySelector('#confirmationCertificateName').textContent = (
-      certificate.commonName || certificate.label || '—'
-    );
-    fragment.querySelector('#confirmationCertificateFingerprint').textContent = (
-      certificate.thumbprint || '—'
-    );
-    const confirm = fragment.querySelector('#confirmSigning');
-    const cancel = fragment.querySelector('#cancelSigning');
-    state.activeDialog = backdrop;
-    confirm.addEventListener('click', () => {
-      closeActiveDialog();
-      resolve();
-    });
-    cancel.addEventListener('click', () => {
-      rejectDialog(reject, 'Подписание отменено пользователем.');
-    });
-    backdrop.addEventListener('click', (event) => {
-      if (event.target === backdrop) {
-        rejectDialog(reject, 'Подписание отменено пользователем.');
-      }
-    });
-    document.body.appendChild(backdrop);
-    requestAnimationFrame(() => confirm.focus());
-  });
-}
-
-function openCertificateDialog(certificates, preselectedCertificate = null) {
-  return new Promise((resolve, reject) => {
-    if (!certificates.length) {
-      reject(new Error('Не найдено доступных сертификатов.'));
-      return;
-    }
-
-    closeActiveDialog();
-    const fragment = document.getElementById('certificateDialogTemplate').content.cloneNode(true);
-    const backdrop = fragment.querySelector('.dialog-backdrop');
-    const list = fragment.querySelector('#certificateList');
-    const confirm = fragment.querySelector('#confirmCertificate');
-    const cancel = fragment.querySelector('#cancelCertificate');
-    const preselectedKey = getCertificateKey(preselectedCertificate);
-    let selectedIndex = Math.max(0, certificates.findIndex((certificate) => getCertificateKey(certificate) === preselectedKey));
-
-    state.activeDialog = backdrop;
-
-    const render = () => {
-      list.innerHTML = certificates
-        .map((certificate, index) => renderCertificateCard(certificate, index, index === selectedIndex))
-        .join('');
-
-      list.querySelectorAll('.certificate-card').forEach((card) => {
-        card.addEventListener('click', () => {
-          selectedIndex = Number(card.dataset.index);
-          render();
-        });
-      });
-    };
-
-    render();
-
-    confirm.addEventListener('click', () => {
-      const picked = certificates[selectedIndex];
-      closeActiveDialog();
-      resolve(picked);
-    });
-
-    cancel.addEventListener('click', () => {
-      rejectDialog(reject, 'Выбор сертификата отменён.');
-    });
-
-    backdrop.addEventListener('click', (event) => {
-      if (event.target === backdrop) {
-        rejectDialog(reject, 'Выбор сертификата отменён.');
-      }
-    });
-
-    document.body.appendChild(backdrop);
-  });
-}
-
-function cloneConfig(config) {
-  if (config === undefined) {
-    return undefined;
-  }
-  return JSON.parse(JSON.stringify(config));
-}
-
-function mergeConfig(base, override) {
-  if (Array.isArray(base) || Array.isArray(override)) {
-    return cloneConfig(override ?? base);
-  }
-  if (!base || typeof base !== 'object') {
-    return cloneConfig(override ?? base);
-  }
-  const result = cloneConfig(base);
-  if (!override || typeof override !== 'object') {
-    return result;
-  }
-  Object.entries(override).forEach(([key, value]) => {
-    if (value && typeof value === 'object' && !Array.isArray(value) && result[key] && typeof result[key] === 'object' && !Array.isArray(result[key])) {
-      result[key] = mergeConfig(result[key], value);
-    } else {
-      result[key] = cloneConfig(value);
-    }
-  });
-  return result;
-}
-
-function loadSavedStampConfig() {
-  try {
-    const raw = window.localStorage.getItem(STAMP_CONFIG_STORAGE_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw);
-  } catch (_error) {
-    return null;
-  }
-}
-
-function savePersonalStampConfig(config) {
-  window.localStorage.setItem(STAMP_CONFIG_STORAGE_KEY, JSON.stringify(config));
-}
-
-function clearPersonalStampConfig() {
-  window.localStorage.removeItem(STAMP_CONFIG_STORAGE_KEY);
-}
-
-function hasPersonalStampConfig() {
-  return Boolean(loadSavedStampConfig());
-}
-
-function resolveEffectiveStampConfig(serverConfig) {
-  const saved = loadSavedStampConfig();
-  if (!saved) {
-    return ensureStampConfigShape(serverConfig);
-  }
-  return ensureStampConfigShape(mergeConfig(serverConfig, saved));
-}
-
 function migrateLegacyStampFontReferences() {
   let changed = false;
-  const saved = hasPersonalStampConfig();
+  const saved = stampConfigStore.has();
   const effectiveFonts = state.stampConfig?.appearance?.fonts || {};
   const defaultFonts = state.defaultStampConfig?.appearance?.fonts || {};
 
@@ -1235,32 +979,8 @@ function migrateLegacyStampFontReferences() {
   }
 
   if (changed && saved) {
-    savePersonalStampConfig(state.stampConfig);
+    stampConfigStore.save(state.stampConfig);
   }
-}
-
-function ensureStampConfigShape(config) {
-  const draft = cloneConfig(config);
-  draft.appearance ||= {};
-  draft.appearance.separator ||= {};
-  draft.appearance.fonts ||= {};
-  draft.appearance.fonts.title ||= {};
-  draft.appearance.fonts.label ||= {};
-  draft.appearance.fonts.value ||= {};
-  draft.appearance.layout ||= {};
-  draft.content ||= {};
-  draft.content.title ||= [];
-  draft.content.rows ||= [];
-  draft.signatureObject ||= {};
-  draft.placements ||= {};
-  draft.placements.rules ||= [{}];
-  if (!draft.placements.rules.length) {
-    draft.placements.rules.push({});
-  }
-  draft.placements.rules[0].pages ||= {};
-  draft.placements.rules[0].placement ||= {};
-  draft.limits ||= {};
-  return draft;
 }
 
 function normalizeColor(value, fallback = '#000000') {
@@ -1879,7 +1599,7 @@ function openStampSettingsDialog() {
     const root = backdrop;
 
     state.stampConfig = ensureStampConfigShape(state.stampConfig);
-    configStatus.textContent = hasPersonalStampConfig()
+    configStatus.textContent = stampConfigStore.has()
       ? 'Есть персональные настройки в браузере'
       : 'Используются серверные настройки по умолчанию';
     populateVisualForm(root, state.stampConfig);
@@ -1901,7 +1621,7 @@ function openStampSettingsDialog() {
     });
 
     reset.addEventListener('click', () => {
-      clearPersonalStampConfig();
+      stampConfigStore.clear();
       state.stampConfig = ensureStampConfigShape(state.defaultStampConfig);
       state.selectedStampPosition = getStampPlacementPresetKey(state.stampConfig, { preferSelected: false });
       configStatus.textContent = 'Используются серверные настройки по умолчанию';
@@ -1918,7 +1638,7 @@ function openStampSettingsDialog() {
         const parsed = isJsonVisible
           ? ensureStampConfigShape(JSON.parse(root.querySelector('#stampConfigEditor').value))
           : readVisualForm(root);
-        savePersonalStampConfig(parsed);
+        stampConfigStore.save(parsed);
         state.stampConfig = parsed;
         state.selectedStampPosition = getStampPlacementPresetKey(state.stampConfig, { preferSelected: false });
         updateStampPlacementUi();
@@ -1971,7 +1691,7 @@ async function prepareAndSign() {
 
     const selectedCertificate = state.selectedCertificate;
     const documentDigest = await sha256HexFromBase64(state.uploadedPdfBase64);
-    await openSigningConfirmationDialog({
+    await dialogManager.openSigningConfirmation({
       documentName: state.uploadedPdfName || 'Документ.pdf',
       documentDigest,
       certificate: selectedCertificate,
@@ -2109,7 +1829,10 @@ document.getElementById('chooseCertificateButton').addEventListener('click', asy
     if (state.activeCryptoStack === 'rutoken') {
       await withOperationalCryptoBusyOverlay('Читаю состояние Рутокена…', () => requestRutokenEnvironmentRefresh({ silentStatus: true }));
     }
-    const selectedCertificate = await openCertificateDialog(state.certificates, state.selectedCertificate);
+    const selectedCertificate = await dialogManager.openCertificate(
+      state.certificates,
+      state.selectedCertificate,
+    );
     state.selectedCertificate = selectedCertificate;
     updatePrimaryActionState();
     setStatus(`Сертификат выбран: ${selectedCertificate.label}. Теперь можно запускать подпись.`);

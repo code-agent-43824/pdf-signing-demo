@@ -85,10 +85,10 @@ test('UI requires an explicit, digest-bound signing confirmation', () => {
   assert.match(app, /window\.crypto\.subtle\.digest\('SHA-256', bytes\)/);
   assert.match(
     app,
-    /await openSigningConfirmationDialog\(\{[\s\S]*documentName:[\s\S]*documentDigest,[\s\S]*certificate: selectedCertificate/,
+    /await dialogManager\.openSigningConfirmation\(\{[\s\S]*documentName:[\s\S]*documentDigest,[\s\S]*certificate: selectedCertificate/,
   );
   assert.ok(
-    app.indexOf('await openSigningConfirmationDialog')
+    app.indexOf('await dialogManager.openSigningConfirmation')
       < app.indexOf('apiClient.prepare('),
   );
 });
@@ -114,6 +114,10 @@ test('certificate usability and Rutoken PIN lifecycle are fail-closed', () => {
     path.join(PROJECT_ROOT, 'public', 'modules', 'certificates.js'),
     'utf8',
   );
+  const dialogs = fs.readFileSync(
+    path.join(PROJECT_ROOT, 'public', 'modules', 'dialogs.js'),
+    'utf8',
+  );
 
   assert.match(certificateHelpers, /isCertificateDateWindowValid/);
   assert.match(cryptoProAdapter, /HasPrivateKey/);
@@ -128,6 +132,10 @@ test('certificate usability and Rutoken PIN lifecycle are fail-closed', () => {
     /CERT_CATEGORY_UNSPEC/,
   );
   assert.match(html, /id="rutokenPinInput"[^>]*data-sensitive-input/);
+  assert.match(
+    dialogs,
+    /querySelectorAll\?\.\('\[data-sensitive-input\]'\)[\s\S]*input\.value = ''/,
+  );
   assert.match(app, /finally \{\s*pin = '';/);
   assert.match(
     app,
