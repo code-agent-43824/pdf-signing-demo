@@ -1025,6 +1025,47 @@ Rollout evidence:
   session/result counters нулевые, socket только `127.0.0.1:3010`, warning
   journal пуст; 12 private legacy PDF сохранены.
 
+#### PR-10d — application factory и public routes (2026-08-24)
+
+Статус: **реализован и развёрнут в production**.
+
+- Express application factory, общие security/request middleware, порядок
+  подключения маршрутов и safe JSON error boundary вынесены в
+  `src/application.js`; factory не открывает listener и остаётся независимо
+  тестируемым;
+- read-only stamp/font/form endpoints и явный запрет legacy `/generated`
+  вынесены в `src/routes/public.js` без изменения публичных URL, ответов или
+  порядка относительно static middleware;
+- `src/server.js` теперь только собирает runtime dependencies, проверяет
+  приватность `RESULTS_DIR` и передаёт приложение в bootstrap; файл сокращён
+  с 340 до 160 строк;
+- signing/PDF/CMS/storage/frontend не менялись; добавлены два контракта для
+  listener-free application factory, Express hardening, base-path boundary,
+  form metadata и закрытого legacy storage; полный suite содержит 54 теста.
+
+Rollout evidence:
+
+- implementation commit `cd6ce7b`; GitHub Actions run
+  [`32708392451`](https://github.com/code-agent-43824/pdf-signing-demo/actions/runs/32708392451)
+  прошёл clean bootstrap, 54/54 tests, SBOM gate и оба dependency audit;
+- production staging на Node `22.22.2` / Python `3.14.4` прошёл 54/54 tests,
+  `pip check` и побайтовую проверку fixture/SBOM artifacts; ключевые
+  signing/PDF/CMS/frontend файлы production побайтово совпадают с repository;
+- перед переключением workers, sessions и results были нулевыми; прежний
+  runtime и service unit сохранены в backup
+  `/home/openclaw/services/pdf-signing-demo/backups/20260824T085451Z-pr10d`;
+- public HTTPS contour проверил UI/security headers, health, stamp/fonts/form,
+  закрытый `/generated` и полный synthetic cycle
+  `prepare -> CAdES -> complete -> preview x2 -> download x2`; все четыре
+  результата имели SHA-256
+  `531228216e472dabfdb27ec4090503cccd5e3d92a70ceaccde66cb1395e5c2f1`, API
+  вернул `valid / not_checked / not_checked`, а pyHanko подтвердил
+  `intact/valid/trusted/ENTIRE_FILE`;
+- synthetic result перенесён в rollout backup, transient runtime очищен
+  штатным restart; финально service active, `NRestarts=0`, readiness зелёный,
+  session/result counters нулевые, socket только `127.0.0.1:3010`, warning
+  journal пуст; все 12 private legacy PDF сохранены побайтово.
+
 ### Frontend
 
 - Разделить `public/app.js` на:
