@@ -14,6 +14,14 @@ test('UI separates integrity, trust and qualified status without false success c
     path.join(PROJECT_ROOT, 'public', 'app.js'),
     'utf8',
   );
+  const cryptoProAdapter = fs.readFileSync(
+    path.join(PROJECT_ROOT, 'public', 'modules', 'cryptopro-adapter.js'),
+    'utf8',
+  );
+  const rutokenAdapter = fs.readFileSync(
+    path.join(PROJECT_ROOT, 'public', 'modules', 'rutoken-adapter.js'),
+    'utf8',
+  );
   const styles = fs.readFileSync(
     path.join(PROJECT_ROOT, 'public', 'styles.css'),
     'utf8',
@@ -46,12 +54,12 @@ test('UI separates integrity, trust and qualified status without false success c
     /Цепочка доверия, срок, отзыв и назначение ключа не проверялись/,
   );
   assert.match(
-    app,
-    /const cmsSignature = await oSignedData\.SignHash\([\s\S]*?return normalizeCmsBase64\(cmsSignature\);/,
+    cryptoProAdapter,
+    /const cmsSignature = await signedData\.SignHash\([\s\S]*?return normalizeBase64\(cmsSignature\);/,
   );
   assert.match(
-    app,
-    /const cmsSignature = await plugin\.sign\([\s\S]*?return normalizeCmsBase64\(cmsSignature\);/,
+    rutokenAdapter,
+    /const cmsSignature = await plugin\.sign\([\s\S]*?return normalizeBase64\(cmsSignature\);/,
   );
   assert.match(
     styles,
@@ -94,17 +102,29 @@ test('certificate usability and Rutoken PIN lifecycle are fail-closed', () => {
     path.join(PROJECT_ROOT, 'public', 'app.js'),
     'utf8',
   );
+  const cryptoProAdapter = fs.readFileSync(
+    path.join(PROJECT_ROOT, 'public', 'modules', 'cryptopro-adapter.js'),
+    'utf8',
+  );
+  const rutokenAdapter = fs.readFileSync(
+    path.join(PROJECT_ROOT, 'public', 'modules', 'rutoken-adapter.js'),
+    'utf8',
+  );
+  const certificateHelpers = fs.readFileSync(
+    path.join(PROJECT_ROOT, 'public', 'modules', 'certificates.js'),
+    'utf8',
+  );
 
-  assert.match(app, /isCertificateDateWindowValid/);
-  assert.match(app, /HasPrivateKey/);
-  assert.match(app, /IsDigitalSignatureEnabled/);
-  assert.match(app, /IsNonRepudiationEnabled/);
+  assert.match(certificateHelpers, /isCertificateDateWindowValid/);
+  assert.match(cryptoProAdapter, /HasPrivateKey/);
+  assert.match(cryptoProAdapter, /IsDigitalSignatureEnabled/);
+  assert.match(cryptoProAdapter, /IsNonRepudiationEnabled/);
   assert.match(
-    app,
+    rutokenAdapter,
     /const categories = \[plugin\.CERT_CATEGORY_USER\]/,
   );
   assert.doesNotMatch(
-    app.match(/async function enumerateRutokenCertificates[\s\S]*?return result;/)?.[0] || '',
+    rutokenAdapter.match(/async function enumerateCertificates[\s\S]*?return result;/)?.[0] || '',
     /CERT_CATEGORY_UNSPEC/,
   );
   assert.match(html, /id="rutokenPinInput"[^>]*data-sensitive-input/);

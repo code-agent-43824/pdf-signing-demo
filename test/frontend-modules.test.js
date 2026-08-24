@@ -6,13 +6,18 @@ const { test } = require('node:test');
 
 const MODULE_DIR = path.resolve(__dirname, '..', 'public', 'modules');
 
-function loadBrowserModule(name) {
+function loadBrowserModules(names) {
   const window = {};
-  vm.runInNewContext(
+  const context = vm.createContext({ window });
+  names.forEach((name) => vm.runInContext(
     fs.readFileSync(path.join(MODULE_DIR, name), 'utf8'),
-    { window },
-  );
+    context,
+  ));
   return window;
+}
+
+function loadBrowserModule(name) {
+  return loadBrowserModules([name]);
 }
 
 test('frontend API client preserves endpoints, JSON requests and safe errors', async () => {
@@ -80,4 +85,85 @@ test('certificate helpers preserve date, key-usage and DN boundaries', () => {
     certificates.getCertificateIssuerLabel('OU=УЦ, O=Организация'),
     'Организация',
   );
+});
+
+test('CryptoPro adapter builds detached CAdES-BES from the prepared digest', async () => {
+  const { PdfSigningCryptoPro: adapter } = loadBrowserModules([
+    'certificates.js',
+    'cryptopro-adapter.js',
+  ]);
+  const calls = [];
+  const objects = {
+    'CAdESCOM.HashedData': {
+      propset_Algorithm(value) { calls.push(['algorithm', value]); },
+      propset_DataEncoding(value) { calls.push(['encoding', value]); },
+      async Hash(value) { calls.push(['hash', value]); },
+    },
+    'CAdESCOM.CPSigner': {
+      propset_Certificate(value) { calls.push(['certificate', value]); },
+    },
+    'CAdESCOM.CadesSignedData': {
+      async SignHash(hashedData, signer, type) {
+        calls.push(['sign', hashedData, signer, type]);
+        return '-----BEGIN CMS-----\nYWJj\n-----END CMS-----';
+      },
+    },
+  };
+  const plugin = {
+    CADESCOM_HASH_ALGORITHM_CP_GOST_3411_2012_256: 101,
+    CADESCOM_BASE64_TO_BINARY: 1,
+    CADESCOM_CADES_BES: 7,
+    async CreateObjectAsync(name) { return objects[name]; },
+  };
+
+  const result = await adapter.sign(plugin, {
+    algorithm: 'ГОСТ Р 34.10-2012 256',
+    label: 'Тест',
+    certificate: { id: 'certificate' },
+  }, 'digest-base64');
+
+  assert.equal(result, 'YWJj');
+  assert.deepEqual(calls.map(([name]) => name), [
+    'algorithm', 'encoding', 'hash', 'certificate', 'sign',
+  ]);
+  assert.equal(calls[0][1], 101);
+  assert.equal(calls[2][1], 'digest-base64');
+  assert.equal(calls[4][3], 7);
+});
+
+test('Rutoken adapter keeps signing detached and maps provider login errors', async () => {
+  const { PdfSigningRutoken: adapter } = loadBrowserModules([
+    'certificates.js',
+    'rutoken-adapter.js',
+  ]);
+  const calls = [];
+  const plugin = {
+    DATA_FORMAT_BASE64: 'base64',
+    HASH_TYPE_SHA256: 'sha256',
+    errorCodes: { ALREADY_LOGGED_IN: 93 },
+    async sign(...args) {
+      calls.push(args);
+      return '-----BEGIN CMS-----\nZGV0YWNoZWQ=\n-----END CMS-----';
+    },
+  };
+
+  const result = await adapter.sign(plugin, {
+    deviceId: 'device-1',
+    certId: 'cert-1',
+    algorithm: 'RSA SHA-256',
+    label: 'Тест',
+  }, 'digest-base64');
+
+  assert.equal(result, 'ZGV0YWNoZWQ=');
+  assert.deepEqual(calls[0].slice(0, 4), [
+    'device-1', 'cert-1', 'digest-base64', 'base64',
+  ]);
+  assert.deepEqual({ ...calls[0][4] }, {
+    detached: true,
+    addSignTime: true,
+    addEssCert: true,
+    rsaHashAlgorithm: 'sha256',
+  });
+  assert.equal(adapter.isAlreadyLoggedInError(new Error('93'), plugin), true);
+  assert.equal(adapter.getErrorMessage(new Error('93'), plugin), 'ALREADY_LOGGED_IN (93)');
 });

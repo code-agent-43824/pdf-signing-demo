@@ -40,6 +40,9 @@ const state = {
   availableFonts: [],
 };
 
+const cryptoProAdapter = window.PdfSigningCryptoPro;
+const rutokenAdapter = window.PdfSigningRutoken;
+
 const CRYPTO_STACK_LABELS = {
   cryptopro: 'CryptoPro',
   rutoken: 'Рутокен',
@@ -110,12 +113,7 @@ const TEMPLATE_TOKEN_OPTIONS = [
 ];
 const apiClient = window.PdfSigningApi.createApiClient();
 const {
-  collectKeyUsageTokens,
   formatCertificateDate,
-  getCertificateCommonName,
-  getCertificateIssuerLabel,
-  isCertificateDateWindowValid,
-  isSigningKeyUsageAllowed,
 } = window.PdfSigningCertificates;
 
 function setStatus(message) {
@@ -655,51 +653,6 @@ async function boot() {
   await initActiveCryptoStack({ force: true });
 }
 
-async function createObject(name) {
-  if (!window.cadesplugin) {
-    throw new Error('cadesplugin не загружен');
-  }
-  if (window.cadesplugin.CreateObjectAsync) {
-    return window.cadesplugin.CreateObjectAsync(name);
-  }
-  return window.cadesplugin.CreateObject(name);
-}
-
-async function getProp(object, asyncGetterName, syncGetterName) {
-  if (typeof object[asyncGetterName] === 'function') return object[asyncGetterName]();
-  if (syncGetterName in object) return object[syncGetterName];
-  throw new Error(`Property ${asyncGetterName}/${syncGetterName} not available`);
-}
-
-async function setProp(object, asyncSetterName, syncSetterName, value) {
-  if (typeof object[asyncSetterName] === 'function') return object[asyncSetterName](value);
-  object[syncSetterName] = value;
-}
-
-async function inspectCryptoProSigningCapability(certificate) {
-  const validFromDate = await getProp(certificate, 'ValidFromDate', 'ValidFromDate');
-  const validToDate = await getProp(certificate, 'ValidToDate', 'ValidToDate');
-  const hasPrivateKey = Boolean(
-    await getProp(certificate, 'HasPrivateKey', 'HasPrivateKey'),
-  );
-  const keyUsage = await getProp(certificate, 'KeyUsage', 'KeyUsage');
-  const usage = {
-    present: Boolean(await getProp(keyUsage, 'IsPresent', 'IsPresent')),
-    digitalSignature: Boolean(
-      await getProp(keyUsage, 'IsDigitalSignatureEnabled', 'IsDigitalSignatureEnabled'),
-    ),
-    nonRepudiation: Boolean(
-      await getProp(keyUsage, 'IsNonRepudiationEnabled', 'IsNonRepudiationEnabled'),
-    ),
-  };
-  return {
-    validFromDate,
-    validToDate,
-    hasPrivateKey,
-    keyUsageAllowed: isSigningKeyUsageAllowed(usage),
-  };
-}
-
 function closeActiveDialog() {
   state.activeDialog?.querySelectorAll?.('[data-sensitive-input]').forEach((input) => {
     input.value = '';
@@ -737,67 +690,6 @@ function resetSignedPdfPreview() {
   updatePrimaryActionState();
 }
 
-async function enumerateCertificates() {
-  const store = await createObject('CAdESCOM.Store');
-  await store.Open(
-    window.cadesplugin.CADESCOM_CURRENT_USER_STORE,
-    window.cadesplugin.CAPICOM_MY_STORE,
-    window.cadesplugin.CAPICOM_STORE_OPEN_MAXIMUM_ALLOWED,
-  );
-
-  try {
-    const certificates = await getProp(store, 'Certificates', 'Certificates');
-    const count = await getProp(certificates, 'Count', 'Count');
-    const result = [];
-
-    for (let index = 1; index <= count; index += 1) {
-      const certificate = await certificates.Item(index);
-      const subjectName = await getProp(certificate, 'SubjectName', 'SubjectName');
-      const issuerName = await getProp(certificate, 'IssuerName', 'IssuerName');
-      const thumbprint = await getProp(certificate, 'Thumbprint', 'Thumbprint');
-      const serialNumber = await getProp(certificate, 'SerialNumber', 'SerialNumber');
-      let capability;
-      try {
-        capability = await inspectCryptoProSigningCapability(certificate);
-      } catch (_error) {
-        continue;
-      }
-      if (
-        !isCertificateDateWindowValid(
-          capability.validFromDate,
-          capability.validToDate,
-        )
-        || !capability.hasPrivateKey
-        || !capability.keyUsageAllowed
-      ) {
-        continue;
-      }
-      const publicKey = await certificate.PublicKey();
-      const algorithm = await publicKey.Algorithm;
-      const friendlyName = await getProp(algorithm, 'FriendlyName', 'FriendlyName');
-      result.push({
-        label: getCertificateCommonName(subjectName),
-        commonName: getCertificateCommonName(subjectName),
-        subjectName,
-        issuerName,
-        issuerLabel: getCertificateIssuerLabel(issuerName),
-        thumbprint,
-        serialNumber,
-        validFromDate: capability.validFromDate,
-        validToDate: capability.validToDate,
-        hasPrivateKey: true,
-        keyUsageAllowed: true,
-        algorithm: friendlyName,
-        certificate,
-      });
-    }
-
-    return result;
-  } finally {
-    await store.Close();
-  }
-}
-
 async function initCryptoPro() {
   const provider = state.cryptoProviders.cryptopro;
   provider.checked = true;
@@ -812,12 +704,11 @@ async function initCryptoPro() {
     setProviderDiagnostic('cryptopro', 'extension', 'ready', 'доступно');
 
     await Promise.resolve(window.cadesplugin);
-    const about = await createObject('CAdESCOM.About');
     setProviderDiagnostic('cryptopro', 'plugin', 'ready', 'доступен');
 
     let cspText = 'доступен';
     try {
-      const cspVersion = await getProp(about, 'CSPVersion', 'CSPVersion');
+      const cspVersion = await cryptoProAdapter.getCspVersion(window.cadesplugin);
       if (cspVersion) {
         cspText = String(cspVersion.toString?.() || cspVersion);
       }
@@ -826,7 +717,7 @@ async function initCryptoPro() {
     }
     setProviderDiagnostic('cryptopro', 'csp', 'ready', cspText);
 
-    const certificates = await enumerateCertificates();
+    const certificates = await cryptoProAdapter.enumerateCertificates(window.cadesplugin);
     provider.ready = true;
     provider.certificates = certificates;
     provider.client = window.cadesplugin;
@@ -842,7 +733,7 @@ async function initCryptoPro() {
     setProviderDiagnostic('cryptopro', 'csp', 'error', 'недоступен');
     if (state.activeCryptoStack === 'cryptopro') {
       syncActiveProviderState();
-      const details = window.cadesplugin?.getLastError ? window.cadesplugin.getLastError(error) : error.message;
+      const details = cryptoProAdapter.getErrorMessage(window.cadesplugin, error);
       if (!window.cadesplugin) {
         setProviderDiagnostic('cryptopro', 'extension', 'error', 'не найдено');
       }
@@ -853,258 +744,6 @@ async function initCryptoPro() {
 
 function isBrowserWithRutokenExtension() {
   return Boolean(window.chrome || typeof InstallTrigger !== 'undefined');
-}
-
-function normalizeRutokenDn(value) {
-  if (!value) return '';
-  if (typeof value === 'string') return value;
-  if (Array.isArray(value)) {
-    return value.map((item) => normalizeRutokenDn(item)).filter(Boolean).join(', ');
-  }
-  if (typeof value === 'object') {
-    const preferred = value.commonName || value.CN || value.title || value.name;
-    if (preferred) return String(preferred);
-    if ('rdn' in value && 'value' in value) {
-      return `${value.rdn}=${value.value}`;
-    }
-    return Object.entries(value)
-      .filter(([, item]) => item !== undefined && item !== null && item !== '')
-      .map(([key, item]) => {
-        if (Array.isArray(item)) {
-          const normalized = item.map((entry) => normalizeRutokenDn(entry)).filter(Boolean).join(', ');
-          return normalized || '';
-        }
-        if (item && typeof item === 'object' && 'rdn' in item && 'value' in item) {
-          return `${item.rdn}=${item.value}`;
-        }
-        return `${key}=${normalizeRutokenDn(item)}`;
-      })
-      .filter(Boolean)
-      .join(', ');
-  }
-  return String(value);
-}
-
-function getRutokenDnField(value, fieldNames = []) {
-  const wanted = new Set(fieldNames.map((field) => String(field).toLowerCase()));
-  if (!value) return '';
-  if (typeof value === 'string') return '';
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      const found = getRutokenDnField(item, fieldNames);
-      if (found) return found;
-    }
-    return '';
-  }
-  if (typeof value === 'object') {
-    for (const [key, item] of Object.entries(value)) {
-      if (wanted.has(String(key).toLowerCase()) && item !== undefined && item !== null && item !== '') {
-        return String(item);
-      }
-    }
-    if ('rdn' in value && 'value' in value && wanted.has(String(value.rdn).toLowerCase())) {
-      return String(value.value);
-    }
-    for (const item of Object.values(value)) {
-      const found = getRutokenDnField(item, fieldNames);
-      if (found) return found;
-    }
-  }
-  return '';
-}
-
-function getRutokenDnCommonName(value) {
-  const commonName = getRutokenDnField(value, ['commonName', 'CN']);
-  return commonName || normalizeRutokenDn(value);
-}
-
-function parseRutokenDate(value) {
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return new Date(value * 1000);
-  }
-  if (typeof value === 'string' && value.trim()) {
-    const parsed = new Date(value);
-    if (!Number.isNaN(parsed.getTime())) {
-      return parsed;
-    }
-  }
-  return null;
-}
-
-function base64ToHex(base64) {
-  const bytes = atob(base64);
-  return Array.from(bytes, (char) => char.charCodeAt(0).toString(16).padStart(2, '0')).join('');
-}
-
-function normalizeCmsBase64(value) {
-  return String(value || '')
-    .replace(/-----BEGIN [^-]+-----/g, '')
-    .replace(/-----END [^-]+-----/g, '')
-    .replace(/\s+/g, '');
-}
-
-function detectRutokenHashAlgorithmConstant(certificate, plugin) {
-  const name = `${certificate.algorithm || ''} ${certificate.label || ''}`.toLowerCase();
-  if (name.includes('2012') && name.includes('512')) {
-    return plugin.HASH_TYPE_GOST3411_12_512;
-  }
-  if (name.includes('2012') && name.includes('256')) {
-    return plugin.HASH_TYPE_GOST3411_12_256;
-  }
-  if (name.includes('sha-512') || name.includes('sha512')) {
-    return plugin.HASH_TYPE_SHA512;
-  }
-  if (name.includes('sha-384') || name.includes('sha384')) {
-    return plugin.HASH_TYPE_SHA384;
-  }
-  if (name.includes('sha-256') || name.includes('sha256') || name.includes('rsa')) {
-    return plugin.HASH_TYPE_SHA256;
-  }
-  return plugin.HASH_TYPE_GOST3411_94;
-}
-
-function isRutokenRsaCertificate(certificate) {
-  const name = `${certificate.algorithm || ''} ${certificate.label || ''}`.toLowerCase();
-  return name.includes('rsa');
-}
-
-function getRutokenErrorMessage(error, plugin = state.cryptoProviders.rutoken.client) {
-  if (!error) return 'Неизвестная ошибка.';
-  if (typeof error === 'string') return error;
-  if (error.message && Number.isNaN(Number(error.message))) return error.message;
-  if (plugin?.errorCodes && error?.message) {
-    const code = Number(error.message);
-    const matched = Object.entries(plugin.errorCodes).find(([, value]) => Number(value) === code);
-    if (matched) {
-      return `${matched[0]} (${error.message})`;
-    }
-  }
-  return error.message || String(error);
-}
-
-function getRutokenErrorCode(error) {
-  const message = typeof error === 'string' ? error : String(error?.message || error || '');
-  const numericPrefix = message.match(/^\s*(-?\d+)/);
-  if (numericPrefix) {
-    return Number(numericPrefix[1]);
-  }
-  const numericOnly = Number(message);
-  return Number.isFinite(numericOnly) ? numericOnly : null;
-}
-
-function isRutokenAlreadyLoggedInError(error, plugin = state.cryptoProviders.rutoken.client) {
-  const message = getRutokenErrorMessage(error, plugin);
-  const rawMessage = typeof error === 'string' ? error : String(error?.message || error || '');
-  const code = getRutokenErrorCode(error);
-  const alreadyLoggedInCode = Number(plugin?.errorCodes?.ALREADY_LOGGED_IN ?? 93);
-
-  return message.includes('ALREADY_LOGGED_IN')
-    || rawMessage.includes('ALREADY_LOGGED_IN')
-    || /login has already been performed/i.test(message)
-    || /login has already been performed/i.test(rawMessage)
-    || (Number.isFinite(code) && Number.isFinite(alreadyLoggedInCode) && code === alreadyLoggedInCode);
-}
-
-async function enumerateRutokenCertificates(plugin) {
-  const deviceIds = await plugin.enumerateDevices({ mode: plugin.ENUMERATE_DEVICES_LIST });
-  const result = [];
-
-  for (const deviceId of deviceIds || []) {
-    let tokenLabel = `Устройство ${deviceId}`;
-    try {
-      tokenLabel = await plugin.getDeviceInfo(deviceId, plugin.TOKEN_INFO_LABEL);
-    } catch (_error) {
-      // ignore label lookup failure
-    }
-
-    // USER certificates are the Rutoken category linked to a private key.
-    const categories = [plugin.CERT_CATEGORY_USER].filter((value) => value !== undefined);
-    const seenCertIds = new Set();
-
-    for (const category of categories) {
-      const certIds = await plugin.enumerateCertificates(deviceId, category);
-      for (const certId of certIds || []) {
-        if (seenCertIds.has(certId)) {
-          continue;
-        }
-        seenCertIds.add(certId);
-
-        const pem = await plugin.getCertificate(deviceId, certId);
-        const parsed = await plugin.parseCertificateFromString(pem);
-        const validFromDate = parseRutokenDate(
-          parsed?.notBefore || parsed?.validFrom || parsed?.validNotBefore,
-        );
-        const validToDate = parseRutokenDate(
-          parsed?.notAfter || parsed?.validTo || parsed?.validNotAfter,
-        );
-        if (
-          !validFromDate
-          || !validToDate
-          || !isCertificateDateWindowValid(
-            validFromDate.toISOString(),
-            validToDate.toISOString(),
-          )
-        ) {
-          continue;
-        }
-        const keyUsageSource = parsed?.keyUsages ?? parsed?.keyUsage;
-        const normalizedKeyUsages = collectKeyUsageTokens(keyUsageSource)
-          .map((usage) => String(usage).toLowerCase().replace(/[^a-zа-я0-9]/g, ''));
-        const keyUsageAllowed = keyUsageSource === undefined
-          || keyUsageSource === null
-          || normalizedKeyUsages.some((usage) => (
-            usage.includes('digitalsignature')
-            || usage.includes('nonrepudiation')
-            || usage.includes('contentcommitment')
-            || usage.includes('цифроваяподпись')
-          ));
-        if (!keyUsageAllowed) {
-          continue;
-        }
-
-        const subjectNameRaw = normalizeRutokenDn(parsed?.subject) || certId;
-        const issuerNameRaw = normalizeRutokenDn(parsed?.issuer);
-        const commonName = getRutokenDnCommonName(parsed?.subject) || subjectNameRaw;
-        const issuerCommonName = getRutokenDnCommonName(parsed?.issuer) || issuerNameRaw;
-        const algorithm = parsed?.publicKeyAlgorithm || parsed?.signatureAlgorithm || 'Rutoken certificate';
-        result.push({
-          label: commonName,
-          commonName,
-          subjectName: commonName,
-          issuerName: issuerCommonName,
-          subjectNameRaw,
-          issuerNameRaw,
-          issuerLabel: issuerCommonName,
-          thumbprint: parsed?.thumbprint || parsed?.fingerprint || certId,
-          serialNumber: parsed?.serialNumber || certId,
-          validFromDate: validFromDate.toISOString(),
-          validToDate: validToDate.toISOString(),
-          hasPrivateKey: true,
-          keyUsageAllowed: true,
-          algorithm,
-          certificateBase64: normalizeCmsBase64(pem),
-          certId,
-          deviceId,
-          tokenLabel,
-        });
-      }
-    }
-  }
-
-  return result;
-}
-
-async function getRutokenDeviceLabels(plugin, deviceIds = []) {
-  const labels = [];
-  for (const deviceId of deviceIds || []) {
-    try {
-      const label = await plugin.getDeviceInfo(deviceId, plugin.TOKEN_INFO_LABEL);
-      labels.push(label || `Устройство ${deviceId}`);
-    } catch (_error) {
-      labels.push(`Устройство ${deviceId}`);
-    }
-  }
-  return labels;
 }
 
 async function refreshRutokenEnvironment({ silentStatus = false } = {}) {
@@ -1122,12 +761,12 @@ async function refreshRutokenEnvironment({ silentStatus = false } = {}) {
   }
 
   const deviceIds = await plugin.enumerateDevices({ mode: plugin.ENUMERATE_DEVICES_LIST });
-  const certificates = await enumerateRutokenCertificates(plugin);
+  const certificates = await rutokenAdapter.enumerateCertificates(plugin);
   provider.certificates = certificates;
   provider.ready = true;
 
   const tokenLabels = Array.from(new Set([
-    ...(await getRutokenDeviceLabels(plugin, deviceIds)),
+    ...(await rutokenAdapter.getDeviceLabels(plugin, deviceIds)),
     ...certificates.map((certificate) => certificate.tokenLabel).filter(Boolean),
   ]));
   if (deviceIds?.length) {
@@ -1206,7 +845,7 @@ async function initRutoken() {
       if (!window.rutoken) {
         setProviderDiagnostic('rutoken', 'extension', 'error', 'не найдено');
       }
-      setStatus(`Не удалось инициализировать Рутокен: ${getRutokenErrorMessage(error)}`);
+      setStatus(`Не удалось инициализировать Рутокен: ${rutokenAdapter.getErrorMessage(error, provider.client)}`);
     }
   }
 }
@@ -1250,24 +889,7 @@ async function signPreparedContentRutoken(selectedCertificate, contentToSignBase
     if (!plugin) {
       throw new Error('Рутокен плагин не готов.');
     }
-
-    const options = {
-      detached: true,
-      addSignTime: true,
-      addEssCert: true,
-    };
-    if (isRutokenRsaCertificate(selectedCertificate)) {
-      options.rsaHashAlgorithm = detectRutokenHashAlgorithmConstant(selectedCertificate, plugin);
-    }
-
-    const cmsSignature = await plugin.sign(
-      selectedCertificate.deviceId,
-      selectedCertificate.certId,
-      contentToSignBase64,
-      plugin.DATA_FORMAT_BASE64,
-      options,
-    );
-    return normalizeCmsBase64(cmsSignature);
+    return rutokenAdapter.sign(plugin, selectedCertificate, contentToSignBase64);
   });
 }
 
@@ -1371,29 +993,6 @@ function openRutokenPinDialog({ title = 'Введите PIN-код токена.
   });
 }
 
-async function getRutokenPinRetriesLeft(plugin, deviceId) {
-  try {
-    const pinsInfo = await plugin.getDeviceInfo(deviceId, plugin.TOKEN_INFO_PINS_INFO);
-    const retriesLeft = pinsInfo?.retriesLeft;
-    if (Number.isFinite(Number(retriesLeft))) {
-      return Number(retriesLeft);
-    }
-  } catch (_error) {
-    // ignore and try legacy fallback below
-  }
-
-  try {
-    const retriesLeft = await plugin.getDeviceInfo(deviceId, plugin.TOKEN_INFO_PIN_RETRIES_LEFT);
-    if (Number.isFinite(Number(retriesLeft))) {
-      return Number(retriesLeft);
-    }
-  } catch (_error) {
-    // ignore legacy fallback failure
-  }
-
-  return null;
-}
-
 async function ensureRutokenLogin(deviceId) {
   const plugin = state.cryptoProviders.rutoken.client;
   if (!plugin) {
@@ -1415,7 +1014,7 @@ async function ensureRutokenLogin(deviceId) {
       if (error?.message === 'Ввод PIN-кода отменён.') {
         throw error;
       }
-      if (isRutokenAlreadyLoggedInError(error, plugin)) {
+      if (rutokenAdapter.isAlreadyLoggedInError(error, plugin)) {
         return;
       }
       loginError = error;
@@ -1425,8 +1024,8 @@ async function ensureRutokenLogin(deviceId) {
         input.value = '';
       });
     }
-    const message = getRutokenErrorMessage(loginError, plugin);
-    const retriesLeft = await getRutokenPinRetriesLeft(plugin, deviceId);
+    const message = rutokenAdapter.getErrorMessage(loginError, plugin);
+    const retriesLeft = await rutokenAdapter.getPinRetriesLeft(plugin, deviceId);
     const retriesSuffix = Number.isFinite(Number(retriesLeft))
       ? ` Осталось попыток: ${retriesLeft}.`
       : '';
@@ -2327,44 +1926,9 @@ function openStampSettingsDialog() {
   });
 }
 
-function detectHashAlgorithmConstant(certificate) {
-  const name = `${certificate.algorithm} ${certificate.label}`.toLowerCase();
-  if (name.includes('2012') && name.includes('512')) {
-    return window.cadesplugin.CADESCOM_HASH_ALGORITHM_CP_GOST_3411_2012_512;
-  }
-  if (name.includes('2012') && name.includes('256')) {
-    return window.cadesplugin.CADESCOM_HASH_ALGORITHM_CP_GOST_3411_2012_256;
-  }
-  return window.cadesplugin.CADESCOM_HASH_ALGORITHM_CP_GOST_3411;
-}
-
 async function signPreparedContent(selectedCertificate, contentToSignBase64) {
   return withOperationalCryptoBusyOverlay('CryptoPro подписывает данные…', async () => {
-    const oHashedData = await createObject('CAdESCOM.HashedData');
-    await setProp(
-      oHashedData,
-      'propset_Algorithm',
-      'Algorithm',
-      detectHashAlgorithmConstant(selectedCertificate),
-    );
-    await setProp(
-      oHashedData,
-      'propset_DataEncoding',
-      'DataEncoding',
-      window.cadesplugin.CADESCOM_BASE64_TO_BINARY,
-    );
-    await oHashedData.Hash(contentToSignBase64);
-
-    const oSigner = await createObject('CAdESCOM.CPSigner');
-    await setProp(oSigner, 'propset_Certificate', 'Certificate', selectedCertificate.certificate);
-
-    const oSignedData = await createObject('CAdESCOM.CadesSignedData');
-    const cmsSignature = await oSignedData.SignHash(
-      oHashedData,
-      oSigner,
-      window.cadesplugin.CADESCOM_CADES_BES,
-    );
-    return normalizeCmsBase64(cmsSignature);
+    return cryptoProAdapter.sign(window.cadesplugin, selectedCertificate, contentToSignBase64);
   });
 }
 
@@ -2382,20 +1946,8 @@ function fileToBase64(file) {
 }
 
 async function exportSelectedCertificateBase64(certificate) {
-  if (certificate.certificateBase64) {
-    return normalizeCmsBase64(certificate.certificateBase64);
-  }
-  if (!certificate.certificate) {
-    throw new Error('Выбранный сертификат нельзя экспортировать для серверной проверки.');
-  }
-  const exported = await certificate.certificate.Export(
-    window.cadesplugin.CADESCOM_ENCODE_BASE64,
-  );
-  const normalized = normalizeCmsBase64(exported);
-  if (!normalized) {
-    throw new Error('Не удалось экспортировать выбранный сертификат.');
-  }
-  return normalized;
+  if (certificate.certificateBase64) return certificate.certificateBase64;
+  return cryptoProAdapter.exportCertificate(window.cadesplugin, certificate);
 }
 
 async function prepareAndSign() {
@@ -2562,8 +2114,8 @@ document.getElementById('signButton').addEventListener('click', async () => {
     await prepareAndSign();
   } catch (error) {
     const details = state.activeCryptoStack === 'rutoken'
-      ? getRutokenErrorMessage(error)
-      : (window.cadesplugin?.getLastError ? window.cadesplugin.getLastError(error) : error.message);
+      ? rutokenAdapter.getErrorMessage(error, state.cryptoProviders.rutoken.client)
+      : cryptoProAdapter.getErrorMessage(window.cadesplugin, error);
     setStatus(`Ошибка: ${details}`);
   } finally {
     updatePrimaryActionState();
