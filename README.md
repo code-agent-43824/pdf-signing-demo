@@ -14,9 +14,12 @@ Browser Plugin или Рутокен Плагин.
 ## Архитектура
 
 - `public/` — статический UI и локально закреплённые browser adapters;
-- `src/server.js` — сборка Express-приложения и runtime dependencies;
+- `src/server.js` — сборка runtime dependencies и запуск сервиса;
+- `src/application.js` — Express application factory, общие middleware и
+  порядок подключения маршрутов;
 - `src/bootstrap.js` — loopback listener, HTTP timeouts и фоновые cleanup;
-- `src/routes/` — health, result и signing endpoints;
+- `src/routes/` — health, public configuration/form, result и signing
+  endpoints;
 - `src/http/` — request validation, rate limiting и единое безопасное
   отображение внутренних ошибок в публичный HTTP-контракт;
 - `src/stamp/` — чтение конфигурации штампа и двусторонняя граница между
