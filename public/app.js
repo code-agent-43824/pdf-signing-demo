@@ -108,6 +108,15 @@ const TEMPLATE_TOKEN_OPTIONS = [
   { value: '{signer.thumbprint}', label: 'Thumbprint' },
   { value: '{signer.serial_number}', label: 'Serial number' },
 ];
+const apiClient = window.PdfSigningApi.createApiClient();
+const {
+  collectKeyUsageTokens,
+  formatCertificateDate,
+  getCertificateCommonName,
+  getCertificateIssuerLabel,
+  isCertificateDateWindowValid,
+  isSigningKeyUsageAllowed,
+} = window.PdfSigningCertificates;
 
 function setStatus(message) {
   document.getElementById('statusLog').textContent = message;
@@ -608,17 +617,8 @@ function showSourceEmptyState(message = 'PDF ещё не загружен') {
   updatePrimaryActionState();
 }
 
-async function fetchJsonOk(url, options, fallbackMessage) {
-  const response = await fetch(url, options);
-  const data = await response.json();
-  if (!response.ok || !data.ok) {
-    throw new Error(data.message || fallbackMessage);
-  }
-  return data;
-}
-
 async function fetchStampConfig() {
-  const data = await fetchJsonOk('./api/stamp-config', undefined, 'Не удалось загрузить конфиг штампа.');
+  const data = await apiClient.loadStampConfig();
   state.defaultStampConfig = ensureStampConfigShape(data.config);
   state.stampConfig = resolveEffectiveStampConfig(state.defaultStampConfig);
   state.selectedStampPosition = getStampPlacementPresetKey(state.stampConfig, { preferSelected: false });
@@ -627,7 +627,7 @@ async function fetchStampConfig() {
 }
 
 async function fetchAvailableFonts() {
-  const data = await fetchJsonOk('./api/fonts', undefined, 'Не удалось загрузить список шрифтов.');
+  const data = await apiClient.loadFonts();
   state.availableFonts = data.fonts || [];
   return data;
 }
@@ -676,44 +676,6 @@ async function setProp(object, asyncSetterName, syncSetterName, value) {
   object[syncSetterName] = value;
 }
 
-function isCertificateDateWindowValid(validFromDate, validToDate, now = Date.now()) {
-  const validFrom = new Date(validFromDate);
-  const validTo = new Date(validToDate);
-  return !Number.isNaN(validFrom.getTime())
-    && !Number.isNaN(validTo.getTime())
-    && validFrom.getTime() <= now
-    && validTo.getTime() > now;
-}
-
-function isSigningKeyUsageAllowed({
-  present,
-  digitalSignature,
-  nonRepudiation,
-}) {
-  return present === false || digitalSignature === true || nonRepudiation === true;
-}
-
-function collectKeyUsageTokens(value, result = []) {
-  if (typeof value === 'string' || typeof value === 'number') {
-    result.push(String(value));
-    return result;
-  }
-  if (Array.isArray(value)) {
-    value.forEach((item) => collectKeyUsageTokens(item, result));
-    return result;
-  }
-  if (value && typeof value === 'object') {
-    Object.entries(value).forEach(([key, item]) => {
-      if (item === true) {
-        result.push(key);
-      } else if (item !== false && item !== null && item !== undefined) {
-        collectKeyUsageTokens(item, result);
-      }
-    });
-  }
-  return result;
-}
-
 async function inspectCryptoProSigningCapability(certificate) {
   const validFromDate = await getProp(certificate, 'ValidFromDate', 'ValidFromDate');
   const validToDate = await getProp(certificate, 'ValidToDate', 'ValidToDate');
@@ -736,49 +698,6 @@ async function inspectCryptoProSigningCapability(certificate) {
     hasPrivateKey,
     keyUsageAllowed: isSigningKeyUsageAllowed(usage),
   };
-}
-
-function parseDistinguishedName(value) {
-  const source = String(value || '').trim();
-  if (!source) return {};
-
-  return source
-    .split(/,(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)/)
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .reduce((accumulator, part) => {
-      const separatorIndex = part.indexOf('=');
-      if (separatorIndex === -1) return accumulator;
-      const key = part.slice(0, separatorIndex).trim();
-      const valuePart = part.slice(separatorIndex + 1).trim().replace(/^"|"$/g, '');
-      if (key) {
-        accumulator[key] = valuePart;
-      }
-      return accumulator;
-    }, {});
-}
-
-function getCertificateCommonName(subjectName) {
-  const parsed = parseDistinguishedName(subjectName);
-  return parsed.CN || parsed.commonName || parsed.name || String(subjectName || '').trim();
-}
-
-function getCertificateIssuerLabel(issuerName) {
-  const parsed = parseDistinguishedName(issuerName);
-  return parsed.CN || parsed.O || parsed.OU || String(issuerName || '').trim();
-}
-
-function formatCertificateDate(value) {
-  if (!value) return '—';
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return String(value);
-  }
-  return new Intl.DateTimeFormat('ru-RU', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  }).format(parsed);
 }
 
 function closeActiveDialog() {
@@ -2503,18 +2422,14 @@ async function prepareAndSign() {
   const certificateBase64 = await exportSelectedCertificateBase64(selectedCertificate);
 
   setStatus('Подготавливаю PDF под PAdES…');
-  const prepareData = await fetchJsonOk('./api/sign/prepare', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      pdfBase64: state.uploadedPdfBase64,
-      stampConfig: state.stampConfig,
-      requestedStampPosition: state.selectedStampPosition,
-      signer: {
-        certificateBase64,
-      },
-    }),
-  }, 'Не удалось подготовить PDF.');
+  const prepareData = await apiClient.prepare({
+    pdfBase64: state.uploadedPdfBase64,
+    stampConfig: state.stampConfig,
+    requestedStampPosition: state.selectedStampPosition,
+    signer: {
+      certificateBase64,
+    },
+  });
 
   setStatus(`Прошу ${getCryptoStackLabel()} подписать хеш сертификатом: ${selectedCertificate.label}`);
   let cmsSignatureBase64;
@@ -2536,14 +2451,10 @@ async function prepareAndSign() {
   }
 
   setStatus('Встраиваю CMS-подпись обратно в PDF…');
-  const completeData = await fetchJsonOk('./api/sign/complete', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      sessionId: prepareData.sessionId,
-      cmsSignatureBase64,
-    }),
-  }, 'Не удалось встроить подпись в PDF.');
+  const completeData = await apiClient.complete({
+    sessionId: prepareData.sessionId,
+    cmsSignatureBase64,
+  });
 
   renderVerificationResult(completeData.verification);
   const resultExpiresAt = new Date(completeData.resultExpiresAt);

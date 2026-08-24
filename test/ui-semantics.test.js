@@ -81,7 +81,7 @@ test('UI requires an explicit, digest-bound signing confirmation', () => {
   );
   assert.ok(
     app.indexOf('await openSigningConfirmationDialog')
-      < app.indexOf("fetchJsonOk('./api/sign/prepare'"),
+      < app.indexOf('apiClient.prepare('),
   );
 });
 
