@@ -167,3 +167,32 @@ test('Rutoken adapter keeps signing detached and maps provider login errors', as
   assert.equal(adapter.isAlreadyLoggedInError(new Error('93'), plugin), true);
   assert.equal(adapter.getErrorMessage(new Error('93'), plugin), 'ALREADY_LOGGED_IN (93)');
 });
+
+test('signing state machine rejects duplicate and impossible workflow transitions', () => {
+  const { PdfSigningState } = loadBrowserModule('signing-state.js');
+  const changes = [];
+  const workflow = PdfSigningState.createSigningStateMachine((change) => changes.push({ ...change }));
+
+  assert.equal(workflow.phase, 'idle');
+  assert.equal(workflow.can('start'), true);
+  workflow.transition('start');
+  assert.equal(workflow.active, true);
+  assert.throws(() => workflow.transition('start'), /not allowed/);
+  assert.throws(() => workflow.transition('reset'), /not allowed/);
+  workflow.transition('confirmed');
+  assert.throws(() => workflow.transition('completed'), /not allowed/);
+  workflow.transition('prepared');
+  workflow.transition('signed');
+  workflow.transition('completed');
+  assert.equal(workflow.phase, 'complete');
+  assert.equal(workflow.active, false);
+  assert.throws(() => workflow.transition('completed'), /not allowed/);
+  assert.equal(changes.length, 5);
+
+  workflow.transition('start');
+  workflow.transition('failed');
+  assert.equal(workflow.phase, 'failed');
+  assert.equal(workflow.can('start'), true);
+  workflow.transition('reset');
+  assert.equal(workflow.phase, 'idle');
+});

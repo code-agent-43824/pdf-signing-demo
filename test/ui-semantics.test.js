@@ -135,3 +135,19 @@ test('certificate usability and Rutoken PIN lifecycle are fail-closed', () => {
   );
   assert.doesNotMatch(app, /state\.[A-Za-z0-9_]*pin/i);
 });
+
+test('signing UI is guarded by the explicit client workflow', () => {
+  const html = fs.readFileSync(path.join(PROJECT_ROOT, 'public', 'index.html'), 'utf8');
+  const app = fs.readFileSync(path.join(PROJECT_ROOT, 'public', 'app.js'), 'utf8');
+  const workflow = fs.readFileSync(
+    path.join(PROJECT_ROOT, 'public', 'modules', 'signing-state.js'),
+    'utf8',
+  );
+
+  assert.match(html, /modules\/signing-state\.js/);
+  assert.match(app, /signingWorkflow\.can\('start'\)/);
+  assert.match(app, /signingWorkflow\.transition\('confirmed'\)[\s\S]*apiClient\.prepare/);
+  assert.match(app, /signingWorkflow\.transition\('signed'\)[\s\S]*apiClient\.complete/);
+  assert.match(app, /apiClient\.complete[\s\S]*signingWorkflow\.transition\('completed'\)/);
+  assert.match(workflow, /Signing transition \$\{phase\} -> \$\{event\} is not allowed/);
+});
