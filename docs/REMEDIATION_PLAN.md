@@ -1131,9 +1131,37 @@ Rollout evidence:
   `NRestarts=0`, counters zero, loopback-only, warning journal пуст, все 12
   legacy PDF сохранены побайтово.
 
+#### PR-10i — placement, preview/result UI и signing orchestrator (2026-08-25)
+
+Статус: **реализован и развёрнут в production**.
+
+- placement presets/config mutation, fail-closed result/verification rendering
+  и orchestration `confirm -> prepare -> provider sign -> complete` вынесены в
+  `public/modules/placement.js`, `preview-ui.js` и
+  `signing-orchestrator.js`; provider adapters, API payloads, signing state
+  machine и server crypto contour не менялись;
+- `public/app.js` сокращён с 1894 до 1691 строки; VM/browser contracts с
+  provider/API mocks проверяют порядок операций, logout lifecycle, capability
+  URL/expiry и независимые integrity/trust/qualified статусы; suite 68/68;
+- commit `8ae9829`, Actions
+  [`32902480737`](https://github.com/code-agent-43824/pdf-signing-demo/actions/runs/32902480737),
+  immutable release `8ae982910f7c5ec3cb546aabee97659b8a231677`, backup
+  `20260825T214409Z-cicd-8ae982910f7c`;
+- production canary SHA-256
+  `59400f54c5c3032fc66693e6d7bb7341c333069c9846153cd49b6b1a89501ff2`, API
+  `valid/not_checked/not_checked`, pyHanko
+  `intact/valid/trusted/ENTIRE_FILE`;
+- headless browser подтвердил загрузку всех трёх namespaces, upload реального
+  multipage fixture в blob preview и переключение placement `right -> left`;
+  console содержал только ожидаемые ошибки отсутствующего в headless Chrome
+  extension, application/module errors отсутствовали;
+- финально service active, `NRestarts=0`, listener только
+  `127.0.0.1:3010`, observability `ok=true`, alerts/events пусты, public
+  metrics `404`, warning journal пуст, все 12 legacy PDF сохранены.
+
 ### Frontend
 
-Статус: **план PR-10e—PR-10h выполнен**.
+Статус: **план PR-10e—PR-10i выполнен**.
 
 - Разделить `public/app.js` на:
   - CryptoPro adapter;
