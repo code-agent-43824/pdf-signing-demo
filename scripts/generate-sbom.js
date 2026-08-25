@@ -18,9 +18,12 @@ function normalizeName(name) {
 
 function generateNodeSbom() {
   const manifest = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+  const npmCli = process.env.NPM_CLI;
+  const command = npmCli ? process.execPath : 'npm';
   const output = execFileSync(
-    'npm',
+    command,
     [
+      ...(npmCli ? [npmCli] : []),
       'sbom',
       '--omit=dev',
       '--package-lock-only',
