@@ -104,7 +104,8 @@ else
   .venv/bin/python -m pip check
   printf '%s\n' "${revision}" > .release-revision
 
-  canary_dir="$(mktemp -d "${service_root}/.canary.XXXXXX")"
+  # Express sendFile rejects files below a dot-prefixed path by default.
+  canary_dir="$(mktemp -d "${service_root}/canary-XXXXXX")"
   canary_port="$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()')"
   PATH="$(dirname -- "${node_bin}"):${staging_dir}/.venv/bin:${PATH}" \
     NODE_ENV=production \
