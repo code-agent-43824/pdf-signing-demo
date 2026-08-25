@@ -76,32 +76,7 @@ const CRYPTO_SCRIPTS = {
   },
 };
 
-const STAMP_POSITION_PRESETS = {
-  left: {
-    label: 'Слева',
-    anchor: 'bottom-left',
-    offsetX: 24,
-    offsetY: 24,
-  },
-  'center-left': {
-    label: 'По центру слева',
-    anchor: 'bottom-left',
-    offsetX: 163,
-    offsetY: 24,
-  },
-  'center-right': {
-    label: 'По центру справа',
-    anchor: 'bottom-right',
-    offsetX: 163,
-    offsetY: 24,
-  },
-  right: {
-    label: 'Справа',
-    anchor: 'bottom-right',
-    offsetX: 24,
-    offsetY: 24,
-  },
-};
+const STAMP_POSITION_PRESETS = window.PdfSigningPlacement.presets;
 
 const TEMPLATE_TOKEN_OPTIONS = [
   { value: '{signer.cert_id}', label: 'ID сертификата' },
@@ -125,6 +100,50 @@ const { clone: cloneConfig, ensureShape: ensureStampConfigShape } = stampConfigS
 const dialogManager = window.PdfSigningDialogs.createDialogManager(document, {
   formatCertificateDate,
   getCertificateKey,
+});
+const previewUi = window.PdfSigningPreview.createPreviewUi(document);
+const placementController = window.PdfSigningPlacement.createPlacementController({
+  document,
+  ensureShape: ensureStampConfigShape,
+  getConfig: () => state.stampConfig,
+  getDefaultRule: getDefaultPlacementRule,
+  getSelected: () => state.selectedStampPosition,
+  setConfig: (config) => { state.stampConfig = config; },
+  setSelected: (preset) => { state.selectedStampPosition = preset; },
+});
+const signingOrchestrator = window.PdfSigningOrchestrator.createSigningOrchestrator({
+  apiClient,
+  confirm: (details) => dialogManager.openSigningConfirmation(details),
+  ensureRutokenLogin,
+  exportCertificate: exportSelectedCertificateBase64,
+  getContext: () => ({
+    certificate: state.selectedCertificate,
+    logoutRutoken: async (deviceId) => {
+      try {
+        await state.cryptoProviders.rutoken.client?.logout(deviceId);
+      } catch (_error) {
+        // Logout is best-effort; PIN and dialog state are already cleared.
+      }
+    },
+    mode: state.activeCryptoStack,
+    pdfBase64: state.uploadedPdfBase64,
+    pdfName: state.uploadedPdfName,
+    pluginReady: state.pluginReady,
+    providerLabel: getCryptoStackLabel(),
+    stampConfig: state.stampConfig,
+    stampPosition: state.selectedStampPosition,
+  }),
+  refreshRutoken: () => withOperationalCryptoBusyOverlay(
+    'Проверяю состояние Рутокена…',
+    () => requestRutokenEnvironmentRefresh({ silentStatus: true }),
+  ),
+  sha256: sha256HexFromBase64,
+  showResult: (completed) => previewUi.showSigned(completed),
+  signCryptoPro: signPreparedContent,
+  signRutoken: signPreparedContentRutoken,
+  status: setStatus,
+  updateAction: updatePrimaryActionState,
+  workflow: signingWorkflow,
 });
 
 function setStatus(message) {
@@ -246,48 +265,15 @@ function bindRutokenRefreshEvents() {
 }
 
 function getStampPlacementPresetKey(config = state.stampConfig, { preferSelected = true } = {}) {
-  if (preferSelected && STAMP_POSITION_PRESETS[state.selectedStampPosition]) {
-    return state.selectedStampPosition;
-  }
-  const rule = getDefaultPlacementRule(ensureStampConfigShape(config));
-  const placement = rule?.placement || {};
-  const anchor = String(placement.anchor || 'bottom-right');
-  const offsetX = Number(placement.offsetX || 0);
-  const offsetY = Number(placement.offsetY || 0);
-
-  return Object.entries(STAMP_POSITION_PRESETS).find(([, preset]) => (
-    preset.anchor === anchor
-    && Number(preset.offsetX) === offsetX
-    && Number(preset.offsetY) === offsetY
-  ))?.[0] || 'right';
+  return placementController.getPresetKey(config, { preferSelected });
 }
 
 function updateStampPlacementUi() {
-  const activePreset = getStampPlacementPresetKey();
-  document.querySelectorAll('[data-stamp-position]').forEach((button) => {
-    const isActive = button.dataset.stampPosition === activePreset;
-    button.classList.toggle('is-active', isActive);
-    button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
-  });
+  placementController.update();
 }
 
 function applyStampPlacementPreset(presetKey) {
-  const preset = STAMP_POSITION_PRESETS[presetKey];
-  if (!preset) return;
-
-  const draft = ensureStampConfigShape(state.stampConfig);
-  draft.appearance.width = 128;
-  state.selectedStampPosition = presetKey;
-  const rule = getDefaultPlacementRule(draft);
-  rule.placement.mode = 'anchored';
-  rule.placement.anchor = preset.anchor;
-  rule.placement.offsetX = preset.offsetX;
-  rule.placement.offsetY = preset.offsetY;
-  rule.placement.columns = 1;
-  rule.placement.stepX = 0;
-  rule.placement.stepY = 0;
-  state.stampConfig = draft;
-  updateStampPlacementUi();
+  placementController.apply(presetKey);
 }
 
 function bindRutokenTokenMonitor(plugin) {
@@ -524,92 +510,6 @@ function updatePrimaryActionState() {
   updateSelectedCertificateUi();
 }
 
-function setPreviewMode(mode = 'empty') {
-  const sourceEmpty = document.getElementById('sourceEmpty');
-  const sourcePdf = document.getElementById('sourcePdf');
-  const signedState = document.getElementById('signedState');
-  const signedPdf = document.getElementById('signedPdf');
-  const previewTitle = document.getElementById('previewTitle');
-  const previewHint = document.getElementById('previewHint');
-  const successBanner = document.getElementById('successBanner');
-
-  sourceEmpty.classList.toggle('hidden', mode !== 'empty');
-  sourcePdf.classList.toggle('hidden', mode !== 'source');
-  signedState.classList.toggle('hidden', mode !== 'signed-empty');
-  signedPdf.classList.toggle('hidden', mode !== 'signed');
-  successBanner.classList.toggle('hidden', mode !== 'signed');
-
-  if (mode === 'signed') {
-    previewTitle.textContent = 'Подписанный документ';
-    previewHint.textContent = 'Финальная версия PDF после встраивания подписи и штампа';
-    return;
-  }
-
-  previewTitle.textContent = 'Предпросмотр документа';
-  previewHint.textContent = mode === 'source'
-    ? 'Исходный загруженный PDF перед подписанием'
-    : 'После загрузки PDF-файла его предпросмотр появится здесь';
-}
-
-function getSignatureCountLabel(count) {
-  const absolute = Math.abs(Number(count) || 0) % 100;
-  const lastDigit = absolute % 10;
-  if (absolute > 10 && absolute < 20) return 'подписей';
-  if (lastDigit === 1) return 'подпись';
-  if (lastDigit >= 2 && lastDigit <= 4) return 'подписи';
-  return 'подписей';
-}
-
-function setVerificationDetailsExpanded(expanded) {
-  const toggle = document.getElementById('resultInfoToggle');
-  const details = document.getElementById('verificationDetails');
-  toggle.setAttribute('aria-expanded', String(expanded));
-  details.classList.toggle('hidden', !expanded);
-}
-
-function renderVerificationResult(verification) {
-  const trustChecks = verification?.trust?.checks;
-  const trustChecksAreExplicitlyUnknown = trustChecks
-    && ['chain', 'validity', 'revocation', 'keyUsage']
-      .every((name) => trustChecks[name] === 'not_checked');
-  const validContract = (
-    verification?.schemaVersion === 1
-    && verification?.integrity?.status === 'valid'
-    && verification.integrity.code === 'CMS_INTEGRITY_VALID'
-    && verification.integrity.signerCertificateMatched === true
-    && Number.isInteger(verification.integrity.signaturesVerified)
-    && verification.integrity.signaturesVerified > 0
-    && verification?.trust?.status === 'not_checked'
-    && verification.trust.code === 'CERTIFICATE_TRUST_NOT_CHECKED'
-    && trustChecksAreExplicitlyUnknown
-    && verification?.qualified?.status === 'not_checked'
-    && verification.qualified.code === 'QUALIFIED_STATUS_NOT_CHECKED'
-  );
-  if (!validContract) {
-    throw new Error('Сервер не вернул полный и однозначный результат проверки подписи.');
-  }
-
-  const signatureCount = verification.integrity.signaturesVerified;
-  document.getElementById('verificationTitle').textContent = 'Подписанный файл готов';
-  document.getElementById('verificationMessage').textContent = (
-    'Документ доступен для просмотра и скачивания в течение 15 минут.'
-  );
-  document.getElementById('integrityStatusBadge').textContent = 'Подтверждена';
-  document.getElementById('integrityStatusText').textContent = (
-    `Криптографически проверено ${signatureCount} ${getSignatureCountLabel(signatureCount)} в PDF; `
-    + 'сертификат подписанта совпадает с выбранным.'
-  );
-  document.getElementById('trustStatusBadge').textContent = 'Не проверено';
-  document.getElementById('trustStatusText').textContent = (
-    'Цепочка доверия, срок, отзыв и назначение ключа не проверялись.'
-  );
-  document.getElementById('qualifiedStatusBadge').textContent = 'Не подтверждён';
-  document.getElementById('qualifiedStatusText').textContent = (
-    'Проверка по политике квалифицированной электронной подписи не выполнялась.'
-  );
-  setVerificationDetailsExpanded(false);
-}
-
 function updateEnvironmentDiagnostics() {
   renderEnvironmentStatusStrip();
 
@@ -622,13 +522,7 @@ function updateEnvironmentDiagnostics() {
 }
 
 function showSourceEmptyState(message = 'PDF ещё не загружен') {
-  setPreviewMode('empty');
-  document.getElementById('sourcePdf').removeAttribute('src');
-  document.getElementById('docMeta').textContent = message;
-  const viewerFileName = document.getElementById('viewerFileName');
-  if (viewerFileName) {
-    viewerFileName.textContent = 'Документ не загружен';
-  }
+  previewUi.showEmpty(message);
   updatePrimaryActionState();
 }
 
@@ -648,13 +542,7 @@ async function fetchAvailableFonts() {
 }
 
 function showPdf(url, metaText) {
-  document.getElementById('sourcePdf').src = url;
-  setPreviewMode('source');
-  document.getElementById('docMeta').textContent = metaText;
-  const viewerFileName = document.getElementById('viewerFileName');
-  if (viewerFileName) {
-    viewerFileName.textContent = state.uploadedPdfName || 'Загруженный документ';
-  }
+  previewUi.showSource(url, state.uploadedPdfName, metaText);
   updatePrimaryActionState();
 }
 
@@ -684,13 +572,7 @@ function resetUploadedPdfSelection() {
 }
 
 function resetSignedPdfPreview() {
-  const signedPdf = document.getElementById('signedPdf');
-  const downloadLink = document.getElementById('downloadLink');
-  signedPdf.removeAttribute('src');
-  setPreviewMode(state.uploadedPdfBase64 ? 'source' : 'empty');
-  downloadLink.classList.add('hidden');
-  downloadLink.removeAttribute('href');
-  setVerificationDetailsExpanded(false);
+  previewUi.resetSigned(Boolean(state.uploadedPdfBase64));
   updatePrimaryActionState();
 }
 
@@ -1680,91 +1562,7 @@ async function exportSelectedCertificateBase64(certificate) {
 }
 
 async function prepareAndSign() {
-  signingWorkflow.transition('start');
-  try {
-    if (state.activeCryptoStack === 'rutoken') {
-      await withOperationalCryptoBusyOverlay('Проверяю состояние Рутокена…', () => requestRutokenEnvironmentRefresh({ silentStatus: true }));
-    }
-    if (!state.pluginReady) throw new Error(`${getCryptoStackLabel()} plugin не готов.`);
-    if (!state.uploadedPdfBase64) throw new Error('Сначала загрузите PDF-документ для подписи.');
-    if (!state.selectedCertificate) throw new Error('Сначала выберите сертификат для подписи.');
-
-    const selectedCertificate = state.selectedCertificate;
-    const documentDigest = await sha256HexFromBase64(state.uploadedPdfBase64);
-    await dialogManager.openSigningConfirmation({
-      documentName: state.uploadedPdfName || 'Документ.pdf',
-      documentDigest,
-      certificate: selectedCertificate,
-    });
-    const certificateBase64 = await exportSelectedCertificateBase64(selectedCertificate);
-    signingWorkflow.transition('confirmed');
-
-    setStatus('Подготавливаю PDF под PAdES…');
-    const prepareData = await apiClient.prepare({
-      pdfBase64: state.uploadedPdfBase64,
-      stampConfig: state.stampConfig,
-      requestedStampPosition: state.selectedStampPosition,
-      signer: { certificateBase64 },
-    });
-    signingWorkflow.transition('prepared');
-
-    setStatus(`Прошу ${getCryptoStackLabel()} подписать хеш сертификатом: ${selectedCertificate.label}`);
-    let cmsSignatureBase64;
-    try {
-      if (state.activeCryptoStack === 'rutoken') await ensureRutokenLogin(selectedCertificate.deviceId);
-      cmsSignatureBase64 = state.activeCryptoStack === 'rutoken'
-        ? await signPreparedContentRutoken(selectedCertificate, prepareData.contentToSignBase64)
-        : await signPreparedContent(selectedCertificate, prepareData.contentToSignBase64);
-    } finally {
-      if (state.activeCryptoStack === 'rutoken') {
-        try {
-          await state.cryptoProviders.rutoken.client?.logout(selectedCertificate.deviceId);
-        } catch (_error) {
-          // ignore logout failure
-        }
-      }
-    }
-    signingWorkflow.transition('signed');
-
-    setStatus('Встраиваю CMS-подпись обратно в PDF…');
-    const completeData = await apiClient.complete({
-      sessionId: prepareData.sessionId,
-      cmsSignatureBase64,
-    });
-
-    renderVerificationResult(completeData.verification);
-    const resultExpiresAt = new Date(completeData.resultExpiresAt);
-    if (
-      !/^\.\/api\/results\/[A-Za-z0-9_-]{43}$/.test(completeData.signedPdfUrl)
-      || !/^\.\/api\/results\/[A-Za-z0-9_-]{43}$/.test(completeData.downloadUrl)
-      || Number.isNaN(resultExpiresAt.getTime())
-      || resultExpiresAt.getTime() <= Date.now()
-    ) {
-      throw new Error('Сервер вернул некорректную ссылку на результат.');
-    }
-    const signedPdf = document.getElementById('signedPdf');
-    const downloadLink = document.getElementById('downloadLink');
-    signedPdf.src = completeData.signedPdfUrl;
-    setPreviewMode('signed');
-    const viewerFileName = document.getElementById('viewerFileName');
-    if (viewerFileName) viewerFileName.textContent = 'Подписанный документ';
-    downloadLink.href = completeData.downloadUrl;
-    downloadLink.download = completeData.downloadName || 'signed-formular.pdf';
-    downloadLink.classList.remove('hidden');
-    setStatus(
-      'Готово. Подписанный PDF можно просматривать и скачивать несколько раз '
-      + `до ${resultExpiresAt.toLocaleTimeString('ru-RU', {
-        hour: '2-digit',
-        minute: '2-digit',
-      })} (15 минут).`,
-    );
-    signingWorkflow.transition('completed');
-  } catch (error) {
-    if (signingWorkflow.can('failed')) signingWorkflow.transition('failed');
-    throw error;
-  } finally {
-    updatePrimaryActionState();
-  }
+  return signingOrchestrator.run();
 }
 
 document.getElementById('pdfUpload').addEventListener('change', async (event) => {
@@ -1861,8 +1659,7 @@ document.getElementById('signButton').addEventListener('click', async () => {
 });
 
 document.getElementById('resultInfoToggle').addEventListener('click', () => {
-  const toggle = document.getElementById('resultInfoToggle');
-  setVerificationDetailsExpanded(toggle.getAttribute('aria-expanded') !== 'true');
+  previewUi.toggleDetails();
 });
 
 document.getElementById('stampSettingsButton').addEventListener('click', async () => {

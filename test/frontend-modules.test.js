@@ -197,6 +197,150 @@ test('signing state machine rejects duplicate and impossible workflow transition
   assert.equal(workflow.phase, 'idle');
 });
 
+test('preview UI validates result capabilities and independent verification statuses', () => {
+  const { PdfSigningPreview: preview } = loadBrowserModule('preview-ui.js');
+  const verification = {
+    schemaVersion: 1,
+    integrity: {
+      status: 'valid',
+      code: 'CMS_INTEGRITY_VALID',
+      signerCertificateMatched: true,
+      signaturesVerified: 2,
+    },
+    trust: {
+      status: 'not_checked',
+      code: 'CERTIFICATE_TRUST_NOT_CHECKED',
+      checks: {
+        chain: 'not_checked',
+        validity: 'not_checked',
+        revocation: 'not_checked',
+        keyUsage: 'not_checked',
+      },
+    },
+    qualified: {
+      status: 'not_checked',
+      code: 'QUALIFIED_STATUS_NOT_CHECKED',
+    },
+  };
+  assert.equal(preview.validateVerification(verification), 2);
+  assert.equal(preview.getSignatureCountLabel(2), 'подписи');
+  assert.throws(
+    () => preview.validateVerification({ ...verification, trust: { status: 'valid' } }),
+    /полный и однозначный результат/,
+  );
+  const token = 'A'.repeat(43);
+  const expiresAt = preview.validateResult({
+    signedPdfUrl: `./api/results/${token}`,
+    downloadUrl: `./api/results/${token}`,
+    resultExpiresAt: '2026-08-25T22:00:00.000Z',
+  }, Date.parse('2026-08-25T21:00:00.000Z'));
+  assert.equal(expiresAt.toISOString(), '2026-08-25T22:00:00.000Z');
+  assert.throws(() => preview.validateResult({
+    signedPdfUrl: 'https://example.test/result.pdf',
+    downloadUrl: `./api/results/${token}`,
+    resultExpiresAt: '2026-08-25T22:00:00.000Z',
+  }, 0), /некорректную ссылку/);
+});
+
+test('placement controller maps presets and updates config without hidden DOM state', () => {
+  const { PdfSigningPlacement: placement } = loadBrowserModule('placement.js');
+  let config = {
+    appearance: { width: 144 },
+    placements: { rules: [{ placement: { anchor: 'bottom-left', offsetX: 24, offsetY: 24 } }] },
+  };
+  let selected = 'left';
+  const buttons = ['left', 'right'].map((name) => ({
+    dataset: { stampPosition: name },
+    classList: { toggle(_className, value) { this.active = value; } },
+    setAttribute(_name, value) { this.pressed = value; },
+  }));
+  const controller = placement.createPlacementController({
+    document: { querySelectorAll: () => buttons },
+    ensureShape: (value) => JSON.parse(JSON.stringify(value)),
+    getConfig: () => config,
+    getDefaultRule: (value) => value.placements.rules[0],
+    getSelected: () => selected,
+    setConfig: (value) => { config = value; },
+    setSelected: (value) => { selected = value; },
+  });
+
+  assert.equal(controller.getPresetKey(config, { preferSelected: false }), 'left');
+  assert.equal(controller.apply('right'), true);
+  assert.equal(selected, 'right');
+  assert.equal(config.appearance.width, 128);
+  assert.deepEqual({ ...config.placements.rules[0].placement }, {
+    anchor: 'bottom-right',
+    columns: 1,
+    mode: 'anchored',
+    offsetX: 24,
+    offsetY: 24,
+    stepX: 0,
+    stepY: 0,
+  });
+  assert.equal(buttons[1].classList.active, true);
+  assert.equal(buttons[1].pressed, 'true');
+  assert.equal(controller.apply('unknown'), false);
+});
+
+test('signing orchestrator preserves confirmation, prepare, sign and complete order', async () => {
+  const { PdfSigningState, PdfSigningOrchestrator } = loadBrowserModules([
+    'signing-state.js',
+    'signing-orchestrator.js',
+  ]);
+  const calls = [];
+  const workflow = PdfSigningState.createSigningStateMachine(({ phase }) => calls.push(`phase:${phase}`));
+  const orchestrator = PdfSigningOrchestrator.createSigningOrchestrator({
+    apiClient: {
+      async prepare(body) {
+        calls.push(`prepare:${body.signer.certificateBase64}`);
+        return { sessionId: 'session', contentToSignBase64: 'digest' };
+      },
+      async complete(body) {
+        calls.push(`complete:${body.cmsSignatureBase64}`);
+        return { ok: true };
+      },
+    },
+    async confirm() { calls.push('confirm'); },
+    async ensureRutokenLogin() { calls.push('login'); },
+    async exportCertificate() { calls.push('certificate'); return 'certificate-base64'; },
+    getContext: () => ({
+      certificate: { deviceId: 'device', label: 'Test certificate' },
+      async logoutRutoken() { calls.push('logout'); },
+      mode: 'rutoken',
+      pdfBase64: 'pdf-base64',
+      pdfName: 'document.pdf',
+      pluginReady: true,
+      providerLabel: 'Рутокен',
+      stampConfig: { schemaVersion: 1 },
+      stampPosition: 'right',
+    }),
+    async refreshRutoken() { calls.push('refresh'); },
+    async sha256() { calls.push('sha256'); return 'document-digest'; },
+    showResult() { calls.push('show-result'); return new Date('2026-08-25T22:00:00Z'); },
+    async signCryptoPro() { throw new Error('wrong provider'); },
+    async signRutoken() { calls.push('sign'); return 'cms-base64'; },
+    status(message) { calls.push(`status:${message.split('…')[0]}`); },
+    updateAction() { calls.push('update-action'); },
+    workflow,
+  });
+
+  await orchestrator.run();
+  assert.deepEqual(calls.filter((item) => [
+    'confirm', 'certificate', 'login', 'sign', 'logout', 'show-result', 'update-action',
+  ].includes(item) || /^(prepare|complete):/.test(item)), [
+    'confirm',
+    'certificate',
+    'prepare:certificate-base64',
+    'login',
+    'sign',
+    'logout',
+    'complete:cms-base64',
+    'show-result',
+    'update-action',
+  ]);
+  assert.equal(workflow.phase, 'complete');
+});
+
 test('stamp configuration store merges browser overrides without mutating defaults', () => {
   const { PdfSigningStampConfig } = loadBrowserModule('stamp-config.js');
   const values = new Map();

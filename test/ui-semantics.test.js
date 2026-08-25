@@ -14,6 +14,14 @@ test('UI separates integrity, trust and qualified status without false success c
     path.join(PROJECT_ROOT, 'public', 'app.js'),
     'utf8',
   );
+  const previewUi = fs.readFileSync(
+    path.join(PROJECT_ROOT, 'public', 'modules', 'preview-ui.js'),
+    'utf8',
+  );
+  const orchestrator = fs.readFileSync(
+    path.join(PROJECT_ROOT, 'public', 'modules', 'signing-orchestrator.js'),
+    'utf8',
+  );
   const cryptoProAdapter = fs.readFileSync(
     path.join(PROJECT_ROOT, 'public', 'modules', 'cryptopro-adapter.js'),
     'utf8',
@@ -42,15 +50,15 @@ test('UI separates integrity, trust and qualified status without false success c
     /успешно подписан[а-яё\s]*квалифицированной электронной подписью/i,
   );
 
-  assert.match(app, /verification\?\.integrity\?\.status === 'valid'/);
-  assert.match(app, /verification\?\.trust\?\.status === 'not_checked'/);
-  assert.match(app, /verification\?\.qualified\?\.status === 'not_checked'/);
-  assert.match(app, /downloadLink\.href = completeData\.downloadUrl/);
-  assert.match(app, /можно просматривать и скачивать несколько раз/);
-  assert.match(app, /setVerificationDetailsExpanded\(false\)/);
+  assert.match(previewUi, /verification\?\.integrity\?\.status !== 'valid'/);
+  assert.match(previewUi, /verification\?\.trust\?\.status !== 'not_checked'/);
+  assert.match(previewUi, /verification\?\.qualified\?\.status !== 'not_checked'/);
+  assert.match(previewUi, /downloadLink\.href = completeData\.downloadUrl/);
+  assert.match(orchestrator, /можно просматривать и скачивать несколько раз/);
+  assert.match(previewUi, /setDetailsExpanded\(false\)/);
   assert.match(app, /resultInfoToggle.*addEventListener\('click'/s);
   assert.match(
-    app,
+    previewUi,
     /Цепочка доверия, срок, отзыв и назначение ключа не проверялись/,
   );
   assert.match(
@@ -76,6 +84,10 @@ test('UI requires an explicit, digest-bound signing confirmation', () => {
     path.join(PROJECT_ROOT, 'public', 'app.js'),
     'utf8',
   );
+  const orchestrator = fs.readFileSync(
+    path.join(PROJECT_ROOT, 'public', 'modules', 'signing-orchestrator.js'),
+    'utf8',
+  );
 
   assert.match(html, /id="signingConfirmationDialogTemplate"/);
   assert.match(html, /id="confirmationDocumentName"/);
@@ -83,13 +95,9 @@ test('UI requires an explicit, digest-bound signing confirmation', () => {
   assert.match(html, /id="confirmationCertificateFingerprint"/);
   assert.match(html, /id="confirmSigning"/);
   assert.match(app, /window\.crypto\.subtle\.digest\('SHA-256', bytes\)/);
-  assert.match(
-    app,
-    /await dialogManager\.openSigningConfirmation\(\{[\s\S]*documentName:[\s\S]*documentDigest,[\s\S]*certificate: selectedCertificate/,
-  );
+  assert.match(orchestrator, /await confirm\(\{[\s\S]*documentName:[\s\S]*documentDigest,[\s\S]*certificate: context\.certificate/);
   assert.ok(
-    app.indexOf('await dialogManager.openSigningConfirmation')
-      < app.indexOf('apiClient.prepare('),
+    orchestrator.indexOf('await confirm(') < orchestrator.indexOf('apiClient.prepare('),
   );
 });
 
@@ -151,11 +159,15 @@ test('signing UI is guarded by the explicit client workflow', () => {
     path.join(PROJECT_ROOT, 'public', 'modules', 'signing-state.js'),
     'utf8',
   );
+  const orchestrator = fs.readFileSync(
+    path.join(PROJECT_ROOT, 'public', 'modules', 'signing-orchestrator.js'),
+    'utf8',
+  );
 
   assert.match(html, /modules\/signing-state\.js/);
   assert.match(app, /signingWorkflow\.can\('start'\)/);
-  assert.match(app, /signingWorkflow\.transition\('confirmed'\)[\s\S]*apiClient\.prepare/);
-  assert.match(app, /signingWorkflow\.transition\('signed'\)[\s\S]*apiClient\.complete/);
-  assert.match(app, /apiClient\.complete[\s\S]*signingWorkflow\.transition\('completed'\)/);
+  assert.match(orchestrator, /workflow\.transition\('confirmed'\)[\s\S]*apiClient\.prepare/);
+  assert.match(orchestrator, /workflow\.transition\('signed'\)[\s\S]*apiClient\.complete/);
+  assert.match(orchestrator, /apiClient\.complete[\s\S]*workflow\.transition\('completed'\)/);
   assert.match(workflow, /Signing transition \$\{phase\} -> \$\{event\} is not allowed/);
 });
