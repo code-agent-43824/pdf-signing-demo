@@ -1209,6 +1209,8 @@ readiness/public HTTPS/service state после переключения зап�
 
 ## 11. Наблюдаемость
 
+Статус: **реализовано и развёрнуто в production 2026-08-25**.
+
 - Структурированные логи с request/session correlation ID.
 - Метрики:
   - длительность prepare/complete/validate;
@@ -1221,6 +1223,44 @@ readiness/public HTTPS/service state после переключения зап�
   персональные DN целиком или полный fingerprint без необходимости.
 - Alerts на рост очереди, validation failures, нехватку диска и
   недоступность readiness.
+
+Реализация `9edee52` добавила in-memory Prometheus exposition без новых
+runtime-зависимостей. Локальный `/pdf-signing/health/metrics` содержит только
+bounded labels и агрегаты: duration/outcome `prepare`/`complete`, safe error
+codes, rate limits, обработанные bytes/pages, cleanup failures, worker queue,
+session/result capacity и process RSS/start time. PDF, CMS, PIN,
+capability-токены, DN и fingerprints не сохраняются. Production Caddy
+возвращает `404` на внешний запрос к metrics до передачи в приложение; этот
+контракт и наличие локальных метрик входят в deployment gates.
+
+`scripts/check-observability.js` сравнивает счётчики между запусками и
+проверяет local/public readiness, systemd state/NRestarts, свободное место
+хоста, заполнение очереди, session memory и result storage. Пороговые события:
+немедленная server/worker failure, пять signing failures или rate limits за
+интервал, любая cleanup failure, 80% storage/session capacity, полная очередь,
+менее 512 MiB или 5% диска. Private state содержит только counters и имена
+активных состояний.
+
+Rollout подтверждён Actions run
+[`32883378192`](https://github.com/code-agent-43824/pdf-signing-demo/actions/runs/32883378192):
+
+- CI и production-runtime suite: 65/65, audits, fixtures, SBOM и `pip check`
+  чистые;
+- isolated canary SHA-256
+  `7cb5e1705cf7b23df2c613632965e6634f3b355fb04c930863cdbaf7c3e103ca`,
+  API `valid/not_checked/not_checked`, pyHanko
+  `intact/valid/trusted/ENTIRE_FILE`;
+- immutable release `9edee52d58e9797984519eefb267aae50049bcbe`, backup
+  `20260825T182346Z-cicd-9edee52d58e9`;
+- production monitor baseline: `ok=true`, alerts/events пусты, service active,
+  `NRestarts=0`, очередь/session/results/cleanup counters нулевые; listener
+  только `127.0.0.1:3010`, внешний metrics `404`, warning journal пуст;
+- все 12 private legacy PDF сохранены.
+
+Пятиминутный deterministic OpenClaw command job
+`faf0497a-905d-4865-a625-4c84efd6c977` выполняет checker по restricted SSH и
+не запускает модель. В topic `7884` отправляются только новый alert, burst или
+recovery; здоровый forced run завершился за 1.5 секунды без сообщения.
 
 ## 12. Рекомендуемая последовательность pull requests
 
