@@ -1155,6 +1155,8 @@ Rollout evidence:
 
 ## 10. CI/CD quality gates
 
+Статус: **реализовано**.
+
 Каждый pull request должен проходить:
 
 1. lint и форматирование JS/Python;
@@ -1176,6 +1178,14 @@ Deployment:
 - атомарное переключение symlink;
 - сохранение предыдущего release для rollback;
 - автоматический rollback при неуспешной PAdES-проверке.
+
+Реализация использует единый workflow `.github/workflows/ci.yml`, GitHub
+Environment `production`, выделенный restricted SSH deploy key и
+`scripts/deploy-production.sh`. Сервер повторяет воспроизводимую установку
+и все gates, затем `scripts/smoke-signing.js` проверяет полный CAdES/PAdES
+цикл на изолированном canary до атомарного переключения `current`. Ошибка
+readiness/public HTTPS/service state после переключения запускает rollback
+на предыдущий immutable release и прежний user-systemd unit.
 
 ## 11. Наблюдаемость
 

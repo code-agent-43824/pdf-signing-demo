@@ -17,6 +17,7 @@ function normalizeName(name) {
 }
 
 function generateNodeSbom() {
+  const manifest = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   const output = execFileSync(
     'npm',
     [
@@ -32,6 +33,7 @@ function generateNodeSbom() {
   delete sbom.serialNumber;
   if (sbom.metadata) {
     delete sbom.metadata.timestamp;
+    sbom.metadata.component.name = manifest.name;
   }
   return sbom;
 }

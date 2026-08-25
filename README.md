@@ -294,14 +294,27 @@ Repo includes reference deployment files:
 - `deploy/Caddyfile.snippet`
 
 Production разворачивается из зафиксированного commit в
-`/home/openclaw/services/pdf-signing-demo/current`. Перед заменой
-создаётся timestamped backup кода, venv и service unit. В staging-копии
-выполняются `npm ci --omit=dev`, установка `requirements.txt
---require-hashes` в venv и полный test suite; только после этого файлы
-переносятся в `current`, service перезапускается и проверяются readiness,
-public HTTPS, полный CAdES cycle и независимая PDF validation. При любой
-неуспешной проверке восстанавливается backup. `RESULTS_DIR` и legacy
-archive не входят в release tree.
+`/home/openclaw/services/pdf-signing-demo/current`. После успешного CI на
+`main` GitHub Actions передаёт ровно проверенный commit выделенным
+production SSH-ключом. На сервере `scripts/deploy-production.sh` под
+эксклюзивной блокировкой создаёт immutable release, устанавливает только
+зафиксированные зависимости, повторяет полный suite и запускает canary на
+отдельном loopback-порту. Canary выполняет полный цикл
+`prepare → CAdES → complete → preview×2 → download×2` и независимую
+pyHanko-проверку. Затем `current` атомарно переключается symlink-ом,
+service перезапускается и проверяются local/public readiness и HTTPS UI.
+При любой ошибке после переключения предыдущий release и service unit
+восстанавливаются автоматически. Перед rollout сохраняется timestamped
+backup; `RESULTS_DIR` и legacy archive не входят в release tree.
+
+Workflow использует GitHub Environment `production`: host/user хранятся в
+environment variables `PRODUCTION_HOST`/`PRODUCTION_USER`, приватный ключ и
+точная строка host key — в secrets `PRODUCTION_SSH_KEY` и
+`PRODUCTION_KNOWN_HOSTS`. Ключ на сервере отдельный и имеет SSH-ограничение
+`restrict`; существующие административные ключи в CI не передаются.
+Серверный bootstrap использует отдельную копию точно npm `10.9.8` в
+`/home/openclaw/runtime/npm-10.9.8`; приложение не включает npm в runtime
+dependencies.
 
 ## Проверки golden-корпуса
 

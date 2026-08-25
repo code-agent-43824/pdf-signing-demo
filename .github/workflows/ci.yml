@@ -8,6 +8,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: pdf-signing-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   golden-pades:
     runs-on: ubuntu-latest
@@ -41,3 +45,39 @@ jobs:
           .venv/bin/python -m pip_audit \
             --requirement requirements.txt \
             --disable-pip
+
+  deploy-production:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: golden-pades
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+
+    steps:
+      - name: Check out verified revision
+        uses: actions/checkout@v7
+
+      - name: Configure pinned production host
+        env:
+          SSH_KEY: ${{ secrets.PRODUCTION_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.PRODUCTION_KNOWN_HOSTS }}
+        run: |
+          install -d -m 0700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 0600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+
+      - name: Build immutable source archive
+        run: git archive --format=tar.gz --output="release-${GITHUB_SHA}.tar.gz" "${GITHUB_SHA}"
+
+      - name: Upload and deploy with automatic rollback
+        env:
+          DEPLOY_HOST: ${{ vars.PRODUCTION_HOST }}
+          DEPLOY_USER: ${{ vars.PRODUCTION_USER }}
+        run: |
+          target="${DEPLOY_USER}@${DEPLOY_HOST}"
+          archive="release-${GITHUB_SHA}.tar.gz"
+          remote_archive="/home/openclaw/services/pdf-signing-demo/incoming/${archive}"
+          ssh "$target" 'mkdir -p /home/openclaw/services/pdf-signing-demo/incoming /home/openclaw/services/pdf-signing-demo/releases'
+          scp "$archive" "${target}:${remote_archive}"
+          ssh "$target" "set -euo pipefail; revision='${GITHUB_SHA}'; archive='${remote_archive}'; stage=\"/home/openclaw/services/pdf-signing-demo/releases/.\${revision}.staging\"; trap 'rm -f -- \"\${archive}\"' EXIT; rm -rf -- \"\${stage}\"; mkdir -p -- \"\${stage}\"; tar -xzf \"\${archive}\" -C \"\${stage}\"; \"\${stage}/scripts/deploy-production.sh\" \"\${revision}\" \"\${stage}\""
