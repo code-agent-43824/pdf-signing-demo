@@ -47,7 +47,7 @@ jobs:
             --disable-pip
 
   deploy-production:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && !contains(github.event.head_commit.message, '[skip deploy]')
     needs: golden-pades
     runs-on: ubuntu-latest
     timeout-minutes: 30

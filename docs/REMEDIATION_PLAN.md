@@ -1187,6 +1187,26 @@ Environment `production`, выделенный restricted SSH deploy key и
 readiness/public HTTPS/service state после переключения запускает rollback
 на предыдущий immutable release и прежний user-systemd unit.
 
+Первый автоматический rollout завершён 2026-08-25:
+
+- commits `f98eb8d`, `919712f`, `b96b103`; финальный Actions run
+  [`32880057475`](https://github.com/code-agent-43824/pdf-signing-demo/actions/runs/32880057475)
+  прошёл оба обязательных job;
+- server staging на Node `22.22.2`, npm `10.9.8` и Python `3.14.4` прошёл
+  63/63 tests, audits, `pip check` и deterministic fixture/SBOM checks;
+- isolated canary выполнил полный цикл с preview/download ×2, единым
+  SHA-256 `db5788d34c19feac2e73b2b76e96677137b110fe7602b03d955214715de0b9c3`,
+  API `valid/not_checked/not_checked` и pyHanko
+  `intact/valid/trusted/ENTIRE_FILE`;
+- production атомарно переключён на immutable release `b96b103`; backup
+  `20260825T174952Z-cicd-b96b1031f90f`;
+- отдельный forced-failure drill подтвердил автоматический rollback и
+  восстановление readiness; evidence сохранён в backup
+  `20260825T175300Z-cicd-b96b1031f90f`;
+- финально service active, `NRestarts=0`, local/public readiness зелёные,
+  counters и result storage нулевые, listener только `127.0.0.1:3010`,
+  warning journal пуст, все 12 legacy PDF сохранены.
+
 ## 11. Наблюдаемость
 
 - Структурированные логи с request/session correlation ID.

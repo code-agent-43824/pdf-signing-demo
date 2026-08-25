@@ -19,6 +19,7 @@ test('production deployment keeps required safety gates', () => {
   execFileSync('bash', ['-n', verifyPath]);
   assert.match(workflow, /needs: golden-pades/);
   assert.match(workflow, /environment: production/);
+  assert.match(workflow, /\[skip deploy\]/);
   assert.match(workflow, /PRODUCTION_KNOWN_HOSTS/);
   assert.match(deploy, /flock -n/);
   assert.match(deploy, /verify-release\.sh/);
