@@ -5,6 +5,7 @@ const { sendSafeError } = require('../http/errors');
 const { runIsolatedProcess } = require('../runtime/process-runner');
 
 function createHealthRouter({
+  metrics,
   operationQueue,
   results,
   resultsDir,
@@ -108,6 +109,14 @@ function createHealthRouter({
     } catch (error) {
       sendSafeError(req, res, error);
     }
+  });
+
+  router.get('/metrics', (_req, res) => {
+    res.type('text/plain; version=0.0.4; charset=utf-8').send(metrics.render({
+      operationQueue,
+      results,
+      sessions,
+    }));
   });
 
   return router;

@@ -112,6 +112,7 @@ function createVerificationResult(integrity, embeddedIntegrity) {
 function createSigningRouter({
   completeRateLimiter,
   formPdfPath,
+  metrics,
   operationQueue,
   ownerKeyForRequest,
   prepareRateLimiter,
@@ -141,7 +142,31 @@ function createSigningRouter({
     (error) => (error ? sendSafeError(req, res, error, 'complete') : next()),
   );
 
-  router.post('/prepare', prepareRateLimit, async (req, res) => {
+  function observeRequest(operation) {
+    return (_req, res, next) => {
+      const startedAt = process.hrtime.bigint();
+      let observed = false;
+      const observe = (status = res.statusCode, code = res.locals.errorCode) => {
+        if (observed) return;
+        observed = true;
+        const durationSeconds = Number(process.hrtime.bigint() - startedAt) / 1e9;
+        metrics.observeRequest(
+          operation,
+          durationSeconds,
+          status,
+          code,
+        );
+      };
+      res.once('finish', observe);
+      res.once('close', () => observe(
+        res.writableEnded ? res.statusCode : 499,
+        res.writableEnded ? res.locals.errorCode : 'REQUEST_ABORTED',
+      ));
+      next();
+    };
+  }
+
+  router.post('/prepare', observeRequest('prepare'), prepareRateLimit, async (req, res) => {
     try {
       validatePrepareBody(req.body);
       const certificateDer = decodeCertificateBase64(
@@ -161,6 +186,7 @@ function createSigningRouter({
           throw error;
         }
         const pdfInfo = await validatePdfBuffer(sourceBuffer);
+        metrics.observePdf(sourceBuffer.length, pdfInfo.pages);
         validateStampConfigForDocument(req.body.stampConfig, pdfInfo.pages);
         const stampConfig = req.body.stampConfig
           ? stampConfiguration.toServer(
@@ -203,7 +229,7 @@ function createSigningRouter({
     }
   });
 
-  router.post('/complete', completeRateLimit, async (req, res) => {
+  router.post('/complete', observeRequest('complete'), completeRateLimit, async (req, res) => {
     try {
       validateCompleteBody(req.body);
       const { sessionId, cmsSignatureBase64 } = req.body;

@@ -14,6 +14,10 @@ test('production deployment keeps required safety gates', () => {
     'utf8',
   );
   const deploy = fs.readFileSync(deployPath, 'utf8');
+  const caddy = fs.readFileSync(
+    path.join(projectRoot, 'deploy', 'mescheryakov.pro.caddy'),
+    'utf8',
+  );
 
   execFileSync('bash', ['-n', deployPath]);
   execFileSync('bash', ['-n', verifyPath]);
@@ -24,6 +28,12 @@ test('production deployment keeps required safety gates', () => {
   assert.match(deploy, /flock -n/);
   assert.match(deploy, /verify-release\.sh/);
   assert.match(deploy, /smoke-signing\.js/);
+  assert.match(deploy, /pdf_signing_process_start_time_seconds/);
+  assert.match(deploy, /health\/metrics.*404/s);
   assert.match(deploy, /mv -Tf/);
   assert.match(deploy, /rolling back/);
+  assert.match(
+    caddy,
+    /handle \/pdf-signing\/health\/metrics \{\s+respond 404\s+\}\s+handle \/pdf-signing\/\*/,
+  );
 });

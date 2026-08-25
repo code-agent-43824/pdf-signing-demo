@@ -115,6 +115,9 @@ else
     "${node_bin}" src/server.js >"${canary_dir}/server.log" 2>&1 &
   canary_pid=$!
   wait_for_ready "http://127.0.0.1:${canary_port}/pdf-signing/"
+  curl --fail --silent --show-error --max-time 3 \
+    "http://127.0.0.1:${canary_port}/pdf-signing/health/metrics" \
+    | grep -q '^pdf_signing_process_start_time_seconds '
   PATH="$(dirname -- "${node_bin}"):${staging_dir}/.venv/bin:${PATH}" \
     "${node_bin}" scripts/smoke-signing.js \
     "http://127.0.0.1:${canary_port}/pdf-signing/"
@@ -162,6 +165,11 @@ systemctl --user restart "${service_name}"
 wait_for_ready "http://127.0.0.1:3010/pdf-signing/"
 curl --fail --silent --show-error --max-time 10 \
   "${public_url}health/ready" >/dev/null
+curl --fail --silent --show-error --max-time 3 \
+  "http://127.0.0.1:3010/pdf-signing/health/metrics" \
+  | grep -q '^pdf_signing_process_start_time_seconds '
+[[ "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+  --max-time 10 "${public_url}health/metrics")" == 404 ]]
 curl --fail --silent --show-error --max-time 10 "${public_url}" >/dev/null
 [[ "$(readlink -f -- "${service_root}/current")" == "${release_dir}" ]]
 [[ "$(systemctl --user show "${service_name}" -p ActiveState --value)" == active ]]

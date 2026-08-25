@@ -4,6 +4,7 @@ function startServer({
   app,
   basePath,
   completeRateLimiter,
+  metrics,
   port,
   prepareRateLimiter,
   results,
@@ -13,6 +14,7 @@ function startServer({
   setInterval(() => {
     sessions.cleanup();
     void results.cleanup().catch((error) => {
+      metrics.recordCleanupFailure();
       console.error(JSON.stringify({
         timestamp: new Date().toISOString(),
         level: 'error',

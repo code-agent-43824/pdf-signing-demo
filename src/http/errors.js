@@ -117,6 +117,7 @@ function sendSafeError(req, res, error, stage = null) {
   const message = known
     ? error.publicMessage
     : 'Сервис временно не может выполнить операцию.';
+  res.locals.errorCode = code;
   logRequestError(req, res, error, stage, code);
 
   return res.status(status).json({

@@ -2,6 +2,10 @@ mescheryakov.pro, www.mescheryakov.pro {
     # If the parent site has a global header block, exclude
     # /pdf-signing and /pdf-signing/* from that matcher so it does not
     # append a conflicting Referrer-Policy to the application response.
+    handle /pdf-signing/health/metrics {
+        respond 404
+    }
+
     handle /pdf-signing/* {
         # CSP and browser response headers are emitted by the application.
         header Strict-Transport-Security "max-age=31536000; includeSubDomains"

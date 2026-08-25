@@ -41,6 +41,7 @@ function createApplication({
   completeRateLimiter,
   formPdfName,
   formPdfPath,
+  metrics,
   operationQueue,
   ownerKeyForRequest,
   prepareRateLimiter,
@@ -104,6 +105,7 @@ function createApplication({
 
   const router = express.Router();
   router.use('/health', createHealthRouter({
+    metrics,
     operationQueue,
     results,
     resultsDir,
@@ -119,6 +121,7 @@ function createApplication({
   router.use('/api/sign', createSigningRouter({
     completeRateLimiter,
     formPdfPath,
+    metrics,
     operationQueue,
     ownerKeyForRequest,
     prepareRateLimiter,

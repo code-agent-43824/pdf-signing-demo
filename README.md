@@ -103,6 +103,8 @@ Health endpoints при `BASE_PATH=/pdf-signing/`:
 
 - `GET /pdf-signing/health/live` — процесс отвечает
 - `GET /pdf-signing/health/ready` — доступны Python, конфигурация и writable storage
+- `GET /pdf-signing/health/metrics` — локальные Prometheus-метрики; Caddy
+  намеренно возвращает `404` для внешних запросов к этому endpoint
 
 HTTP-сервер слушает только `127.0.0.1`; внешний доступ предполагается
 исключительно через reverse proxy.
@@ -315,6 +317,12 @@ environment variables `PRODUCTION_HOST`/`PRODUCTION_USER`, приватный к
 Серверный bootstrap использует отдельную копию точно npm `10.9.8` в
 `/home/openclaw/runtime/npm-10.9.8`; приложение не включает npm в runtime
 dependencies.
+
+`scripts/check-observability.js` проверяет local/public readiness, состояние
+systemd и рестарты, свободное место хоста, очередь workers, заполнение session
+memory/result storage, ошибки signing/rate limit и cleanup. Он хранит только
+счётчики и активные состояния в private state file; PDF, CMS, PIN,
+capability-токены, DN и fingerprints в метрики или monitor state не попадают.
 
 ## Проверки golden-корпуса
 

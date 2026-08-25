@@ -16,6 +16,7 @@ const {
 } = require('./stamp/configuration');
 const { createApplication } = require('./application');
 const { startServer } = require('./bootstrap');
+const { createObservabilityMetrics } = require('./observability/metrics');
 
 const PORT = process.env.PORT || 3010;
 const BASE_PATH = process.env.BASE_PATH || '/';
@@ -125,6 +126,7 @@ const stampConfiguration = createStampConfiguration({
   localFontsDir,
   stampConfigPath,
 });
+const metrics = createObservabilityMetrics();
 
 function ownerKeyForRequest(req) {
   return crypto
@@ -138,6 +140,7 @@ const app = createApplication({
   completeRateLimiter,
   formPdfName: FORM_PDF_NAME,
   formPdfPath,
+  metrics,
   operationQueue,
   ownerKeyForRequest,
   prepareRateLimiter,
@@ -152,6 +155,7 @@ startServer({
   app,
   basePath: BASE_PATH,
   completeRateLimiter,
+  metrics,
   port: PORT,
   prepareRateLimiter,
   results,
