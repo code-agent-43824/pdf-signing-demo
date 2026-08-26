@@ -1235,6 +1235,29 @@ readiness/public HTTPS/service state после переключения зап�
   counters и result storage нулевые, listener только `127.0.0.1:3010`,
   warning journal пуст, все 12 legacy PDF сохранены.
 
+Retention и disk preflight развёрнуты 2026-08-26 commit `17b1ea5`, Actions
+run [`33001884107`](https://github.com/code-agent-43824/pdf-signing-demo/actions/runs/33001884107):
+
+- до сборки удаляются только валидно именованные stale staging и incoming
+  archives, затем требуется место для двух текущих release и 512 MiB резерва;
+- после всех rollout gates сохраняются current/previous release, два последних
+  обычных CI/CD backup, а также manual и явно помеченные evidence backup;
+- destructive paths проверяются на прямое нахождение внутри service root,
+  symlink наружу игнорируются, `RETENTION_DRY_RUN=1` не удаляет данные;
+- production preflight прошёл при `1538469888` доступных и `805543936`
+  требуемых bytes; server suite 70/70, audits, fixtures/SBOM и `pip check`
+  чистые;
+- isolated canary SHA-256
+  `d50f3058ae03de92c81de1ee6f7dbf0e300570409f519ded4da39b7a4b0ea098`,
+  API `valid/not_checked/not_checked`, pyHanko
+  `intact/valid/trusted/ENTIRE_FILE`;
+- production переключён на `17b1ea5c256a9e7490e8a3e0606b1cd2f53ce9dd`,
+  backup `20260826T185132Z-cicd-17b1ea5c256a`; старый третий release `9edee52`
+  удалён автоматически, current `17b1ea5` и previous `8ae9829` сохранены;
+- финально свободно около 1.4 GiB, observability без alerts/events, service
+  active с `NRestarts=0`, public metrics `404`, warning journal пуст, все 12
+  legacy PDF совпадают с сохранённым SHA-256 manifest.
+
 ## 11. Наблюдаемость
 
 Статус: **реализовано и развёрнуто в production 2026-08-25**.
