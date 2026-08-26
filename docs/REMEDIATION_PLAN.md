@@ -1159,9 +1159,41 @@ Rollout evidence:
   `127.0.0.1:3010`, observability `ok=true`, alerts/events пусты, public
   metrics `404`, warning journal пуст, все 12 legacy PDF сохранены.
 
+#### PR-10j — provider environment lifecycle (2026-08-26)
+
+Статус: **реализован и развёрнут в production**.
+
+- загрузка vendor script, discovery расширения/плагина, диагностика среды,
+  чтение сертификатов и проверка operational state перенесены из `app.js` в
+  существующие CryptoPro/Rutoken adapters; Rutoken adapter также владеет
+  focus/pageshow refresh и debounced token monitor;
+- `app.js` оставляет provider-neutral UI/state orchestration, PIN dialog и
+  общий signing workflow, не обращается напрямую к `window.cadesplugin`,
+  `window.rutoken` или vendor discovery API; размер сокращён с 1691 до 1539
+  строк без новых модулей и runtime-зависимостей;
+- VM-контракты отдельно проверяют initialization/diagnostics CryptoPro и
+  Rutoken, token connect/disconnect refresh и fail-closed отсутствие
+  расширения; полный suite 73/73;
+- commits `3011186`, `159f94d`, финальный Actions run
+  [`33009936418`](https://github.com/code-agent-43824/pdf-signing-demo/actions/runs/33009936418),
+  immutable release `159f94d46773824c87fc124d9f03dc7da570d451`, backup
+  `20260826T202207Z-cicd-159f94d46773`;
+- production canary SHA-256
+  `810e9409ff6a50bd15d9868c2a56a0b575ebc149bd948ca1ab064031360be627`,
+  API `valid/not_checked/not_checked`, pyHanko
+  `intact/valid/trusted/ENTIRE_FILE`;
+- headless browser подтвердил загрузку обоих environment contracts и
+  переключение CryptoPro -> Rutoken; при отсутствующих расширениях UI
+  fail-closed показывает отдельные diagnostics, application/module/CSP errors
+  отсутствуют;
+- финально local/public readiness `200`, service active, `NRestarts=0`,
+  listener только `127.0.0.1:3010`, observability без alerts/events, public
+  metrics `404`, warning journal пуст; два release и rollback/evidence backup
+  сохранены, все 12 legacy PDF совпадают с SHA-256 manifest.
+
 ### Frontend
 
-Статус: **план PR-10e—PR-10i выполнен**.
+Статус: **план PR-10e—PR-10j выполнен**.
 
 - Разделить `public/app.js` на:
   - CryptoPro adapter;

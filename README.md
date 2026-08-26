@@ -15,8 +15,8 @@ Browser Plugin или Рутокен Плагин.
 
 - `public/` — статический UI и локально закреплённые browser adapters;
 - `public/modules/` — тестируемые browser-модули API, certificate helpers,
-  адаптеры CryptoPro/Рутокен, signing state machine, stamp config store и
-  signing dialogs;
+  адаптеры CryptoPro/Рутокен вместе с их environment lifecycle, signing state
+  machine, stamp config store и signing dialogs;
 - `src/server.js` — сборка runtime dependencies и запуск сервиса;
 - `src/application.js` — Express application factory, общие middleware и
   порядок подключения маршрутов;
