@@ -19,6 +19,7 @@ fi
 
 service_root="$(realpath -m -- "${service_root}")"
 staging_dir="$(realpath -m -- "${staging_dir}")"
+storage_script="${staging_dir}/scripts/manage-deploy-storage.sh"
 release_dir="${service_root}/releases/${revision}"
 expected_staging="${service_root}/releases/.${revision}.staging"
 
@@ -86,6 +87,8 @@ if [[ "$("${node_bin}" "${npm_cli}" --version)" != 10.9.8 ]]; then
   echo "pinned npm 10.9.8 is unavailable" >&2
   exit 1
 fi
+
+"${storage_script}" preflight "${service_root}" "${staging_dir}"
 
 if [[ -e "${release_dir}" ]]; then
   if [[ "$(cat "${release_dir}/.release-revision" 2>/dev/null || true)" != "${revision}" ]]; then
@@ -176,6 +179,8 @@ curl --fail --silent --show-error --max-time 10 "${public_url}" >/dev/null
 [[ "$(systemctl --user show "${service_name}" -p NRestarts --value)" == 0 ]]
 
 switched=0
+"${release_dir}/scripts/manage-deploy-storage.sh" \
+  prune "${service_root}" "${release_dir}" "${previous_target}"
 echo "deployed ${revision}"
 echo "release=${release_dir}"
 echo "backup=${backup_dir}"

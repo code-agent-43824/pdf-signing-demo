@@ -309,6 +309,15 @@ service перезапускается и проверяются local/public re
 восстанавливаются автоматически. Перед rollout сохраняется timestamped
 backup; `RESULTS_DIR` и legacy archive не входят в release tree.
 
+Перед сборкой deploy удаляет только stale staging-каталоги с валидным release
+именем и incoming-архивы старше часа, затем требует свободное место в размере
+двух текущих release плюс резерв 512 MiB. После полностью успешного rollout
+остаются current и предыдущий immutable release, два последних обычных CI/CD
+backup и все evidence-backup с `.retain` или `rollback-drill.log`; manual
+backup не затрагиваются. Пороги задаются `DEPLOY_DISK_RESERVE_BYTES`,
+`STALE_DEPLOY_ARTIFACT_AGE_SECONDS` и `DEPLOY_BACKUP_RETENTION_COUNT`.
+`RETENTION_DRY_RUN=1` показывает удаления без их выполнения.
+
 Workflow использует GitHub Environment `production`: host/user хранятся в
 environment variables `PRODUCTION_HOST`/`PRODUCTION_USER`, приватный ключ и
 точная строка host key — в secrets `PRODUCTION_SSH_KEY` и
