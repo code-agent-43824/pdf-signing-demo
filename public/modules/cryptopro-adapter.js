@@ -132,7 +132,60 @@
     return plugin?.getLastError ? plugin.getLastError(error) : error?.message;
   }
 
+  function createEnvironment({ loadScript, setDiagnostic }) {
+    const diagnostic = (key, state, text) => setDiagnostic(key, state, text);
+
+    function describeError(error) {
+      return getErrorMessage(root.cadesplugin, error);
+    }
+
+    function isOperational(provider) {
+      return Boolean(provider?.client)
+        && provider.diagnostics?.extension?.state === 'ready'
+        && provider.diagnostics?.plugin?.state === 'ready'
+        && provider.diagnostics?.csp?.state === 'ready';
+    }
+
+    async function initialize() {
+      diagnostic('extension', 'pending', 'Проверка…');
+      diagnostic('plugin', 'pending', 'Проверка…');
+      diagnostic('csp', 'pending', 'Проверка…');
+      try {
+        await loadScript();
+        const plugin = root.cadesplugin;
+        if (!plugin) throw new Error('Скрипт cadesplugin_api.js не загрузился');
+        diagnostic('extension', 'ready', 'доступно');
+
+        await Promise.resolve(plugin);
+        diagnostic('plugin', 'ready', 'доступен');
+
+        let cspText = 'доступен';
+        try {
+          const cspVersion = await getCspVersion(plugin);
+          if (cspVersion) cspText = String(cspVersion.toString?.() || cspVersion);
+        } catch (_error) {
+          // Версия необязательна: доступность CSP подтверждается чтением сертификатов.
+        }
+        diagnostic('csp', 'ready', cspText);
+
+        return {
+          ready: true,
+          client: plugin,
+          certificates: await enumerateCertificates(plugin),
+        };
+      } catch (error) {
+        diagnostic('plugin', 'error', 'недоступен');
+        diagnostic('csp', 'error', 'недоступен');
+        if (!root.cadesplugin) diagnostic('extension', 'error', 'не найдено');
+        throw error;
+      }
+    }
+
+    return Object.freeze({ describeError, initialize, isOperational });
+  }
+
   root.PdfSigningCryptoPro = Object.freeze({
+    createEnvironment,
     enumerateCertificates,
     exportCertificate,
     getCspVersion,

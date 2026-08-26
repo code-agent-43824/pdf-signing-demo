@@ -131,6 +131,47 @@ test('CryptoPro adapter builds detached CAdES-BES from the prepared digest', asy
   assert.equal(calls[4][3], 7);
 });
 
+test('CryptoPro environment owns plugin discovery, diagnostics and certificate refresh', async () => {
+  const window = loadBrowserModules([
+    'certificates.js',
+    'cryptopro-adapter.js',
+  ]);
+  const diagnostics = new Map();
+  const plugin = {
+    async CreateObjectAsync(name) {
+      if (name === 'CAdESCOM.About') return { CSPVersion: '5.0' };
+      if (name === 'CAdESCOM.Store') {
+        return {
+          Certificates: { Count: 0 },
+          async Open() {},
+          async Close() {},
+        };
+      }
+      throw new Error(`Unexpected object: ${name}`);
+    },
+  };
+  window.cadesplugin = plugin;
+  let scriptLoads = 0;
+  const environment = window.PdfSigningCryptoPro.createEnvironment({
+    async loadScript() { scriptLoads += 1; },
+    setDiagnostic(key, state, text) { diagnostics.set(key, { state, text }); },
+  });
+
+  const snapshot = await environment.initialize();
+
+  assert.equal(scriptLoads, 1);
+  assert.equal(snapshot.ready, true);
+  assert.equal(snapshot.client, plugin);
+  assert.deepEqual(Array.from(snapshot.certificates), []);
+  assert.deepEqual(diagnostics.get('extension'), { state: 'ready', text: 'доступно' });
+  assert.deepEqual(diagnostics.get('plugin'), { state: 'ready', text: 'доступен' });
+  assert.deepEqual(diagnostics.get('csp'), { state: 'ready', text: '5.0' });
+  assert.equal(environment.isOperational({
+    client: plugin,
+    diagnostics: Object.fromEntries(diagnostics),
+  }), true);
+});
+
 test('Rutoken adapter keeps signing detached and maps provider login errors', async () => {
   const { PdfSigningRutoken: adapter } = loadBrowserModules([
     'certificates.js',
@@ -166,6 +207,77 @@ test('Rutoken adapter keeps signing detached and maps provider login errors', as
   });
   assert.equal(adapter.isAlreadyLoggedInError(new Error('93'), plugin), true);
   assert.equal(adapter.getErrorMessage(new Error('93'), plugin), 'ALREADY_LOGGED_IN (93)');
+});
+
+test('Rutoken environment owns discovery, refresh events and debounced token monitoring', async () => {
+  const window = loadBrowserModules([
+    'certificates.js',
+    'rutoken-adapter.js',
+  ]);
+  const diagnostics = new Map();
+  const tokenEvents = [];
+  const browserEvents = [];
+  const documentEvents = [];
+  let devices = [7];
+  let monitorCallback;
+  let scheduledCallback;
+  const plugin = {
+    valid: true,
+    ENUMERATE_DEVICES_LIST: 'list',
+    CERT_CATEGORY_USER: 'user',
+    TOKEN_INFO_LABEL: 'label',
+    async enumerateDevices() { return devices; },
+    async enumerateCertificates() { return []; },
+    async getDeviceInfo(deviceId) { return `Token ${deviceId}`; },
+    tokenMonitor(callback) { monitorCallback = callback; },
+  };
+  window.chrome = {};
+  window.addEventListener = (name) => browserEvents.push(name);
+  window.rutoken = {
+    ready: Promise.resolve(),
+    async isExtensionInstalled() { return true; },
+    async isPluginInstalled() { return true; },
+    async loadPlugin() { return plugin; },
+  };
+  const document = {
+    hidden: false,
+    addEventListener(name) { documentEvents.push(name); },
+  };
+  const environment = window.PdfSigningRutoken.createEnvironment({
+    document,
+    async loadScript() {},
+    onTokenEvent(event) { tokenEvents.push(event); },
+    setDiagnostic(key, state, text) { diagnostics.set(key, { state, text }); },
+    schedule(callback) { scheduledCallback = callback; return 1; },
+    cancelSchedule() {},
+  });
+
+  const snapshot = await environment.initialize();
+  environment.bindRefreshEvents(() => {});
+
+  assert.equal(snapshot.ready, true);
+  assert.equal(snapshot.client, plugin);
+  assert.deepEqual(Array.from(snapshot.deviceIds), [7]);
+  assert.deepEqual(Array.from(snapshot.tokenLabels), ['Token 7']);
+  assert.deepEqual(diagnostics.get('extension'), { state: 'ready', text: 'доступно' });
+  assert.deepEqual(diagnostics.get('plugin'), { state: 'ready', text: 'доступен' });
+  assert.deepEqual(diagnostics.get('token'), { state: 'ready', text: 'Token 7' });
+  assert.deepEqual(browserEvents, ['focus', 'pageshow']);
+  assert.deepEqual(documentEvents, ['visibilitychange']);
+  assert.equal(environment.isOperational({
+    client: plugin,
+    diagnostics: Object.fromEntries(diagnostics),
+  }), true);
+
+  devices = [];
+  monitorCallback('disconnected', 7);
+  await Promise.resolve();
+  await scheduledCallback();
+
+  assert.equal(tokenEvents[0].phase, 'detected');
+  assert.equal(tokenEvents[1].phase, 'refreshed');
+  assert.deepEqual(Array.from(tokenEvents[1].snapshot.deviceIds), []);
+  assert.deepEqual(diagnostics.get('token'), { state: 'error', text: 'не вставлен' });
 });
 
 test('signing state machine rejects duplicate and impossible workflow transitions', () => {

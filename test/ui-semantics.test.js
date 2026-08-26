@@ -171,3 +171,25 @@ test('signing UI is guarded by the explicit client workflow', () => {
   assert.match(orchestrator, /apiClient\.complete[\s\S]*workflow\.transition\('completed'\)/);
   assert.match(workflow, /Signing transition \$\{phase\} -> \$\{event\} is not allowed/);
 });
+
+test('provider adapters own plugin discovery, diagnostics and device lifecycle', () => {
+  const app = fs.readFileSync(path.join(PROJECT_ROOT, 'public', 'app.js'), 'utf8');
+  const cryptoProAdapter = fs.readFileSync(
+    path.join(PROJECT_ROOT, 'public', 'modules', 'cryptopro-adapter.js'),
+    'utf8',
+  );
+  const rutokenAdapter = fs.readFileSync(
+    path.join(PROJECT_ROOT, 'public', 'modules', 'rutoken-adapter.js'),
+    'utf8',
+  );
+
+  assert.match(cryptoProAdapter, /function createEnvironment[\s\S]*root\.cadesplugin/);
+  assert.match(rutokenAdapter, /function createEnvironment[\s\S]*root\.rutoken/);
+  assert.match(rutokenAdapter, /function attachTokenMonitor[\s\S]*tokenMonitor/);
+  assert.match(rutokenAdapter, /function bindRefreshEvents/);
+  assert.doesNotMatch(app, /function bindRutokenTokenMonitor/);
+  assert.doesNotMatch(app, /function refreshRutokenEnvironment/);
+  assert.doesNotMatch(app, /isExtensionInstalled|isPluginInstalled|loadPlugin/);
+  assert.doesNotMatch(app, /tokenMonitor\(/);
+  assert.doesNotMatch(app, /window\.(?:cadesplugin|rutoken)/);
+});

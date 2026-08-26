@@ -22,8 +22,6 @@ const state = {
       checked: false,
       certificates: [],
       client: null,
-      tokenMonitorAttached: false,
-      tokenMonitorTimer: null,
       diagnostics: {
         extension: { state: 'pending', text: 'Проверка…' },
         plugin: { state: 'pending', text: 'Проверка…' },
@@ -41,6 +39,18 @@ const state = {
 
 const cryptoProAdapter = window.PdfSigningCryptoPro;
 const rutokenAdapter = window.PdfSigningRutoken;
+const cryptoEnvironments = {
+  cryptopro: cryptoProAdapter.createEnvironment({
+    loadScript: () => loadExternalScript('cryptopro'),
+    setDiagnostic: (key, nextState, text) => setProviderDiagnostic('cryptopro', key, nextState, text),
+  }),
+  rutoken: rutokenAdapter.createEnvironment({
+    document,
+    loadScript: () => loadExternalScript('rutoken'),
+    onTokenEvent: handleRutokenTokenEvent,
+    setDiagnostic: (key, nextState, text) => setProviderDiagnostic('rutoken', key, nextState, text),
+  }),
+};
 const signingWorkflow = window.PdfSigningState.createSigningStateMachine(() => {
   updatePrimaryActionState();
 });
@@ -178,24 +188,7 @@ async function withBusyOverlay(message, task) {
 }
 
 function isCryptoEnvironmentOperational(mode = state.activeCryptoStack) {
-  const provider = state.cryptoProviders[mode];
-  if (!provider?.client) {
-    return false;
-  }
-
-  if (mode === 'cryptopro') {
-    return provider.diagnostics.extension?.state === 'ready'
-      && provider.diagnostics.plugin?.state === 'ready'
-      && provider.diagnostics.csp?.state === 'ready';
-  }
-
-  if (mode === 'rutoken') {
-    return provider.diagnostics.extension?.state === 'ready'
-      && provider.diagnostics.plugin?.state === 'ready'
-      && provider.diagnostics.token?.state === 'ready';
-  }
-
-  return false;
+  return cryptoEnvironments[mode]?.isOperational(state.cryptoProviders[mode]) || false;
 }
 
 async function withOperationalCryptoBusyOverlay(message, task, { mode = state.activeCryptoStack } = {}) {
@@ -245,23 +238,11 @@ function requestRutokenEnvironmentRefresh(options = {}) {
   if (state.activeCryptoStack !== 'rutoken' || !state.cryptoProviders.rutoken.client) {
     return Promise.resolve();
   }
-  return refreshRutokenEnvironment(options).catch(() => {
-    // Ошибку уже показываем в статусах диагностики.
-  });
-}
-
-function bindRutokenRefreshEvents() {
-  window.addEventListener('focus', () => {
-    requestRutokenEnvironmentRefresh({ silentStatus: true });
-  });
-  window.addEventListener('pageshow', () => {
-    requestRutokenEnvironmentRefresh({ silentStatus: true });
-  });
-  document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) {
-      requestRutokenEnvironmentRefresh({ silentStatus: true });
-    }
-  });
+  return cryptoEnvironments.rutoken.refresh()
+    .then((snapshot) => applyRutokenSnapshot(snapshot, options))
+    .catch(() => {
+      // Ошибку уже показываем в статусах диагностики.
+    });
 }
 
 function getStampPlacementPresetKey(config = state.stampConfig, { preferSelected = true } = {}) {
@@ -276,65 +257,48 @@ function applyStampPlacementPreset(presetKey) {
   placementController.apply(presetKey);
 }
 
-function bindRutokenTokenMonitor(plugin) {
+function applyRutokenSnapshot(snapshot, { silentStatus = false } = {}) {
   const provider = state.cryptoProviders.rutoken;
-  const monitorSource = plugin?.originalObject && typeof plugin.originalObject.tokenMonitor === 'function'
-    ? plugin.originalObject
-    : plugin;
-  if (provider.tokenMonitorAttached || typeof monitorSource?.tokenMonitor !== 'function') {
+  const certificates = snapshot?.certificates || [];
+  const selectedKey = state.activeCryptoStack === 'rutoken'
+    ? getCertificateKey(state.selectedCertificate, 'rutoken')
+    : '';
+  const selectedStillAvailable = selectedKey
+    ? certificates.some((certificate) => getCertificateKey(certificate, 'rutoken') === selectedKey)
+    : true;
+  provider.ready = Boolean(snapshot?.ready);
+  provider.client = snapshot?.client || null;
+  provider.certificates = certificates;
+
+  if (state.activeCryptoStack !== 'rutoken') return;
+  syncActiveProviderState();
+  if (selectedKey && !selectedStillAvailable) {
+    setStatus('Ранее выбранный сертификат на Рутокене больше недоступен. Выберите сертификат заново.');
     return;
   }
+  if (!silentStatus) {
+    setStatus(snapshot?.deviceIds?.length
+      ? 'Рутокен готов. Можно выбрать сертификат и подписать документ.'
+      : 'Рутокен плагин доступен, но токен не вставлен.');
+  }
+}
 
-  const scheduleRefresh = (type, slotId) => {
-    if (provider.tokenMonitorTimer) {
-      window.clearTimeout(provider.tokenMonitorTimer);
-      provider.tokenMonitorTimer = null;
+function handleRutokenTokenEvent(event) {
+  if (event.phase === 'refreshed') {
+    applyRutokenSnapshot(event.snapshot, { silentStatus: true });
+    if (state.activeCryptoStack === 'rutoken') {
+      setStatus(event.type === 'connected' ? `Рутокен подключён: ${event.label}.` : 'Рутокен извлечён.');
     }
-
-    if (type === 'disconnected') {
-      provider.certificates = [];
-      setProviderDiagnostic('rutoken', 'token', 'error', 'не вставлен');
-      if (state.activeCryptoStack === 'rutoken') {
-        syncActiveProviderState();
-        setStatus('Рутокен извлечён.');
-      }
-    } else if (type === 'connected') {
-      setProviderDiagnostic('rutoken', 'token', 'pending', 'обновление…');
-      if (state.activeCryptoStack === 'rutoken') {
-        setStatus('Рутокен подключён, обновляю состояние…');
-      }
-    }
-
-    provider.tokenMonitorTimer = window.setTimeout(async () => {
-      provider.tokenMonitorTimer = null;
-      try {
-        await refreshRutokenEnvironment({ silentStatus: true });
-        if (state.activeCryptoStack !== 'rutoken') {
-          return;
-        }
-
-        if (type === 'connected') {
-          let label = `Рутокен ${slotId}`;
-          try {
-            label = await provider.client?.getDeviceInfo(slotId, provider.client.TOKEN_INFO_LABEL) || label;
-          } catch (_error) {
-            // ignore label lookup failure
-          }
-          setStatus(`Рутокен подключён: ${label}.`);
-        } else if (type === 'disconnected') {
-          setStatus('Рутокен извлечён.');
-        }
-      } catch (_error) {
-        // Ошибку уже показываем в диагностике.
-      }
-    }, type === 'connected' ? 500 : 150);
-  };
-
-  monitorSource.tokenMonitor((type, slotId) => {
-    scheduleRefresh(type, slotId);
-  });
-
-  provider.tokenMonitorAttached = true;
+    return;
+  }
+  if (event.phase !== 'detected' || state.activeCryptoStack !== 'rutoken') return;
+  if (event.type === 'connected') {
+    setStatus('Рутокен подключён, обновляю состояние…');
+    return;
+  }
+  state.cryptoProviders.rutoken.certificates = [];
+  syncActiveProviderState();
+  setStatus('Рутокен извлечён.');
 }
 
 function updateSelectedCertificateUi() {
@@ -549,7 +513,9 @@ function showPdf(url, metaText) {
 async function boot() {
   state.activeCryptoStack = getSavedCryptoStack();
   syncCryptoStackControls();
-  bindRutokenRefreshEvents();
+  cryptoEnvironments.rutoken.bindRefreshEvents(() => {
+    requestRutokenEnvironmentRefresh({ silentStatus: true });
+  });
 
   await Promise.all([fetchStampConfig(), fetchAvailableFonts()]);
   migrateLegacyStampFontReferences();
@@ -579,34 +545,8 @@ function resetSignedPdfPreview() {
 async function initCryptoPro() {
   const provider = state.cryptoProviders.cryptopro;
   provider.checked = true;
-  setProviderDiagnostic('cryptopro', 'extension', 'pending', 'Проверка…');
-  setProviderDiagnostic('cryptopro', 'plugin', 'pending', 'Проверка…');
-  setProviderDiagnostic('cryptopro', 'csp', 'pending', 'Проверка…');
   try {
-    await loadExternalScript('cryptopro');
-    if (!window.cadesplugin) {
-      throw new Error('Скрипт cadesplugin_api.js не загрузился');
-    }
-    setProviderDiagnostic('cryptopro', 'extension', 'ready', 'доступно');
-
-    await Promise.resolve(window.cadesplugin);
-    setProviderDiagnostic('cryptopro', 'plugin', 'ready', 'доступен');
-
-    let cspText = 'доступен';
-    try {
-      const cspVersion = await cryptoProAdapter.getCspVersion(window.cadesplugin);
-      if (cspVersion) {
-        cspText = String(cspVersion.toString?.() || cspVersion);
-      }
-    } catch (_error) {
-      // Оставляем нейтральное значение, если версия не читается.
-    }
-    setProviderDiagnostic('cryptopro', 'csp', 'ready', cspText);
-
-    const certificates = await cryptoProAdapter.enumerateCertificates(window.cadesplugin);
-    provider.ready = true;
-    provider.certificates = certificates;
-    provider.client = window.cadesplugin;
+    Object.assign(provider, await cryptoEnvironments.cryptopro.initialize());
     if (state.activeCryptoStack === 'cryptopro') {
       syncActiveProviderState();
       setStatus('CryptoPro готов. Можно выбрать сертификат и подписать документ.');
@@ -615,65 +555,10 @@ async function initCryptoPro() {
     provider.ready = false;
     provider.certificates = [];
     provider.client = null;
-    setProviderDiagnostic('cryptopro', 'plugin', 'error', 'недоступен');
-    setProviderDiagnostic('cryptopro', 'csp', 'error', 'недоступен');
     if (state.activeCryptoStack === 'cryptopro') {
       syncActiveProviderState();
-      const details = cryptoProAdapter.getErrorMessage(window.cadesplugin, error);
-      if (!window.cadesplugin) {
-        setProviderDiagnostic('cryptopro', 'extension', 'error', 'не найдено');
-      }
+      const details = cryptoEnvironments.cryptopro.describeError(error);
       setStatus(`Не удалось инициализировать CryptoPro: ${details}`);
-    }
-  }
-}
-
-function isBrowserWithRutokenExtension() {
-  return Boolean(window.chrome || typeof InstallTrigger !== 'undefined');
-}
-
-async function refreshRutokenEnvironment({ silentStatus = false } = {}) {
-  const provider = state.cryptoProviders.rutoken;
-  const plugin = provider.client;
-  if (!plugin) {
-    provider.ready = false;
-    provider.certificates = [];
-    setProviderDiagnostic('rutoken', 'plugin', 'error', 'недоступен');
-    setProviderDiagnostic('rutoken', 'token', 'error', 'не найден');
-    if (state.activeCryptoStack === 'rutoken') {
-      syncActiveProviderState();
-    }
-    return;
-  }
-
-  const deviceIds = await plugin.enumerateDevices({ mode: plugin.ENUMERATE_DEVICES_LIST });
-  const certificates = await rutokenAdapter.enumerateCertificates(plugin);
-  provider.certificates = certificates;
-  provider.ready = true;
-
-  const tokenLabels = Array.from(new Set([
-    ...(await rutokenAdapter.getDeviceLabels(plugin, deviceIds)),
-    ...certificates.map((certificate) => certificate.tokenLabel).filter(Boolean),
-  ]));
-  if (deviceIds?.length) {
-    setProviderDiagnostic('rutoken', 'token', 'ready', tokenLabels[0] || `Подключено: ${deviceIds.length}`);
-  } else {
-    setProviderDiagnostic('rutoken', 'token', 'error', 'не вставлен');
-  }
-
-  if (state.activeCryptoStack === 'rutoken') {
-    const selectedKey = getCertificateKey(state.selectedCertificate, 'rutoken');
-    const selectedStillAvailable = selectedKey
-      ? certificates.some((certificate) => getCertificateKey(certificate, 'rutoken') === selectedKey)
-      : true;
-    syncActiveProviderState();
-    if (selectedKey && !selectedStillAvailable) {
-      setStatus('Ранее выбранный сертификат на Рутокене больше недоступен. Выберите сертификат заново.');
-    }
-    if (!silentStatus) {
-      setStatus(deviceIds?.length
-        ? 'Рутокен готов. Можно выбрать сертификат и подписать документ.'
-        : 'Рутокен плагин доступен, но токен не вставлен.');
     }
   }
 }
@@ -681,57 +566,15 @@ async function refreshRutokenEnvironment({ silentStatus = false } = {}) {
 async function initRutoken() {
   const provider = state.cryptoProviders.rutoken;
   provider.checked = true;
-  setProviderDiagnostic('rutoken', 'extension', 'pending', 'Проверка…');
-  setProviderDiagnostic('rutoken', 'plugin', 'pending', 'Проверка…');
-  setProviderDiagnostic('rutoken', 'token', 'pending', 'Проверка…');
   try {
-    await loadExternalScript('rutoken');
-    if (!window.rutoken) {
-      throw new Error('Скрипт rutoken-plugin.min.js не загрузился');
-    }
-
-    await window.rutoken.ready;
-    if (isBrowserWithRutokenExtension()) {
-      const extensionInstalled = await window.rutoken.isExtensionInstalled();
-      if (!extensionInstalled) {
-        throw new Error("Не найдено расширение 'Адаптер Рутокен Плагина'.");
-      }
-      setProviderDiagnostic('rutoken', 'extension', 'ready', 'доступно');
-    } else {
-      setProviderDiagnostic('rutoken', 'extension', 'ready', 'не требуется');
-    }
-
-    const pluginInstalled = await window.rutoken.isPluginInstalled();
-    if (!pluginInstalled) {
-      throw new Error('Рутокен Плагин не установлен.');
-    }
-
-    const plugin = await window.rutoken.loadPlugin();
-    if (!plugin?.valid) {
-      throw new Error('Не удалось загрузить Рутокен Плагин.');
-    }
-    provider.client = plugin;
-    provider.ready = true;
-    bindRutokenTokenMonitor(plugin);
-    setProviderDiagnostic('rutoken', 'plugin', 'ready', 'доступен');
-    await refreshRutokenEnvironment();
+    applyRutokenSnapshot(await cryptoEnvironments.rutoken.initialize());
   } catch (error) {
     provider.ready = false;
     provider.certificates = [];
     provider.client = null;
-    if (provider.tokenMonitorTimer) {
-      window.clearTimeout(provider.tokenMonitorTimer);
-      provider.tokenMonitorTimer = null;
-    }
-    provider.tokenMonitorAttached = false;
-    setProviderDiagnostic('rutoken', 'plugin', 'error', 'недоступен');
-    setProviderDiagnostic('rutoken', 'token', 'error', 'не найден');
     if (state.activeCryptoStack === 'rutoken') {
       syncActiveProviderState();
-      if (!window.rutoken) {
-        setProviderDiagnostic('rutoken', 'extension', 'error', 'не найдено');
-      }
-      setStatus(`Не удалось инициализировать Рутокен: ${rutokenAdapter.getErrorMessage(error, provider.client)}`);
+      setStatus(`Не удалось инициализировать Рутокен: ${cryptoEnvironments.rutoken.describeError(error)}`);
     }
   }
 }
@@ -741,7 +584,10 @@ async function initActiveCryptoStack({ force = false } = {}) {
   if (!force && provider?.ready) {
     syncActiveProviderState();
     if (state.activeCryptoStack === 'rutoken') {
-      await withOperationalCryptoBusyOverlay('Проверяю состояние Рутокена…', () => refreshRutokenEnvironment({ silentStatus: true }));
+      await withOperationalCryptoBusyOverlay(
+        'Проверяю состояние Рутокена…',
+        () => requestRutokenEnvironmentRefresh({ silentStatus: true }),
+      );
     }
     setStatus(`Активен ${getCryptoStackLabel()}. Можно выбрать сертификат и подписать документ.`);
     return;
@@ -1539,7 +1385,7 @@ function openStampSettingsDialog() {
 
 async function signPreparedContent(selectedCertificate, contentToSignBase64) {
   return withOperationalCryptoBusyOverlay('CryptoPro подписывает данные…', async () => {
-    return cryptoProAdapter.sign(window.cadesplugin, selectedCertificate, contentToSignBase64);
+    return cryptoProAdapter.sign(state.cryptoProviders.cryptopro.client, selectedCertificate, contentToSignBase64);
   });
 }
 
@@ -1558,7 +1404,7 @@ function fileToBase64(file) {
 
 async function exportSelectedCertificateBase64(certificate) {
   if (certificate.certificateBase64) return certificate.certificateBase64;
-  return cryptoProAdapter.exportCertificate(window.cadesplugin, certificate);
+  return cryptoProAdapter.exportCertificate(state.cryptoProviders.cryptopro.client, certificate);
 }
 
 async function prepareAndSign() {
@@ -1651,7 +1497,7 @@ document.getElementById('signButton').addEventListener('click', async () => {
   } catch (error) {
     const details = state.activeCryptoStack === 'rutoken'
       ? rutokenAdapter.getErrorMessage(error, state.cryptoProviders.rutoken.client)
-      : cryptoProAdapter.getErrorMessage(window.cadesplugin, error);
+      : cryptoProAdapter.getErrorMessage(state.cryptoProviders.cryptopro.client, error);
     setStatus(`Ошибка: ${details}`);
   } finally {
     updatePrimaryActionState();
