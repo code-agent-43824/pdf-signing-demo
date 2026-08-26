@@ -3,6 +3,10 @@
 Демо-проект для веб-сценария подписи PDF-документа через CryptoPro
 Browser Plugin или Рутокен Плагин.
 
+План отдельного режима подписи произвольных файлов CAdES-BES в attached и
+detached упаковке зафиксирован в
+[`docs/CADES_BES_PLAN.md`](docs/CADES_BES_PLAN.md); реализация ещё не начата.
+
 ## Что уже есть
 
 - Node.js сервер на Express
