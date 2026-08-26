@@ -315,6 +315,7 @@
         await root.rutoken.ready;
         if (root.chrome || typeof root.InstallTrigger !== 'undefined') {
           if (!await root.rutoken.isExtensionInstalled()) {
+            diagnostic('extension', 'error', 'не найдено');
             throw new Error("Не найдено расширение 'Адаптер Рутокен Плагина'.");
           }
           diagnostic('extension', 'ready', 'доступно');

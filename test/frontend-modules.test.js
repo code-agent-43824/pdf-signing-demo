@@ -278,6 +278,10 @@ test('Rutoken environment owns discovery, refresh events and debounced token mon
   assert.equal(tokenEvents[1].phase, 'refreshed');
   assert.deepEqual(Array.from(tokenEvents[1].snapshot.deviceIds), []);
   assert.deepEqual(diagnostics.get('token'), { state: 'error', text: 'не вставлен' });
+
+  window.rutoken.isExtensionInstalled = async () => false;
+  await assert.rejects(environment.initialize(), /Не найдено расширение/);
+  assert.deepEqual(diagnostics.get('extension'), { state: 'error', text: 'не найдено' });
 });
 
 test('signing state machine rejects duplicate and impossible workflow transitions', () => {
