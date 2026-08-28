@@ -1,6 +1,7 @@
 # План поддержки CAdES-BES attached/detached
 
-Статус: **запланировано, реализация не начата**.
+Статус: **этап 0 частично выполнен; real-provider gate ожидает доступ к
+пользовательскому компьютеру**.
 
 Этот документ фиксирует отдельный пользовательский сценарий создания
 CAdES-BES подписи произвольного файла через CryptoPro Browser Plugin или
@@ -175,6 +176,13 @@ fail-closed контракт и проверка всех PDF signatures не о
   персональные CMS/сертификаты в repository не добавлять.
 - Если любой provider не создаёт требуемый CAdES-BES или меняет исходные
   байты, остановить реализацию и пересмотреть scope.
+
+Текущий результат: в
+[`spikes/001-cades-bes-provider-capability/`](../spikes/001-cades-bes-provider-capability/README.md)
+подготовлены общий бинарный fixture, точный browser runner и fail-closed
+анализатор четырёх CMS. Анализатор локально проверен на ephemeral RSA
+attached/detached CMS. Финальный verdict остаётся `PARTIAL`, пока те же проверки
+не пройдут на реальных CryptoPro и Рутокен; продуктовые этапы 1–5 не начаты.
 
 ### Этап 1 — verifier и API contracts
 
