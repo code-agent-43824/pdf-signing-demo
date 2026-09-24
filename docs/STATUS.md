@@ -8,12 +8,17 @@
   `https://mescheryakov.pro/` — 200.
 - **Ствол `main`.** Зелёный: начиная с `4b279d2` проходят все гейты CI, включая
   `npm audit` и `pip-audit`.
-- **Известные дефекты.** В облачной песочнице Claude Code тест
-  `isolated worker is asynchronous and timeout kills its process group`
-  иногда падает с `condition timed out`; причина — в `docs/JOURNAL.md`,
-  исправление — в `docs/PLAN.md`.
+- **Известные дефекты.**
+  - Рутокен в Firefox не работает: CSP страницы блокирует inline-скрипты
+    Firefox-расширения «Адаптер Рутокен Плагин», и приложение сообщает «Не
+    найдено расширение». В Chrome Рутокен не затронут. Разбор — в
+    `docs/JOURNAL.md`, исправление — в `docs/PLAN.md`.
+  - В облачной песочнице Claude Code тест
+    `isolated worker is asynchronous and timeout kills its process group`
+    иногда падает с `condition timed out`; причина — в `docs/JOURNAL.md`,
+    исправление — в `docs/PLAN.md`.
 - **CAdES-BES (`docs/CADES_BES_PLAN.md`).** Этап 0 не закрыт: вердикт spike —
   `PARTIAL`, прогона с реальными провайдерами на компьютере владельца в
   репозитории нет.
-- **Где остановилась работа.** Незавершённой работы нет; открытые пункты — в
-  `docs/PLAN.md`, раздел «Замечено попутно».
+- **Где остановилась работа.** Идёт исправление Рутокена в Firefox; порядок —
+  в `docs/PLAN.md`.
