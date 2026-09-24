@@ -132,8 +132,33 @@
     return plugin?.getLastError ? plugin.getLastError(error) : error?.message;
   }
 
+  // Settles like the promise unless the signal aborts first. An aborted wait
+  // rejects with the abort reason; whatever the promise does later is ignored.
+  function untilAborted(promise, signal) {
+    if (!signal) return promise;
+    return new Promise((resolve, reject) => {
+      const stop = () => reject(signal.reason);
+      if (signal.aborted) {
+        stop();
+        return;
+      }
+      signal.addEventListener('abort', stop, { once: true });
+      Promise.resolve(promise)
+        .then(resolve, reject)
+        .finally(() => signal.removeEventListener('abort', stop));
+    });
+  }
+
   function createEnvironment({ loadScript, setDiagnostic }) {
     const diagnostic = (key, state, text) => setDiagnostic(key, state, text);
+
+    // cadesplugin_api.js starts a load timer that cannot be cancelled. When it
+    // fires before the plugin answers, Firefox gets a modal "install the
+    // extension" overlay unless this flag is set at that moment, so the flag
+    // follows whether CryptoPro is still being waited for.
+    function allowExtensionInstallPrompt(allowed) {
+      root.cadesplugin_skip_extension_install = !allowed;
+    }
 
     function describeError(error) {
       return getErrorMessage(root.cadesplugin, error);
@@ -146,24 +171,31 @@
         && provider.diagnostics?.csp?.state === 'ready';
     }
 
-    async function initialize() {
+    // Aborting `signal` stops the wait for the plugin, skips the CSP and
+    // certificate queries and suppresses the vendor overlay; the aborted call
+    // rejects with the abort reason and leaves the diagnostics as they are.
+    async function initialize({ signal } = {}) {
+      if (signal?.aborted) throw signal.reason;
+      allowExtensionInstallPrompt(true);
+      signal?.addEventListener('abort', () => allowExtensionInstallPrompt(false), { once: true });
       diagnostic('extension', 'pending', 'Проверка…');
       diagnostic('plugin', 'pending', 'Проверка…');
       diagnostic('csp', 'pending', 'Проверка…');
       try {
-        await loadScript();
+        await untilAborted(loadScript(), signal);
         const plugin = root.cadesplugin;
         if (!plugin) throw new Error('Скрипт cadesplugin_api.js не загрузился');
         diagnostic('extension', 'ready', 'доступно');
 
-        await Promise.resolve(plugin);
+        await untilAborted(plugin, signal);
         diagnostic('plugin', 'ready', 'доступен');
 
         let cspText = 'доступен';
         try {
-          const cspVersion = await getCspVersion(plugin);
+          const cspVersion = await untilAborted(getCspVersion(plugin), signal);
           if (cspVersion) cspText = String(cspVersion.toString?.() || cspVersion);
-        } catch (_error) {
+        } catch (error) {
+          if (signal?.aborted) throw error;
           // Версия необязательна: доступность CSP подтверждается чтением сертификатов.
         }
         diagnostic('csp', 'ready', cspText);
@@ -171,9 +203,10 @@
         return {
           ready: true,
           client: plugin,
-          certificates: await enumerateCertificates(plugin),
+          certificates: await untilAborted(enumerateCertificates(plugin), signal),
         };
       } catch (error) {
+        if (signal?.aborted) throw error;
         diagnostic('plugin', 'error', 'недоступен');
         diagnostic('csp', 'error', 'недоступен');
         if (!root.cadesplugin) diagnostic('extension', 'error', 'не найдено');

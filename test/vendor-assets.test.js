@@ -3,6 +3,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const { test } = require('node:test');
+const vm = require('node:vm');
 
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 const VENDOR_DIR = path.join(PROJECT_ROOT, 'public', 'vendor');
@@ -50,6 +51,67 @@ test('runtime crypto scripts are local, checksummed and SRI-pinned', () => {
   assert.doesNotMatch(runtimeConfig, /https?:\/\//);
   assert.match(app, /script\.integrity = asset\.integrity/);
   assert.match(app, /script\.crossOrigin = 'anonymous'/);
+});
+
+// Runs the pinned CryptoPro loader as Firefox without the CryptoPro extension
+// and returns its load timer and everything it appended to <body>.
+function loadCryptoProLoaderInFirefox() {
+  const timers = [];
+  const appended = [];
+  const byId = new Map();
+  const createElement = () => ({
+    style: {},
+    innerHTML: '',
+    addEventListener() {},
+    getElementsByTagName: () => [],
+  });
+  const body = {
+    appendChild(element) {
+      appended.push(element);
+      byId.set(element.id, element);
+    },
+  };
+  const sandbox = {
+    Promise,
+    navigator: {
+      userAgent: 'Mozilla/5.0 (X11; Linux x86_64; rv:156.0) Gecko/20100101 Firefox/156.0',
+      mimeTypes: {},
+    },
+    document: {
+      hidden: false,
+      readyState: 'complete',
+      createElement,
+      getElementsByTagName: () => [body],
+      getElementById: (id) => byId.get(id) || createElement(),
+      addEventListener() {},
+    },
+    setTimeout(callback) {
+      timers.push(callback);
+      return timers.length;
+    },
+    postMessage() {},
+    addEventListener() {},
+  };
+  sandbox.window = sandbox;
+  vm.runInContext(
+    fs.readFileSync(path.join(VENDOR_DIR, 'cadesplugin_api.js'), 'utf8'),
+    vm.createContext(sandbox),
+  );
+  return { appended, sandbox, timers };
+}
+
+test('CryptoPro loader reads the install-prompt flag when its load timer fires', async () => {
+  const silenced = loadCryptoProLoaderInFirefox();
+  assert.equal(silenced.timers.length, 1);
+  silenced.sandbox.cadesplugin_skip_extension_install = true;
+  silenced.timers[0]();
+  assert.deepEqual(silenced.appended, []);
+  await assert.rejects(silenced.sandbox.cadesplugin, /Истекло время ожидания загрузки плагина/);
+
+  const prompting = loadCryptoProLoaderInFirefox();
+  prompting.timers[0]();
+  assert.deepEqual(prompting.appended.map(({ id }) => id), ['cadesplugin_ovr']);
+  await assert.rejects(prompting.sandbox.cadesplugin, /Истекло время ожидания загрузки плагина/);
 });
 
 test('HTML has no inline script or event-handler escape hatch', () => {

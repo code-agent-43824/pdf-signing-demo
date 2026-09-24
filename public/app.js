@@ -372,12 +372,10 @@ function renderEnvironmentStatusStrip() {
   }).join('');
 }
 
+// The saved choice comes first: the markup always checks CryptoPro as the
+// default, so reading the radio first would discard the user's choice.
 function getSavedCryptoStack() {
   try {
-    const fromDom = document.querySelector('input[name="cryptoStack"]:checked')?.value;
-    if (CRYPTO_STACK_LABELS[fromDom]) {
-      return fromDom;
-    }
     const fromStorage = window.localStorage.getItem(CRYPTO_STACK_STORAGE_KEY);
     if (CRYPTO_STACK_LABELS[fromStorage]) {
       return fromStorage;
@@ -385,7 +383,8 @@ function getSavedCryptoStack() {
   } catch (_error) {
     // ignore storage issues
   }
-  return 'cryptopro';
+  const fromDom = document.querySelector('input[name="cryptoStack"]:checked')?.value;
+  return CRYPTO_STACK_LABELS[fromDom] ? fromDom : 'cryptopro';
 }
 
 function syncCryptoStackControls() {
@@ -542,16 +541,29 @@ function resetSignedPdfPreview() {
   updatePrimaryActionState();
 }
 
+let cryptoProInitialization = null;
+
+function stopCryptoProInitialization() {
+  cryptoProInitialization?.abort();
+  cryptoProInitialization = null;
+}
+
 async function initCryptoPro() {
   const provider = state.cryptoProviders.cryptopro;
   provider.checked = true;
+  stopCryptoProInitialization();
+  const initialization = new AbortController();
+  cryptoProInitialization = initialization;
   try {
-    Object.assign(provider, await cryptoEnvironments.cryptopro.initialize());
+    Object.assign(provider, await cryptoEnvironments.cryptopro.initialize({
+      signal: initialization.signal,
+    }));
     if (state.activeCryptoStack === 'cryptopro') {
       syncActiveProviderState();
       setStatus('CryptoPro готов. Можно выбрать сертификат и подписать документ.');
     }
   } catch (error) {
+    if (initialization.signal.aborted) return;
     provider.ready = false;
     provider.certificates = [];
     provider.client = null;
@@ -560,6 +572,8 @@ async function initCryptoPro() {
       const details = cryptoEnvironments.cryptopro.describeError(error);
       setStatus(`Не удалось инициализировать CryptoPro: ${details}`);
     }
+  } finally {
+    if (cryptoProInitialization === initialization) cryptoProInitialization = null;
   }
 }
 
@@ -607,6 +621,9 @@ async function initActiveCryptoStack({ force = false } = {}) {
 async function switchCryptoStack(mode) {
   if (!CRYPTO_STACK_LABELS[mode] || mode === state.activeCryptoStack) {
     return;
+  }
+  if (state.activeCryptoStack === 'cryptopro') {
+    stopCryptoProInitialization();
   }
   state.activeCryptoStack = mode;
   state.selectedCertificate = null;

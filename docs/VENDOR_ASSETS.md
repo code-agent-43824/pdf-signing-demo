@@ -20,6 +20,14 @@ JavaScript из сети запрещает CSP приложения. Точны
 (`chrome-extension://…/nmcades_plugin_api.js`). Поэтому CSP разрешает схему
 `chrome-extension:`, но не интернет-хосты.
 
+При выполнении загрузчик ставит таймер (`set_load_timeout`), отменить который
+снаружи нельзя. Если к сроку плагин не ответил, в Firefox загрузчик рисует
+модальный оверлей «нужно расширение», но только когда не установлен
+`window.cadesplugin_skip_extension_install`. Флаг читается в момент
+срабатывания таймера, и на этом построено прекращение ожидания CryptoPro при
+переключении на Рутокен (`public/modules/cryptopro-adapter.js`). Это
+поведение закрепляет `test/vendor-assets.test.js`.
+
 ### Адаптер Рутокен Плагина `rutoken-plugin.min.js`
 
 - Пакет: `@aktivco/rutoken-plugin@1.0.9`.
@@ -42,7 +50,10 @@ JavaScript из сети запрещает CSP приложения. Точны
 4. Пересчитать SHA-256 в `public/vendor/SHA256SUMS` и SHA-384 SRI в
    `CRYPTO_SCRIPTS` (`public/app.js`).
 5. Запустить `npm test` и проверить подпись в браузере обоими реальными
-   провайдерами.
+   провайдерами. Если новый `cadesplugin_api.js` иначе обращается с
+   `cadesplugin_skip_extension_install`, тест загрузчика в
+   `test/vendor-assets.test.js` упадёт: адаптер CryptoPro придётся
+   пересмотреть до обновления.
 6. Закоммитить файл, контрольную сумму, запись о происхождении и SRI вместе.
 
 Изменение источника по тому же URL не принимается автоматически: локальная

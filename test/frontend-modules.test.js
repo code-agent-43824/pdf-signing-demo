@@ -172,6 +172,58 @@ test('CryptoPro environment owns plugin discovery, diagnostics and certificate r
   }), true);
 });
 
+test('aborted CryptoPro initialization stops waiting and silences the vendor overlay', async () => {
+  const window = loadBrowserModules([
+    'certificates.js',
+    'cryptopro-adapter.js',
+  ]);
+  const diagnostics = new Map();
+  const environment = window.PdfSigningCryptoPro.createEnvironment({
+    async loadScript() {},
+    setDiagnostic(key, state, text) { diagnostics.set(key, { state, text }); },
+  });
+
+  window.cadesplugin = new Promise(() => {});
+  const waitingForPlugin = new AbortController();
+  const waiting = environment.initialize({ signal: waitingForPlugin.signal });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(window.cadesplugin_skip_extension_install, false);
+
+  waitingForPlugin.abort();
+  await assert.rejects(waiting, { name: 'AbortError' });
+  assert.equal(window.cadesplugin_skip_extension_install, true);
+  assert.deepEqual(diagnostics.get('plugin'), { state: 'pending', text: 'Проверка…' });
+
+  const created = [];
+  const queryingCsp = new AbortController();
+  window.cadesplugin = {
+    async CreateObjectAsync(name) {
+      created.push(name);
+      queryingCsp.abort();
+      return { CSPVersion: '5.0' };
+    },
+  };
+  await assert.rejects(
+    environment.initialize({ signal: queryingCsp.signal }),
+    { name: 'AbortError' },
+  );
+  assert.deepEqual(created, ['CAdESCOM.About']);
+
+  window.cadesplugin = {
+    async CreateObjectAsync(name) {
+      if (name === 'CAdESCOM.About') return { CSPVersion: '5.0' };
+      return {
+        Certificates: { Count: 0 },
+        async Open() {},
+        async Close() {},
+      };
+    },
+  };
+  const snapshot = await environment.initialize({ signal: new AbortController().signal });
+  assert.equal(snapshot.ready, true);
+  assert.equal(window.cadesplugin_skip_extension_install, false);
+});
+
 test('Rutoken adapter keeps signing detached and maps provider login errors', async () => {
   const { PdfSigningRutoken: adapter } = loadBrowserModules([
     'certificates.js',

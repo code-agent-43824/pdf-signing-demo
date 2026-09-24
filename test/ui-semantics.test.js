@@ -172,6 +172,18 @@ test('signing UI is guarded by the explicit client workflow', () => {
   assert.match(workflow, /Signing transition \$\{phase\} -> \$\{event\} is not allowed/);
 });
 
+test('saved crypto stack beats the markup default and leaving CryptoPro stops its wait', () => {
+  const app = fs.readFileSync(path.join(PROJECT_ROOT, 'public', 'app.js'), 'utf8');
+  const savedStack = app.match(/function getSavedCryptoStack\(\) \{[\s\S]*?\n\}/)?.[0] || '';
+  const storageRead = savedStack.indexOf('localStorage.getItem(CRYPTO_STACK_STORAGE_KEY)');
+  const markupRead = savedStack.indexOf('input[name="cryptoStack"]:checked');
+  assert.ok(storageRead !== -1 && markupRead !== -1 && storageRead < markupRead);
+
+  const switchStack = app.match(/async function switchCryptoStack\(mode\) \{[\s\S]*?\n\}/)?.[0] || '';
+  assert.match(switchStack, /stopCryptoProInitialization\(\)/);
+  assert.match(app, /cryptopro\.initialize\(\{\s*signal: initialization\.signal,?\s*\}\)/);
+});
+
 test('provider adapters own plugin discovery, diagnostics and device lifecycle', () => {
   const app = fs.readFileSync(path.join(PROJECT_ROOT, 'public', 'app.js'), 'utf8');
   const cryptoProAdapter = fs.readFileSync(
