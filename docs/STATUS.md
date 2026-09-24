@@ -13,10 +13,15 @@
 - **Ствол `main`.** Зелёный: начиная с `4b279d2` проходят все гейты CI, включая
   `npm audit` и `pip-audit`. Гейтов lint/форматирования и поиска секретов из
   §10 `docs/REMEDIATION_PLAN.md` в `.github/workflows/ci.yml` нет.
-- **Известные дефекты.** В облачной песочнице Claude Code тест
-  `isolated worker is asynchronous and timeout kills its process group`
-  иногда падает с `condition timed out`; причина — в `docs/JOURNAL.md`,
-  исправление — в `docs/PLAN.md`.
+- **Известные дефекты.** Причины — в `docs/JOURNAL.md`, исправления — в
+  `docs/PLAN.md`.
+  - В облачной песочнице Claude Code тест
+    `isolated worker is asynchronous and timeout kills its process group`
+    иногда падает с `condition timed out`.
+  - Выбор плагина не сохраняется между заходами: страница всегда начинает с
+    CryptoPro.
+  - В Firefox без расширения CryptoPro оверлей «нужно расширение»
+    появляется и после переключения на Рутокен.
 - **CAdES-BES (`docs/CADES_BES_PLAN.md`).** Этап 0 не закрыт: вердикт spike —
   `PARTIAL`, прогона с реальными провайдерами на компьютере владельца в
   репозитории нет.
