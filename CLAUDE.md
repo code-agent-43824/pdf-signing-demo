@@ -89,8 +89,10 @@ shape.
 
 ### Backend (`src/`)
 
-- `server.js` is the only place that reads environment variables (clamped by
-  `positiveInteger`) and wires dependencies. `application.js` is a
+- `server.js` reads the service configuration from the environment (values
+  clamped by `positiveInteger`) and wires dependencies; `bootstrap.js` reads
+  the HTTP timeouts, and `runtime/process-runner.js` reads the worker limits
+  and `NODE_ENV`. `application.js` is a
   listener-free Express factory: security headers and CSP, request IDs, abort
   signals, JSON-only POST, routes under `BASE_PATH`. `bootstrap.js` listens on
   loopback only, sets HTTP timeouts and runs periodic cleanup.
