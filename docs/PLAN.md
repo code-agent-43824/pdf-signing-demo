@@ -5,7 +5,7 @@
 - [x] Обновить `fast-uri` и `qs` в `package-lock.json` и SBOM до версий без
   advisories `npm audit`.
 - [x] Обновить `pypdf` до версии без advisories `pip-audit`.
-- [ ] Задеплоить исправления через CI и проверить production.
+- [x] Задеплоить исправления через CI и проверить production.
 - [~] Подключить свод правил из `code-agent-43824/coding-rules`: `AGENTS.md` как
   есть, импорт в `CLAUDE.md`, карта кода.
 

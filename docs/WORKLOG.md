@@ -35,10 +35,16 @@
   `pip check` чистые. Прогон на production Python 3.14 выполнит
   `scripts/verify-release.sh` при деплое до переключения релиза.
 
-- Шаг 2 начат: CI-прогон `d3d0bc3` прошёл все гейты `npm run verify` и упал
-  только на `pip-audit`, как и ожидалось; прогон `4b279d2` с `pypdf` идёт.
+- Шаг 2: CI-прогон `d3d0bc3` прошёл все гейты `npm run verify` и упал только
+  на `pip-audit`, как и ожидалось. Прогон 57 (`4b279d2`) зелёный целиком и
+  задеплоил релиз. По полному логу деплоя: на сервере Python 3.14 (колёса
+  `cp314`), 73/73 тестов, `npm audit` и `pip check` чистые; canary вернул
+  `integrity valid`, `trust`/`qualified` `not_checked` и pyHanko
+  `intact/valid/trusted/ENTIRE_FILE`; скрипт напечатал `deployed 4b279d2…`,
+  backup `20260924T134549Z-cicd-4b279d277791`. Снаружи: `health/ready` — 200,
+  все проверки `true`; `health/metrics` — 404; UI и `https://mescheryakov.pro/`
+  — 200. Прогон 58 (`b9c0a48`, правила) зелёный, деплой пропущен.
 - Шаг 3 начат: `install.sh` из `coding-rules` положил `AGENTS.md`, sha256
   совпадает с каноническим; `CLAUDE.md` пока содержит заголовок и импорт.
 
-**Дальше.** Дождаться CI и деплоя `4b279d2`, проверить лог деплоя и production
-(шаг 2). Дописать карту кода в `CLAUDE.md` (шаг 3).
+**Дальше.** Дописать карту кода в `CLAUDE.md` (шаг 3).
