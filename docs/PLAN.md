@@ -10,7 +10,7 @@
 - [x] Записать решение владельца о шрифтах штампа в `CLAUDE.md`.
 - [x] Перевести документацию проекта на русский, убрать расхождения с кодом,
   утверждения о состоянии из медленных документов и ошибки.
-- [ ] Тест `isolated worker is asynchronous and timeout kills its process group`
+- [x] Тест `isolated worker is asynchronous and timeout kills its process group`
   (`test/runtime-controls.test.js`): считать зомби завершённым процессом.
 - [ ] CryptoPro не мешает Рутокену: при новом заходе применяется сохранённый
   выбор плагина; при переключении на Рутокен инициализация CryptoPro

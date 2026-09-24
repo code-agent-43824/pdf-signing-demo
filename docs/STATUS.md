@@ -15,9 +15,6 @@
   §10 `docs/REMEDIATION_PLAN.md` в `.github/workflows/ci.yml` нет.
 - **Известные дефекты.** Причины — в `docs/JOURNAL.md`, исправления — в
   `docs/PLAN.md`.
-  - В облачной песочнице Claude Code тест
-    `isolated worker is asynchronous and timeout kills its process group`
-    иногда падает с `condition timed out`.
   - Выбор плагина не сохраняется между заходами: страница всегда начинает с
     CryptoPro.
   - В Firefox без расширения CryptoPro оверлей «нужно расширение»

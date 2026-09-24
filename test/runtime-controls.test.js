@@ -32,14 +32,25 @@ async function waitFor(predicate, timeoutMs = 2000) {
   throw new Error('condition timed out');
 }
 
-function processExists(pid) {
+// A killed process stays a zombie until its new parent reaps it, and some
+// sandboxes' PID 1 does that only seconds later. A zombie no longer runs, so
+// it counts as stopped; without procfs, signal 0 is the only probe.
+function processIsRunning(pid) {
   try {
     process.kill(pid, 0);
-    return true;
   } catch (error) {
     if (error.code === 'ESRCH') return false;
     throw error;
   }
+  let stat;
+  try {
+    stat = fs.readFileSync(`/proc/${pid}/stat`, 'utf8');
+  } catch (error) {
+    if (error.code === 'ENOENT') return !fs.existsSync('/proc/self/stat');
+    throw error;
+  }
+  // The state letter follows the command name, which may contain ") ".
+  return !['Z', 'X'].includes(stat[stat.lastIndexOf(')') + 2]);
 }
 
 test('operation queue bounds global and per-key concurrency', async () => {
@@ -190,14 +201,18 @@ test('isolated worker is asynchronous and timeout kills its process group', asyn
     );
     await waitFor(() => fs.existsSync(childPidPath));
     const childPid = Number(fs.readFileSync(childPidPath, 'ascii'));
+    const started = Date.now();
     await assert.rejects(
       operation,
       (error) => (
         error instanceof WorkerProcessError && error.code === 'WORKER_TIMEOUT'
       ),
     );
-    await waitFor(() => !processExists(childPid));
-    assert.equal(processExists(childPid), false);
+    // A grandchild that survives keeps the worker's pipes open for its whole
+    // 60 s sleep, so a late settlement means the group was not killed.
+    assert.ok(Date.now() - started < 10000, 'worker outlived its timeout');
+    await waitFor(() => !processIsRunning(childPid));
+    assert.equal(processIsRunning(childPid), false);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
