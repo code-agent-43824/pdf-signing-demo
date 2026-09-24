@@ -199,8 +199,8 @@ shape.
   `public/vendor`; `docs/VENDOR_ASSETS.md` makes the reviewed, committed copy
   the release artifact, together with its checksum, provenance and SRI.
 - **§7, vendor binaries in git: stamp fonts in `public/assets/fonts/stamp/`**
-  (licenses in `LICENSES.md` there). The reason is not recorded; ask the owner
-  before moving or removing them.
+  (licenses in `LICENSES.md` there). They stay in the repository by the
+  owner's decision (2026-09-24).
 
 ## Version discipline
 
