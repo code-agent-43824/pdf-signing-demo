@@ -419,36 +419,25 @@ const validateStampConfigSchema = ajv.getSchema(stampConfigSchema.$id);
 
 function assertSchema(validator, value, label) {
   if (!validator(value)) {
-    throw new HttpError(
-      400,
-      'INVALID_REQUEST',
-      'Некорректный запрос.',
-      {
-        label,
-        errors: validator.errors,
-      },
-    );
+    throw new HttpError(400, 'INVALID_REQUEST', 'Некорректный запрос.', {
+      label,
+      errors: validator.errors,
+    });
   }
 }
 
 function decodeStrictBase64(value, maxBytes, label) {
   if (!isStrictBase64(value)) {
-    throw new HttpError(
-      400,
-      'INVALID_BASE64',
-      'Некорректный запрос.',
-      { label },
-    );
+    throw new HttpError(400, 'INVALID_BASE64', 'Некорректный запрос.', { label });
   }
 
   const decoded = Buffer.from(value, 'base64');
   if (decoded.length > maxBytes) {
-    throw new HttpError(
-      413,
-      'PAYLOAD_TOO_LARGE',
-      'Размер данных превышает допустимый лимит.',
-      { label, decodedBytes: decoded.length, maxBytes },
-    );
+    throw new HttpError(413, 'PAYLOAD_TOO_LARGE', 'Размер данных превышает допустимый лимит.', {
+      label,
+      decodedBytes: decoded.length,
+      maxBytes,
+    });
   }
   return decoded;
 }
@@ -477,13 +466,12 @@ function isStrictBase64(value) {
 
   for (let index = 0; index < contentLength; index += 1) {
     const code = value.charCodeAt(index);
-    const valid = (
+    const valid =
       (code >= 65 && code <= 90)
       || (code >= 97 && code <= 122)
       || (code >= 48 && code <= 57)
       || code === 43
-      || code === 47
-    );
+      || code === 47;
     if (!valid) return false;
   }
   return true;
@@ -500,12 +488,11 @@ function validateStampConfig(config) {
     || renderedHeight > 4096
     || renderedWidth * renderedHeight > MAX_STAMP_PIXELS
   ) {
-    throw new HttpError(
-      400,
-      'STAMP_TOO_LARGE',
-      'Некорректная конфигурация штампа.',
-      { renderedWidth, renderedHeight, maxPixels: MAX_STAMP_PIXELS },
-    );
+    throw new HttpError(400, 'STAMP_TOO_LARGE', 'Некорректная конфигурация штампа.', {
+      renderedWidth,
+      renderedHeight,
+      maxPixels: MAX_STAMP_PIXELS,
+    });
   }
 
   for (const [index, rule] of config.placements.rules.entries()) {
@@ -515,12 +502,10 @@ function validateStampConfig(config) {
       && match?.signatureIndexTo
       && match.signatureIndexTo < match.signatureIndexFrom
     ) {
-      throw new HttpError(
-        400,
-        'INVALID_STAMP_RULE',
-        'Некорректная конфигурация штампа.',
-        { rule: index, reason: 'signature index range is reversed' },
-      );
+      throw new HttpError(400, 'INVALID_STAMP_RULE', 'Некорректная конфигурация штампа.', {
+        rule: index,
+        reason: 'signature index range is reversed',
+      });
     }
   }
 }
@@ -582,28 +567,18 @@ function decodeCmsBase64(value) {
 }
 
 function decodeCertificateBase64(value) {
-  return decodeStrictBase64(
-    value,
-    MAX_CERTIFICATE_BYTES,
-    'signer.certificateBase64',
-  );
+  return decodeStrictBase64(value, MAX_CERTIFICATE_BYTES, 'signer.certificateBase64');
 }
 
 async function validatePdfBuffer(pdf) {
   if (pdf.length > MAX_PDF_BYTES) {
-    throw new HttpError(
-      413,
-      'PDF_TOO_LARGE',
-      'Размер PDF превышает допустимый лимит.',
-      { decodedBytes: pdf.length, maxBytes: MAX_PDF_BYTES },
-    );
+    throw new HttpError(413, 'PDF_TOO_LARGE', 'Размер PDF превышает допустимый лимит.', {
+      decodedBytes: pdf.length,
+      maxBytes: MAX_PDF_BYTES,
+    });
   }
   if (pdf.length < 5 || !pdf.subarray(0, 5).equals(Buffer.from('%PDF-'))) {
-    throw new HttpError(
-      400,
-      'INVALID_PDF',
-      'Передан некорректный PDF-документ.',
-    );
+    throw new HttpError(400, 'INVALID_PDF', 'Передан некорректный PDF-документ.');
   }
 
   let document;
@@ -613,22 +588,17 @@ async function validatePdfBuffer(pdf) {
       updateMetadata: false,
     });
   } catch (error) {
-    throw new HttpError(
-      400,
-      'INVALID_PDF',
-      'Передан некорректный PDF-документ.',
-      { parserError: error.message },
-    );
+    throw new HttpError(400, 'INVALID_PDF', 'Передан некорректный PDF-документ.', {
+      parserError: error.message,
+    });
   }
 
   const pages = document.getPages();
   if (pages.length < 1 || pages.length > MAX_PDF_PAGES) {
-    throw new HttpError(
-      400,
-      'PDF_PAGE_LIMIT',
-      'PDF-документ превышает допустимое число страниц.',
-      { pages: pages.length, maxPages: MAX_PDF_PAGES },
-    );
+    throw new HttpError(400, 'PDF_PAGE_LIMIT', 'PDF-документ превышает допустимое число страниц.', {
+      pages: pages.length,
+      maxPages: MAX_PDF_PAGES,
+    });
   }
 
   pages.forEach((page, index) => {

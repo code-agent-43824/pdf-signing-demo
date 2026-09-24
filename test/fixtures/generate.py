@@ -29,18 +29,22 @@ def write_pdf(path, page_specs, *, acroform=False, geometry=None):
         empty_contents.set_data(b'')
         page[NameObject('/Contents')] = writer._add_object(empty_contents)
 
-    writer.add_metadata({
-        '/Title': f'Golden fixture: {path.stem}',
-        '/Author': 'pdf-signing-demo test suite',
-        '/Creator': 'test/fixtures/generate.py',
-        '/Producer': 'pypdf deterministic fixture generator',
-    })
+    writer.add_metadata(
+        {
+            '/Title': f'Golden fixture: {path.stem}',
+            '/Author': 'pdf-signing-demo test suite',
+            '/Creator': 'test/fixtures/generate.py',
+            '/Producer': 'pypdf deterministic fixture generator',
+        }
+    )
 
     if acroform:
-        acroform_object = DictionaryObject({
-            NameObject('/Fields'): ArrayObject(),
-            NameObject('/NeedAppearances'): BooleanObject(False),
-        })
+        acroform_object = DictionaryObject(
+            {
+                NameObject('/Fields'): ArrayObject(),
+                NameObject('/NeedAppearances'): BooleanObject(False),
+            }
+        )
         writer._root_object[NameObject('/AcroForm')] = writer._add_object(acroform_object)
 
     if geometry:
@@ -56,27 +60,33 @@ def write_pdf(path, page_specs, *, acroform=False, geometry=None):
 def add_empty_signature_field(source_path, output_path):
     writer = PdfWriter(clone_from=source_path)
     page = writer.pages[0]
-    widget = DictionaryObject({
-        NameObject('/Type'): NameObject('/Annot'),
-        NameObject('/Subtype'): NameObject('/Widget'),
-        NameObject('/FT'): NameObject('/Sig'),
-        NameObject('/Rect'): ArrayObject([
-            NumberObject(40),
-            NumberObject(40),
-            NumberObject(240),
-            NumberObject(120),
-        ]),
-        NameObject('/T'): TextStringObject('ExistingEmptySignature'),
-        NameObject('/F'): NumberObject(4),
-        NameObject('/P'): page.indirect_reference,
-    })
+    widget = DictionaryObject(
+        {
+            NameObject('/Type'): NameObject('/Annot'),
+            NameObject('/Subtype'): NameObject('/Widget'),
+            NameObject('/FT'): NameObject('/Sig'),
+            NameObject('/Rect'): ArrayObject(
+                [
+                    NumberObject(40),
+                    NumberObject(40),
+                    NumberObject(240),
+                    NumberObject(120),
+                ]
+            ),
+            NameObject('/T'): TextStringObject('ExistingEmptySignature'),
+            NameObject('/F'): NumberObject(4),
+            NameObject('/P'): page.indirect_reference,
+        }
+    )
     widget_ref = writer._add_object(widget)
     page[NameObject('/Annots')] = ArrayObject([widget_ref])
 
-    acroform = DictionaryObject({
-        NameObject('/Fields'): ArrayObject([widget_ref]),
-        NameObject('/SigFlags'): NumberObject(3),
-    })
+    acroform = DictionaryObject(
+        {
+            NameObject('/Fields'): ArrayObject([widget_ref]),
+            NameObject('/SigFlags'): NumberObject(3),
+        }
+    )
     writer._root_object[NameObject('/AcroForm')] = writer._add_object(acroform)
     with output_path.open('wb') as output:
         writer.write(output)
@@ -123,21 +133,15 @@ def main():
 
     files = {
         'pdf/simple.pdf': file_record(simple_path, pages=1, signature_fields=0),
-        'pdf/multipage.pdf': file_record(
-            PDF_ROOT / 'multipage.pdf', pages=3, signature_fields=0
-        ),
-        'pdf/acroform.pdf': file_record(
-            PDF_ROOT / 'acroform.pdf', pages=1, signature_fields=0
-        ),
+        'pdf/multipage.pdf': file_record(PDF_ROOT / 'multipage.pdf', pages=3, signature_fields=0),
+        'pdf/acroform.pdf': file_record(PDF_ROOT / 'acroform.pdf', pages=1, signature_fields=0),
         'pdf/empty-signature-field.pdf': file_record(
             PDF_ROOT / 'empty-signature-field.pdf', pages=1, signature_fields=1
         ),
         'pdf/nonstandard-geometry.pdf': file_record(
             PDF_ROOT / 'nonstandard-geometry.pdf', pages=1, signature_fields=0
         ),
-        'invalid/malformed.pdf': file_record(
-            INVALID_ROOT / 'malformed.pdf', expected_valid=False
-        ),
+        'invalid/malformed.pdf': file_record(INVALID_ROOT / 'malformed.pdf', expected_valid=False),
         'invalid/malformed-cms.der': file_record(
             INVALID_ROOT / 'malformed-cms.der', expected_valid=False
         ),

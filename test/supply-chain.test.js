@@ -25,15 +25,9 @@ function lockedPythonPackages() {
 
 test('runtime dependency trees are minimal and fully locked', () => {
   const packageJson = readJson('package.json');
-  assert.deepEqual(
-    Object.keys(packageJson.dependencies).sort(),
-    ['ajv', 'express', 'pdf-lib'],
-  );
+  assert.deepEqual(Object.keys(packageJson.dependencies).sort(), ['ajv', 'express', 'pdf-lib']);
   assert.equal(packageJson.engines.node, '>=22.22.2 <23');
-  assert.equal(
-    fs.readFileSync(path.join(root, '.node-version'), 'utf8').trim(),
-    '22.22.2',
-  );
+  assert.equal(fs.readFileSync(path.join(root, '.node-version'), 'utf8').trim(), '22.22.2');
 
   const packageLock = readJson('package-lock.json');
   for (const removed of [
@@ -47,14 +41,7 @@ test('runtime dependency trees are minimal and fully locked', () => {
 
   const pythonPackages = lockedPythonPackages();
   assert.ok(pythonPackages.size >= 20);
-  for (const direct of [
-    'asn1crypto',
-    'gostcrypto',
-    'pillow',
-    'pyhanko',
-    'pypdf',
-    'reportlab',
-  ]) {
+  for (const direct of ['asn1crypto', 'gostcrypto', 'pillow', 'pyhanko', 'pypdf', 'reportlab']) {
     assert.ok(pythonPackages.has(direct), `${direct} must be locked`);
   }
 });
@@ -63,10 +50,7 @@ test('committed CycloneDX manifests match both lockfiles', () => {
   const pythonPackages = lockedPythonPackages();
   const pythonSbom = readJson('sbom/python.cdx.json');
   const sbomPythonPackages = new Map(
-    pythonSbom.components.map((component) => [
-      component.name,
-      component.version,
-    ]),
+    pythonSbom.components.map((component) => [component.name, component.version]),
   );
   assert.deepEqual(sbomPythonPackages, pythonPackages);
 
@@ -78,9 +62,7 @@ test('committed CycloneDX manifests match both lockfiles', () => {
   assert.equal('serialNumber' in nodeSbom, false);
   assert.equal('timestamp' in nodeSbom.metadata, false);
 
-  const nodeNames = new Set(
-    nodeSbom.components.map((component) => component.name),
-  );
+  const nodeNames = new Set(nodeSbom.components.map((component) => component.name));
   for (const direct of ['ajv', 'express', 'pdf-lib']) {
     assert.ok(nodeNames.has(direct), `${direct} must be present in Node SBOM`);
   }

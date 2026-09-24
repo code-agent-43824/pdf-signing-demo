@@ -10,8 +10,14 @@
     const result = clone(base);
     if (!override || typeof override !== 'object') return result;
     Object.entries(override).forEach(([key, value]) => {
-      if (value && typeof value === 'object' && !Array.isArray(value)
-        && result[key] && typeof result[key] === 'object' && !Array.isArray(result[key])) {
+      if (
+        value
+        && typeof value === 'object'
+        && !Array.isArray(value)
+        && result[key]
+        && typeof result[key] === 'object'
+        && !Array.isArray(result[key])
+      ) {
         result[key] = merge(result[key], value);
       } else {
         result[key] = clone(value);
@@ -78,4 +84,4 @@
   }
 
   root.PdfSigningStampConfig = Object.freeze({ createStampConfigStore });
-}(window));
+})(window);

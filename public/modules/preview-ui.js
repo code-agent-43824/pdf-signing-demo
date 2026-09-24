@@ -10,9 +10,11 @@
 
   function validateVerification(verification) {
     const trustChecks = verification?.trust?.checks;
-    const trustChecksAreExplicitlyUnknown = trustChecks
-      && ['chain', 'validity', 'revocation', 'keyUsage']
-        .every((name) => trustChecks[name] === 'not_checked');
+    const trustChecksAreExplicitlyUnknown =
+      trustChecks
+      && ['chain', 'validity', 'revocation', 'keyUsage'].every(
+        (name) => trustChecks[name] === 'not_checked',
+      );
     if (
       verification?.schemaVersion !== 1
       || verification?.integrity?.status !== 'valid'
@@ -53,13 +55,15 @@
       document.getElementById('successBanner').classList.toggle('hidden', mode !== 'signed');
       if (mode === 'signed') {
         document.getElementById('previewTitle').textContent = 'Подписанный документ';
-        document.getElementById('previewHint').textContent = 'Финальная версия PDF после встраивания подписи и штампа';
+        document.getElementById('previewHint').textContent =
+          'Финальная версия PDF после встраивания подписи и штампа';
         return;
       }
       document.getElementById('previewTitle').textContent = 'Предпросмотр документа';
-      document.getElementById('previewHint').textContent = mode === 'source'
-        ? 'Исходный загруженный PDF перед подписанием'
-        : 'После загрузки PDF-файла его предпросмотр появится здесь';
+      document.getElementById('previewHint').textContent =
+        mode === 'source'
+          ? 'Исходный загруженный PDF перед подписанием'
+          : 'После загрузки PDF-файла его предпросмотр появится здесь';
     }
 
     function setDetailsExpanded(expanded) {
@@ -71,16 +75,18 @@
     function renderVerification(verification) {
       const signatureCount = validateVerification(verification);
       document.getElementById('verificationTitle').textContent = 'Подписанный файл готов';
-      document.getElementById('verificationMessage').textContent = 'Документ доступен для просмотра и скачивания в течение 15 минут.';
+      document.getElementById('verificationMessage').textContent =
+        'Документ доступен для просмотра и скачивания в течение 15 минут.';
       document.getElementById('integrityStatusBadge').textContent = 'Подтверждена';
-      document.getElementById('integrityStatusText').textContent = (
+      document.getElementById('integrityStatusText').textContent =
         `Криптографически проверено ${signatureCount} ${getSignatureCountLabel(signatureCount)} в PDF; `
-        + 'сертификат подписанта совпадает с выбранным.'
-      );
+        + 'сертификат подписанта совпадает с выбранным.';
       document.getElementById('trustStatusBadge').textContent = 'Не проверено';
-      document.getElementById('trustStatusText').textContent = 'Цепочка доверия, срок, отзыв и назначение ключа не проверялись.';
+      document.getElementById('trustStatusText').textContent =
+        'Цепочка доверия, срок, отзыв и назначение ключа не проверялись.';
       document.getElementById('qualifiedStatusBadge').textContent = 'Не подтверждён';
-      document.getElementById('qualifiedStatusText').textContent = 'Проверка по политике квалифицированной электронной подписи не выполнялась.';
+      document.getElementById('qualifiedStatusText').textContent =
+        'Проверка по политике квалифицированной электронной подписи не выполнялась.';
       setDetailsExpanded(false);
     }
 
@@ -134,4 +140,4 @@
     validateResult,
     validateVerification,
   });
-}(window));
+})(window);

@@ -22,9 +22,7 @@ function createObservabilityMetrics({ now = Date.now } = {}) {
   }
 
   function errorCode(value) {
-    return /^[A-Z][A-Z0-9_]{0,63}$/.test(value || '')
-      ? value
-      : 'INTERNAL_ERROR';
+    return /^[A-Z][A-Z0-9_]{0,63}$/.test(value || '') ? value : 'INTERNAL_ERROR';
   }
 
   function observeRequest(operation, durationSeconds, status, code = null) {
@@ -78,17 +76,25 @@ function createObservabilityMetrics({ now = Date.now } = {}) {
     );
     for (const [key, value] of failures) {
       const separator = key.indexOf(':');
-      lines.push(metricLine('pdf_signing_failures_total', {
-        operation: key.slice(0, separator),
-        code: key.slice(separator + 1),
-      }, value));
+      lines.push(
+        metricLine(
+          'pdf_signing_failures_total',
+          {
+            operation: key.slice(0, separator),
+            code: key.slice(separator + 1),
+          },
+          value,
+        ),
+      );
     }
     lines.push(
       '# HELP pdf_signing_rate_limited_total Rejected signing requests.',
       '# TYPE pdf_signing_rate_limited_total counter',
     );
     for (const operation of OPERATIONS) {
-      lines.push(metricLine('pdf_signing_rate_limited_total', { operation }, rateLimits.get(operation) || 0));
+      lines.push(
+        metricLine('pdf_signing_rate_limited_total', { operation }, rateLimits.get(operation) || 0),
+      );
     }
     lines.push(
       '# HELP pdf_signing_pdf_documents_total Validated source PDF documents.',
@@ -119,7 +125,11 @@ function createObservabilityMetrics({ now = Date.now } = {}) {
       '# HELP pdf_signing_session_memory_bytes Session memory usage and limit.',
       '# TYPE pdf_signing_session_memory_bytes gauge',
       metricLine('pdf_signing_session_memory_bytes', { kind: 'used' }, sessionStats.memoryBytes),
-      metricLine('pdf_signing_session_memory_bytes', { kind: 'limit' }, sessionStats.maxMemoryBytes),
+      metricLine(
+        'pdf_signing_session_memory_bytes',
+        { kind: 'limit' },
+        sessionStats.maxMemoryBytes,
+      ),
       '# HELP pdf_signing_results Current result storage state.',
       '# TYPE pdf_signing_results gauge',
       metricLine('pdf_signing_results', { state: 'stored' }, resultStats.count),

@@ -8,12 +8,7 @@ const DEFAULT_BASE_URL = 'https://mescheryakov.pro/pdf-signing/';
 function parseArgs(argv) {
   const args = {
     baseUrl: DEFAULT_BASE_URL,
-    output: path.join(
-      process.cwd(),
-      'test',
-      'baseline',
-      'production-2026-07-28.json',
-    ),
+    output: path.join(process.cwd(), 'test', 'baseline', 'production-2026-07-28.json'),
   };
   for (let index = 0; index < argv.length; index += 1) {
     if (argv[index] === '--base-url') args.baseUrl = argv[++index];

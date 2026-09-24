@@ -67,9 +67,7 @@ def analyze_result(verifier, item, fixture):
     signed_attrs = signer_infos[0]['signed_attrs']
     attribute_oids = [attribute['type'].dotted for attribute in signed_attrs]
     certificates = [
-        item.chosen
-        for item in signed_data['certificates']
-        if item.name == 'certificate'
+        item.chosen for item in signed_data['certificates'] if item.name == 'certificate'
     ]
 
     return {

@@ -42,7 +42,8 @@ const rutokenAdapter = window.PdfSigningRutoken;
 const cryptoEnvironments = {
   cryptopro: cryptoProAdapter.createEnvironment({
     loadScript: () => loadExternalScript('cryptopro'),
-    setDiagnostic: (key, nextState, text) => setProviderDiagnostic('cryptopro', key, nextState, text),
+    setDiagnostic: (key, nextState, text) =>
+      setProviderDiagnostic('cryptopro', key, nextState, text),
   }),
   rutoken: rutokenAdapter.createEnvironment({
     document,
@@ -99,9 +100,7 @@ const TEMPLATE_TOKEN_OPTIONS = [
   { value: '{signer.serial_number}', label: 'Serial number' },
 ];
 const apiClient = window.PdfSigningApi.createApiClient();
-const {
-  formatCertificateDate,
-} = window.PdfSigningCertificates;
+const { formatCertificateDate } = window.PdfSigningCertificates;
 const stampConfigStore = window.PdfSigningStampConfig.createStampConfigStore(
   window.localStorage,
   STAMP_CONFIG_STORAGE_KEY,
@@ -118,8 +117,12 @@ const placementController = window.PdfSigningPlacement.createPlacementController
   getConfig: () => state.stampConfig,
   getDefaultRule: getDefaultPlacementRule,
   getSelected: () => state.selectedStampPosition,
-  setConfig: (config) => { state.stampConfig = config; },
-  setSelected: (preset) => { state.selectedStampPosition = preset; },
+  setConfig: (config) => {
+    state.stampConfig = config;
+  },
+  setSelected: (preset) => {
+    state.selectedStampPosition = preset;
+  },
 });
 const signingOrchestrator = window.PdfSigningOrchestrator.createSigningOrchestrator({
   apiClient,
@@ -143,10 +146,10 @@ const signingOrchestrator = window.PdfSigningOrchestrator.createSigningOrchestra
     stampConfig: state.stampConfig,
     stampPosition: state.selectedStampPosition,
   }),
-  refreshRutoken: () => withOperationalCryptoBusyOverlay(
-    'Проверяю состояние Рутокена…',
-    () => requestRutokenEnvironmentRefresh({ silentStatus: true }),
-  ),
+  refreshRutoken: () =>
+    withOperationalCryptoBusyOverlay('Проверяю состояние Рутокена…', () =>
+      requestRutokenEnvironmentRefresh({ silentStatus: true }),
+    ),
   sha256: sha256HexFromBase64,
   showResult: (completed) => previewUi.showSigned(completed),
   signCryptoPro: signPreparedContent,
@@ -191,7 +194,11 @@ function isCryptoEnvironmentOperational(mode = state.activeCryptoStack) {
   return cryptoEnvironments[mode]?.isOperational(state.cryptoProviders[mode]) || false;
 }
 
-async function withOperationalCryptoBusyOverlay(message, task, { mode = state.activeCryptoStack } = {}) {
+async function withOperationalCryptoBusyOverlay(
+  message,
+  task,
+  { mode = state.activeCryptoStack } = {},
+) {
   if (!isCryptoEnvironmentOperational(mode)) {
     return task();
   }
@@ -238,7 +245,8 @@ function requestRutokenEnvironmentRefresh(options = {}) {
   if (state.activeCryptoStack !== 'rutoken' || !state.cryptoProviders.rutoken.client) {
     return Promise.resolve();
   }
-  return cryptoEnvironments.rutoken.refresh()
+  return cryptoEnvironments.rutoken
+    .refresh()
     .then((snapshot) => applyRutokenSnapshot(snapshot, options))
     .catch(() => {
       // Ошибку уже показываем в статусах диагностики.
@@ -260,9 +268,10 @@ function applyStampPlacementPreset(presetKey) {
 function applyRutokenSnapshot(snapshot, { silentStatus = false } = {}) {
   const provider = state.cryptoProviders.rutoken;
   const certificates = snapshot?.certificates || [];
-  const selectedKey = state.activeCryptoStack === 'rutoken'
-    ? getCertificateKey(state.selectedCertificate, 'rutoken')
-    : '';
+  const selectedKey =
+    state.activeCryptoStack === 'rutoken'
+      ? getCertificateKey(state.selectedCertificate, 'rutoken')
+      : '';
   const selectedStillAvailable = selectedKey
     ? certificates.some((certificate) => getCertificateKey(certificate, 'rutoken') === selectedKey)
     : true;
@@ -273,13 +282,17 @@ function applyRutokenSnapshot(snapshot, { silentStatus = false } = {}) {
   if (state.activeCryptoStack !== 'rutoken') return;
   syncActiveProviderState();
   if (selectedKey && !selectedStillAvailable) {
-    setStatus('Ранее выбранный сертификат на Рутокене больше недоступен. Выберите сертификат заново.');
+    setStatus(
+      'Ранее выбранный сертификат на Рутокене больше недоступен. Выберите сертификат заново.',
+    );
     return;
   }
   if (!silentStatus) {
-    setStatus(snapshot?.deviceIds?.length
-      ? 'Рутокен готов. Можно выбрать сертификат и подписать документ.'
-      : 'Рутокен плагин доступен, но токен не вставлен.');
+    setStatus(
+      snapshot?.deviceIds?.length
+        ? 'Рутокен готов. Можно выбрать сертификат и подписать документ.'
+        : 'Рутокен плагин доступен, но токен не вставлен.',
+    );
   }
 }
 
@@ -287,7 +300,9 @@ function handleRutokenTokenEvent(event) {
   if (event.phase === 'refreshed') {
     applyRutokenSnapshot(event.snapshot, { silentStatus: true });
     if (state.activeCryptoStack === 'rutoken') {
-      setStatus(event.type === 'connected' ? `Рутокен подключён: ${event.label}.` : 'Рутокен извлечён.');
+      setStatus(
+        event.type === 'connected' ? `Рутокен подключён: ${event.label}.` : 'Рутокен извлечён.',
+      );
     }
     return;
   }
@@ -327,7 +342,9 @@ function updateSelectedCertificateUi() {
 
   if (button) {
     button.disabled = !state.pluginReady || !certificateCount;
-    button.textContent = state.selectedCertificate ? 'Выбрать другой сертификат' : 'Выбрать сертификат';
+    button.textContent = state.selectedCertificate
+      ? 'Выбрать другой сертификат'
+      : 'Выбрать сертификат';
   }
 }
 
@@ -338,7 +355,9 @@ function syncSelectedCertificate({ announceMissing = false } = {}) {
   }
 
   const selectedKey = getCertificateKey(state.selectedCertificate);
-  const refreshed = state.certificates.find((certificate) => getCertificateKey(certificate) === selectedKey);
+  const refreshed = state.certificates.find(
+    (certificate) => getCertificateKey(certificate) === selectedKey,
+  );
   if (refreshed) {
     state.selectedCertificate = refreshed;
     updateSelectedCertificateUi();
@@ -358,9 +377,10 @@ function renderEnvironmentStatusStrip() {
 
   const provider = getActiveProviderState();
   const layout = CRYPTO_DIAGNOSTIC_LAYOUTS[state.activeCryptoStack] || [];
-  root.innerHTML = layout.map(({ key, label }) => {
-    const diagnostic = provider?.diagnostics?.[key] || { state: 'pending', text: 'Проверка…' };
-    return `
+  root.innerHTML = layout
+    .map(({ key, label }) => {
+      const diagnostic = provider?.diagnostics?.[key] || { state: 'pending', text: 'Проверка…' };
+      return `
       <div class="environment-status-pill is-${escapeHtml(diagnostic.state)}">
         <div class="environment-status-pill-head">
           <span class="environment-status-pill-dot" aria-hidden="true"></span>
@@ -369,7 +389,8 @@ function renderEnvironmentStatusStrip() {
         <div class="environment-status-pill-value" title="${escapeHtml(diagnostic.text)}">${escapeHtml(diagnostic.text)}</div>
       </div>
     `;
-  }).join('');
+    })
+    .join('');
 }
 
 // The saved choice comes first: the markup always checks CryptoPro as the
@@ -415,7 +436,11 @@ function loadExternalScript(mode) {
   if (existing?.dataset.loading === 'true') {
     return new Promise((resolve, reject) => {
       existing.addEventListener('load', () => resolve(), { once: true });
-      existing.addEventListener('error', () => reject(new Error(`Не удалось загрузить скрипт ${mode}.`)), { once: true });
+      existing.addEventListener(
+        'error',
+        () => reject(new Error(`Не удалось загрузить скрипт ${mode}.`)),
+        { once: true },
+      );
     });
   }
 
@@ -427,15 +452,23 @@ function loadExternalScript(mode) {
     script.crossOrigin = 'anonymous';
     script.async = true;
     script.dataset.loading = 'true';
-    script.addEventListener('load', () => {
-      script.dataset.loading = 'false';
-      script.dataset.loaded = 'true';
-      resolve();
-    }, { once: true });
-    script.addEventListener('error', () => {
-      script.dataset.loading = 'false';
-      reject(new Error(`Не удалось загрузить скрипт ${mode}.`));
-    }, { once: true });
+    script.addEventListener(
+      'load',
+      () => {
+        script.dataset.loading = 'false';
+        script.dataset.loaded = 'true';
+        resolve();
+      },
+      { once: true },
+    );
+    script.addEventListener(
+      'error',
+      () => {
+        script.dataset.loading = 'false';
+        reject(new Error(`Не удалось загрузить скрипт ${mode}.`));
+      },
+      { once: true },
+    );
     if (!existing) {
       document.head.appendChild(script);
     }
@@ -463,9 +496,9 @@ function updatePrimaryActionState() {
   if (!button) return;
   const canSign = Boolean(
     state.uploadedPdfBase64
-    && state.pluginReady
-    && state.selectedCertificate
-    && signingWorkflow.can('start'),
+      && state.pluginReady
+      && state.selectedCertificate
+      && signingWorkflow.can('start'),
   );
   button.disabled = !canSign;
   button.setAttribute('aria-busy', String(signingWorkflow.active));
@@ -493,7 +526,9 @@ async function fetchStampConfig() {
   const data = await apiClient.loadStampConfig();
   state.defaultStampConfig = ensureStampConfigShape(data.config);
   state.stampConfig = stampConfigStore.resolve(state.defaultStampConfig);
-  state.selectedStampPosition = getStampPlacementPresetKey(state.stampConfig, { preferSelected: false });
+  state.selectedStampPosition = getStampPlacementPresetKey(state.stampConfig, {
+    preferSelected: false,
+  });
   updateStampPlacementUi();
   return data;
 }
@@ -555,9 +590,12 @@ async function initCryptoPro() {
   const initialization = new AbortController();
   cryptoProInitialization = initialization;
   try {
-    Object.assign(provider, await cryptoEnvironments.cryptopro.initialize({
-      signal: initialization.signal,
-    }));
+    Object.assign(
+      provider,
+      await cryptoEnvironments.cryptopro.initialize({
+        signal: initialization.signal,
+      }),
+    );
     if (state.activeCryptoStack === 'cryptopro') {
       syncActiveProviderState();
       setStatus('CryptoPro готов. Можно выбрать сертификат и подписать документ.');
@@ -588,7 +626,9 @@ async function initRutoken() {
     provider.client = null;
     if (state.activeCryptoStack === 'rutoken') {
       syncActiveProviderState();
-      setStatus(`Не удалось инициализировать Рутокен: ${cryptoEnvironments.rutoken.describeError(error)}`);
+      setStatus(
+        `Не удалось инициализировать Рутокен: ${cryptoEnvironments.rutoken.describeError(error)}`,
+      );
     }
   }
 }
@@ -598,9 +638,8 @@ async function initActiveCryptoStack({ force = false } = {}) {
   if (!force && provider?.ready) {
     syncActiveProviderState();
     if (state.activeCryptoStack === 'rutoken') {
-      await withOperationalCryptoBusyOverlay(
-        'Проверяю состояние Рутокена…',
-        () => requestRutokenEnvironmentRefresh({ silentStatus: true }),
+      await withOperationalCryptoBusyOverlay('Проверяю состояние Рутокена…', () =>
+        requestRutokenEnvironmentRefresh({ silentStatus: true }),
       );
     }
     setStatus(`Активен ${getCryptoStackLabel()}. Можно выбрать сертификат и подписать документ.`);
@@ -657,7 +696,11 @@ async function ensureRutokenLogin(deviceId) {
         title: 'Рутокен не запрашивает PIN сам. Введите PIN-код токена, чтобы продолжить подпись.',
         errorMessage,
       });
-      await withOperationalCryptoBusyOverlay('Проверяю PIN-код на Рутокене…', () => plugin.login(deviceId, pin), { mode: 'rutoken' });
+      await withOperationalCryptoBusyOverlay(
+        'Проверяю PIN-код на Рутокене…',
+        () => plugin.login(deviceId, pin),
+        { mode: 'rutoken' },
+      );
       return;
     } catch (error) {
       if (error?.message === 'Ввод PIN-кода отменён.') {
@@ -690,10 +733,7 @@ async function sha256HexFromBase64(base64) {
   }
   const digest = await window.crypto.subtle.digest('SHA-256', bytes);
   bytes.fill(0);
-  return Array.from(
-    new Uint8Array(digest),
-    (byte) => byte.toString(16).padStart(2, '0'),
-  ).join('');
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
 function migrateLegacyStampFontReferences() {
@@ -714,12 +754,8 @@ function migrateLegacyStampFontReferences() {
       .pop()
       .replace(/\.(ttf|otf|ttc)$/i, '')
       .toLowerCase();
-    const matches = state.availableFonts.filter(
-      (font) => font.label.toLowerCase() === legacyLabel,
-    );
-    current.path = matches.length === 1
-      ? matches[0].id
-      : defaultFonts[role]?.path;
+    const matches = state.availableFonts.filter((font) => font.label.toLowerCase() === legacyLabel);
+    current.path = matches.length === 1 ? matches[0].id : defaultFonts[role]?.path;
     changed = true;
   }
 
@@ -788,13 +824,18 @@ function renderTokenOptions(selectedValue) {
   const current = known ? normalized : '__custom__';
   return [
     `<option value="__custom__" ${current === '__custom__' ? 'selected' : ''}>Свое значение…</option>`,
-    ...TEMPLATE_TOKEN_OPTIONS.map((option) => `<option value="${escapeHtml(option.value)}" ${current === option.value ? 'selected' : ''}>${escapeHtml(option.label)}</option>`),
+    ...TEMPLATE_TOKEN_OPTIONS.map(
+      (option) =>
+        `<option value="${escapeHtml(option.value)}" ${current === option.value ? 'selected' : ''}>${escapeHtml(option.label)}</option>`,
+    ),
   ].join('');
 }
 
 function getDefaultPlacementRule(config) {
   const rules = config?.placements?.rules || [];
-  return rules.find((rule) => !rule.match || Object.keys(rule.match).length === 0) || rules[0] || {};
+  return (
+    rules.find((rule) => !rule.match || Object.keys(rule.match).length === 0) || rules[0] || {}
+  );
 }
 
 function getSignatureOverrideRule(config, signatureIndex) {
@@ -901,10 +942,14 @@ function renderStampRows(root, rows) {
 function fontPreviewFamily(fontPath, fallback = 'sans-serif') {
   const selectedFont = state.availableFonts.find((font) => font.id === fontPath);
   const value = String(selectedFont?.label || fontPath || '').toLowerCase();
-  if (value.includes('pt sans caption')) return '"PT Sans Caption Stamp", "PT Sans Caption", Arial, sans-serif';
-  if (value.includes('ibm plex sans')) return '"IBM Plex Sans Stamp", "IBM Plex Sans", Arial, sans-serif';
-  if (value.includes('roboto condensed')) return '"Roboto Condensed Stamp", "Roboto Condensed", Arial, sans-serif';
-  if (value.includes('noto sans semicondensed')) return '"Noto Sans SemiCondensed Stamp", "Noto Sans", Arial, sans-serif';
+  if (value.includes('pt sans caption'))
+    return '"PT Sans Caption Stamp", "PT Sans Caption", Arial, sans-serif';
+  if (value.includes('ibm plex sans'))
+    return '"IBM Plex Sans Stamp", "IBM Plex Sans", Arial, sans-serif';
+  if (value.includes('roboto condensed'))
+    return '"Roboto Condensed Stamp", "Roboto Condensed", Arial, sans-serif';
+  if (value.includes('noto sans semicondensed'))
+    return '"Noto Sans SemiCondensed Stamp", "Noto Sans", Arial, sans-serif';
   if (value.includes('golos text')) return '"Golos Text Stamp", "Golos Text", Arial, sans-serif';
   if (value.includes('serif')) return 'Georgia, "Times New Roman", serif';
   if (value.includes('mono')) return '"SFMono-Regular", Consolas, monospace';
@@ -971,16 +1016,18 @@ function updateStampPreview(root, config) {
     .map((line) => escapeHtml(replacePreviewTokens(line)))
     .join('<br>');
 
-  const rowsHtml = (draft.content.rows || []).map((row) => {
-    const label = escapeHtml(replacePreviewTokens(row.label));
-    const value = escapeHtml(replacePreviewTokens(row.value));
-    return `
+  const rowsHtml = (draft.content.rows || [])
+    .map((row) => {
+      const label = escapeHtml(replacePreviewTokens(row.label));
+      const value = escapeHtml(replacePreviewTokens(row.value));
+      return `
       <div class="preview-stamp-row" style="margin-top:${rowLabelGap}px; margin-bottom:${rowExtraGap}px;">
         <div class="preview-stamp-label" style="font-size:${labelSize}px; font-family:${fontPreviewFamily(fonts.label?.path, 'Georgia, serif')};">${label}</div>
         <div class="preview-stamp-value" style="font-size:${valueSize}px; font-family:${fontPreviewFamily(fonts.value?.path, 'Inter, Arial, sans-serif')};">${value}</div>
       </div>
     `;
-  }).join('');
+    })
+    .join('');
 
   previewCard.innerHTML = `
     <div class="preview-stamp-inner" style="padding:${topPadding}px ${rightPadding}px ${topPadding}px ${leftPadding}px;">
@@ -1006,11 +1053,13 @@ function updateStampPreview(root, config) {
   if (anchor.includes('bottom')) previewCard.style.bottom = `${clamp(y, 10, 80)}px`;
 
   root.querySelector('#previewRuleName').textContent = rule.name || 'default-rule';
-  root.querySelector('#previewPageMode').textContent = rule.pages.mode === 'single'
-    ? `single · стр. ${rule.pages.page || 1}`
-    : (rule.pages.mode || 'single');
+  root.querySelector('#previewPageMode').textContent =
+    rule.pages.mode === 'single'
+      ? `single · стр. ${rule.pages.page || 1}`
+      : rule.pages.mode || 'single';
   root.querySelector('#previewAnchor').textContent = `${anchor} · x:${offsetX} · y:${offsetY}`;
-  root.querySelector('#previewGrid').textContent = `${rule.placement.mode || 'grid'} · колонок ${rule.placement.columns || 1} · шаг ${rule.placement.stepX || 0}/${rule.placement.stepY || 0}`;
+  root.querySelector('#previewGrid').textContent =
+    `${rule.placement.mode || 'grid'} · колонок ${rule.placement.columns || 1} · шаг ${rule.placement.stepX || 0}/${rule.placement.stepY || 0}`;
 }
 
 function populateVisualForm(root, config) {
@@ -1058,7 +1107,9 @@ function populateVisualForm(root, config) {
   root.querySelector('#signatureReason').value = draft.signatureObject.reason || '';
   root.querySelector('#signatureContactInfo').value = draft.signatureObject.contactInfo || '';
   root.querySelector('#signatureLocation').value = draft.signatureObject.location || '';
-  root.querySelector('#signatureBytesReserved').value = Number(draft.signatureObject.bytesReserved || 16000);
+  root.querySelector('#signatureBytesReserved').value = Number(
+    draft.signatureObject.bytesReserved || 16000,
+  );
   root.querySelector('#signatureSubfilter').value = draft.signatureObject.subfilter || 'PADES';
   root.querySelector('#signatureMetadataEnabled').checked = false;
   root.querySelector('#signatureMetadataFieldset').disabled = true;
@@ -1077,14 +1128,24 @@ function populateVisualForm(root, config) {
   root.querySelector('#limitsMaxSignatures').value = Number(draft.limits.maxSignatures || 1);
 
   root.querySelector('#layoutContentLeft').value = Number(draft.appearance.layout.contentLeft || 0);
-  root.querySelector('#layoutContentRight').value = Number(draft.appearance.layout.contentRight || 0);
+  root.querySelector('#layoutContentRight').value = Number(
+    draft.appearance.layout.contentRight || 0,
+  );
   root.querySelector('#layoutStartY').value = Number(draft.appearance.layout.startY || 0);
-  root.querySelector('#layoutTitleLineHeight').value = Number(draft.appearance.layout.titleLineHeight || 0);
-  root.querySelector('#layoutAfterTitleGap').value = Number(draft.appearance.layout.afterTitleGap || 0);
+  root.querySelector('#layoutTitleLineHeight').value = Number(
+    draft.appearance.layout.titleLineHeight || 0,
+  );
+  root.querySelector('#layoutAfterTitleGap').value = Number(
+    draft.appearance.layout.afterTitleGap || 0,
+  );
   root.querySelector('#layoutRowLabelGap').value = Number(draft.appearance.layout.rowLabelGap || 0);
   root.querySelector('#layoutRowExtraGap').value = Number(draft.appearance.layout.rowExtraGap || 0);
-  root.querySelector('#layoutValueLineHeight').value = Number(draft.appearance.layout.valueLineHeight || 0);
-  root.querySelector('#layoutDefaultMaxLines').value = Number(draft.appearance.layout.defaultMaxLines || 2);
+  root.querySelector('#layoutValueLineHeight').value = Number(
+    draft.appearance.layout.valueLineHeight || 0,
+  );
+  root.querySelector('#layoutDefaultMaxLines').value = Number(
+    draft.appearance.layout.defaultMaxLines || 2,
+  );
 
   [
     ['appearanceImageScale', 'appearanceImageScaleValue'],
@@ -1127,8 +1188,12 @@ function collectSignatureOverrides(root, baseRule) {
       placement: {
         mode: 'anchored',
         anchor: root.querySelector(`[data-override-anchor="${signatureIndex}"]`).value,
-        offsetX: Number(root.querySelector(`[data-override-offset-x="${signatureIndex}"]`).value || 0),
-        offsetY: Number(root.querySelector(`[data-override-offset-y="${signatureIndex}"]`).value || 0),
+        offsetX: Number(
+          root.querySelector(`[data-override-offset-x="${signatureIndex}"]`).value || 0,
+        ),
+        offsetY: Number(
+          root.querySelector(`[data-override-offset-y="${signatureIndex}"]`).value || 0,
+        ),
       },
     });
   }
@@ -1140,17 +1205,29 @@ function readVisualForm(root) {
   draft.appearance.width = Number(root.querySelector('#appearanceWidth').value);
   draft.appearance.height = Number(root.querySelector('#appearanceHeight').value);
   draft.appearance.imageScale = Number(root.querySelector('#appearanceImageScale').value);
-  draft.appearance.backgroundColor = normalizeColor(root.querySelector('#appearanceBackgroundColorText').value, '#F5F8FF');
-  draft.appearance.borderColor = normalizeColor(root.querySelector('#appearanceBorderColorText').value, '#3F68B8');
+  draft.appearance.backgroundColor = normalizeColor(
+    root.querySelector('#appearanceBackgroundColorText').value,
+    '#F5F8FF',
+  );
+  draft.appearance.borderColor = normalizeColor(
+    root.querySelector('#appearanceBorderColorText').value,
+    '#3F68B8',
+  );
   draft.appearance.borderWidth = Number(root.querySelector('#appearanceBorderWidth').value);
   draft.appearance.borderRadius = Number(root.querySelector('#appearanceBorderRadius').value);
-  draft.appearance.textColor = normalizeColor(root.querySelector('#appearanceTextColorText').value, '#1A2842');
+  draft.appearance.textColor = normalizeColor(
+    root.querySelector('#appearanceTextColorText').value,
+    '#1A2842',
+  );
 
   draft.appearance.separator.enabled = root.querySelector('#separatorEnabled').checked;
   draft.appearance.separator.y = Number(root.querySelector('#separatorY').value);
   draft.appearance.separator.left = Number(root.querySelector('#separatorLeft').value);
   draft.appearance.separator.right = Number(root.querySelector('#separatorRight').value);
-  draft.appearance.separator.color = normalizeColor(root.querySelector('#separatorColorText').value, '#6E87BC');
+  draft.appearance.separator.color = normalizeColor(
+    root.querySelector('#separatorColorText').value,
+    '#6E87BC',
+  );
   draft.appearance.separator.width = Number(root.querySelector('#separatorWidth').value);
 
   draft.appearance.fonts.title.path = root.querySelector('#fontTitlePath').value;
@@ -1163,15 +1240,22 @@ function readVisualForm(root) {
   draft.appearance.layout.contentLeft = Number(root.querySelector('#layoutContentLeft').value);
   draft.appearance.layout.contentRight = Number(root.querySelector('#layoutContentRight').value);
   draft.appearance.layout.startY = Number(root.querySelector('#layoutStartY').value);
-  draft.appearance.layout.titleLineHeight = Number(root.querySelector('#layoutTitleLineHeight').value);
+  draft.appearance.layout.titleLineHeight = Number(
+    root.querySelector('#layoutTitleLineHeight').value,
+  );
   draft.appearance.layout.afterTitleGap = Number(root.querySelector('#layoutAfterTitleGap').value);
   draft.appearance.layout.rowLabelGap = Number(root.querySelector('#layoutRowLabelGap').value);
   draft.appearance.layout.rowExtraGap = Number(root.querySelector('#layoutRowExtraGap').value);
-  draft.appearance.layout.valueLineHeight = Number(root.querySelector('#layoutValueLineHeight').value);
-  draft.appearance.layout.defaultMaxLines = Number(root.querySelector('#layoutDefaultMaxLines').value);
+  draft.appearance.layout.valueLineHeight = Number(
+    root.querySelector('#layoutValueLineHeight').value,
+  );
+  draft.appearance.layout.defaultMaxLines = Number(
+    root.querySelector('#layoutDefaultMaxLines').value,
+  );
 
-  draft.content.title = root.querySelector('#contentTitle').value
-    .split('\n')
+  draft.content.title = root
+    .querySelector('#contentTitle')
+    .value.split('\n')
     .map((line) => line.trim())
     .filter(Boolean);
   draft.content.rows = collectStampRows(root);
@@ -1203,11 +1287,7 @@ function readVisualForm(root) {
     const signatureIndex = Number(candidate?.match?.signatureIndex);
     return !(signatureIndex >= 1 && signatureIndex <= 4);
   });
-  draft.placements.rules = [
-    ...collectSignatureOverrides(root, rule),
-    rule,
-    ...preservedRules,
-  ];
+  draft.placements.rules = [...collectSignatureOverrides(root, rule), rule, ...preservedRules];
 
   return draft;
 }
@@ -1303,7 +1383,9 @@ function wireStampSettingsForm(root) {
     if (!toggle) return;
     const signatureIndex = toggle.getAttribute('data-override-enabled');
     const card = toggle.closest('.signature-override-card');
-    const controls = card?.querySelectorAll(`[data-override-anchor="${signatureIndex}"], [data-override-offset-x="${signatureIndex}"], [data-override-offset-y="${signatureIndex}"]`);
+    const controls = card?.querySelectorAll(
+      `[data-override-anchor="${signatureIndex}"], [data-override-offset-x="${signatureIndex}"], [data-override-offset-y="${signatureIndex}"]`,
+    );
     card?.classList.toggle('is-disabled', !toggle.checked);
     controls?.forEach((control) => {
       control.disabled = !toggle.checked;
@@ -1348,7 +1430,8 @@ function openStampSettingsDialog() {
       ? 'Есть персональные настройки в браузере'
       : 'Используются серверные настройки по умолчанию';
     populateVisualForm(root, state.stampConfig);
-    root.querySelector('#stampConfigEditor').value = `${JSON.stringify(state.stampConfig, null, 2)}\n`;
+    root.querySelector('#stampConfigEditor').value =
+      `${JSON.stringify(state.stampConfig, null, 2)}\n`;
     wireStampSettingsForm(root);
 
     const close = () => backdrop.remove();
@@ -1368,12 +1451,17 @@ function openStampSettingsDialog() {
     reset.addEventListener('click', () => {
       stampConfigStore.clear();
       state.stampConfig = ensureStampConfigShape(state.defaultStampConfig);
-      state.selectedStampPosition = getStampPlacementPresetKey(state.stampConfig, { preferSelected: false });
+      state.selectedStampPosition = getStampPlacementPresetKey(state.stampConfig, {
+        preferSelected: false,
+      });
       configStatus.textContent = 'Используются серверные настройки по умолчанию';
       populateVisualForm(root, state.stampConfig);
-      root.querySelector('#stampConfigEditor').value = `${JSON.stringify(state.stampConfig, null, 2)}\n`;
+      root.querySelector('#stampConfigEditor').value =
+        `${JSON.stringify(state.stampConfig, null, 2)}\n`;
       updateStampPlacementUi();
-      setStatus('Персональные настройки штампа сброшены. Сейчас используются серверные значения по умолчанию.');
+      setStatus(
+        'Персональные настройки штампа сброшены. Сейчас используются серверные значения по умолчанию.',
+      );
     });
 
     save.addEventListener('click', async () => {
@@ -1385,7 +1473,9 @@ function openStampSettingsDialog() {
           : readVisualForm(root);
         stampConfigStore.save(parsed);
         state.stampConfig = parsed;
-        state.selectedStampPosition = getStampPlacementPresetKey(state.stampConfig, { preferSelected: false });
+        state.selectedStampPosition = getStampPlacementPresetKey(state.stampConfig, {
+          preferSelected: false,
+        });
         updateStampPlacementUi();
         close();
         resolve();
@@ -1402,7 +1492,11 @@ function openStampSettingsDialog() {
 
 async function signPreparedContent(selectedCertificate, contentToSignBase64) {
   return withOperationalCryptoBusyOverlay('CryptoPro подписывает данные…', async () => {
-    return cryptoProAdapter.sign(state.cryptoProviders.cryptopro.client, selectedCertificate, contentToSignBase64);
+    return cryptoProAdapter.sign(
+      state.cryptoProviders.cryptopro.client,
+      selectedCertificate,
+      contentToSignBase64,
+    );
   });
 }
 
@@ -1488,7 +1582,9 @@ document.getElementById('chooseCertificateButton').addEventListener('click', asy
   button.disabled = true;
   try {
     if (state.activeCryptoStack === 'rutoken') {
-      await withOperationalCryptoBusyOverlay('Читаю состояние Рутокена…', () => requestRutokenEnvironmentRefresh({ silentStatus: true }));
+      await withOperationalCryptoBusyOverlay('Читаю состояние Рутокена…', () =>
+        requestRutokenEnvironmentRefresh({ silentStatus: true }),
+      );
     }
     const selectedCertificate = await dialogManager.openCertificate(
       state.certificates,
@@ -1512,9 +1608,10 @@ document.getElementById('signButton').addEventListener('click', async () => {
   try {
     await prepareAndSign();
   } catch (error) {
-    const details = state.activeCryptoStack === 'rutoken'
-      ? rutokenAdapter.getErrorMessage(error, state.cryptoProviders.rutoken.client)
-      : cryptoProAdapter.getErrorMessage(state.cryptoProviders.cryptopro.client, error);
+    const details =
+      state.activeCryptoStack === 'rutoken'
+        ? rutokenAdapter.getErrorMessage(error, state.cryptoProviders.rutoken.client)
+        : cryptoProAdapter.getErrorMessage(state.cryptoProviders.cryptopro.client, error);
     setStatus(`Ошибка: ${details}`);
   } finally {
     updatePrimaryActionState();
@@ -1531,7 +1628,9 @@ document.getElementById('stampSettingsButton').addEventListener('click', async (
   try {
     await Promise.all([fetchStampConfig(), fetchAvailableFonts()]);
     await openStampSettingsDialog();
-    setStatus('Персональные настройки штампа сохранены в этом браузере. Следующая подготовка PDF возьмёт новые параметры.');
+    setStatus(
+      'Персональные настройки штампа сохранены в этом браузере. Следующая подготовка PDF возьмёт новые параметры.',
+    );
   } catch (error) {
     if (!String(error.message || '').includes('отменена')) {
       setStatus(`Ошибка: ${error.message}`);
@@ -1544,7 +1643,9 @@ document.getElementById('stampSettingsButton').addEventListener('click', async (
 document.querySelectorAll('[data-stamp-position]').forEach((button) => {
   button.addEventListener('click', () => {
     applyStampPlacementPreset(button.dataset.stampPosition);
-    setStatus(`Положение штампа обновлено: ${STAMP_POSITION_PRESETS[button.dataset.stampPosition]?.label || 'выбрано'}.`);
+    setStatus(
+      `Положение штампа обновлено: ${STAMP_POSITION_PRESETS[button.dataset.stampPosition]?.label || 'выбрано'}.`,
+    );
   });
 });
 

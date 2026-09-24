@@ -40,10 +40,7 @@ test('session state machine releases buffers on completed, failed and expired st
   assert.equal(store.stats().memoryBytes, 8);
   assert.throws(
     () => store.create({ preparedPdf: Buffer.alloc(1) }, 'owner-a'),
-    (error) => (
-      error instanceof StorageLimitError
-      && error.code === 'SESSION_OWNER_LIMIT'
-    ),
+    (error) => error instanceof StorageLimitError && error.code === 'SESSION_OWNER_LIMIT',
   );
 
   assert.equal(store.complete(completed), true);
@@ -88,18 +85,12 @@ test('session store enforces total memory and active-session limits', () => {
   store.create({ one: Buffer.alloc(5) }, 'owner-a');
   assert.throws(
     () => store.create({ two: Buffer.alloc(4) }, 'owner-b'),
-    (error) => (
-      error instanceof StorageLimitError
-      && error.code === 'SESSION_MEMORY_LIMIT'
-    ),
+    (error) => error instanceof StorageLimitError && error.code === 'SESSION_MEMORY_LIMIT',
   );
   store.create({ two: Buffer.alloc(3) }, 'owner-b');
   assert.throws(
     () => store.create({}, 'owner-c'),
-    (error) => (
-      error instanceof StorageLimitError
-      && error.code === 'SESSION_COUNT_LIMIT'
-    ),
+    (error) => error instanceof StorageLimitError && error.code === 'SESSION_COUNT_LIMIT',
   );
 });
 
@@ -178,10 +169,7 @@ test('concurrent result writes reserve capacity before touching disk', async () 
   const first = store.save(Buffer.alloc(8));
   await assert.rejects(
     store.save(Buffer.alloc(1)),
-    (error) => (
-      error instanceof StorageLimitError
-      && error.code === 'RESULT_COUNT_LIMIT'
-    ),
+    (error) => error instanceof StorageLimitError && error.code === 'RESULT_COUNT_LIMIT',
   );
   await first;
   assert.equal(store.stats().count, 1);
@@ -198,18 +186,12 @@ test('result store rejects aggregate disk and result-count overflow', async () =
   });
   await assert.rejects(
     store.save(Buffer.alloc(9)),
-    (error) => (
-      error instanceof StorageLimitError
-      && error.code === 'RESULT_DISK_LIMIT'
-    ),
+    (error) => error instanceof StorageLimitError && error.code === 'RESULT_DISK_LIMIT',
   );
   await store.save(Buffer.alloc(8));
   await assert.rejects(
     store.save(Buffer.alloc(1)),
-    (error) => (
-      error instanceof StorageLimitError
-      && error.code === 'RESULT_COUNT_LIMIT'
-    ),
+    (error) => error instanceof StorageLimitError && error.code === 'RESULT_COUNT_LIMIT',
   );
 });
 

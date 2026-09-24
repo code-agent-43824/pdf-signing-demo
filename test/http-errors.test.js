@@ -9,15 +9,9 @@ const {
   shouldSkipResponse,
 } = require('../src/http/errors');
 const { HttpError } = require('../src/http/validation');
-const {
-  OperationControlError,
-} = require('../src/runtime/operation-queue');
-const {
-  WorkerProcessError,
-} = require('../src/runtime/process-runner');
-const {
-  StorageLimitError,
-} = require('../src/storage/lifecycle');
+const { OperationControlError } = require('../src/runtime/operation-queue');
+const { WorkerProcessError } = require('../src/runtime/process-runner');
+const { StorageLimitError } = require('../src/storage/lifecycle');
 
 test('HTTP error mapping preserves the established public status and codes', () => {
   const cases = [
@@ -102,13 +96,7 @@ test('safe error responses hide internal details and redact capability paths in 
 test('aborted or already-finished responses are skipped', () => {
   assert.equal(shouldSkipResponse({ destroyed: true }, new Error()), true);
   assert.equal(shouldSkipResponse({ writableEnded: true }, new Error()), true);
-  assert.equal(
-    shouldSkipResponse({}, new OperationControlError('REQUEST_ABORTED')),
-    true,
-  );
-  assert.equal(
-    shouldSkipResponse({}, new WorkerProcessError('WORKER_ABORTED', 'aborted')),
-    true,
-  );
+  assert.equal(shouldSkipResponse({}, new OperationControlError('REQUEST_ABORTED')), true);
+  assert.equal(shouldSkipResponse({}, new WorkerProcessError('WORKER_ABORTED', 'aborted')), true);
   assert.equal(shouldSkipResponse({}, new Error()), false);
 });

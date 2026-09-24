@@ -97,12 +97,9 @@ function createStampConfiguration({
     visitConfiguredFonts(serverConfig, (entry) => {
       const font = catalog.byId.get(entry.path);
       if (!font) {
-        throw new HttpError(
-          400,
-          'UNKNOWN_FONT',
-          'Некорректная конфигурация штампа.',
-          { fontId: entry.path },
-        );
+        throw new HttpError(400, 'UNKNOWN_FONT', 'Некорректная конфигурация штампа.', {
+          fontId: entry.path,
+        });
       }
       entry.path = font.serverPath;
     });

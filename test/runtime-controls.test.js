@@ -3,17 +3,9 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { test } = require('node:test');
-const {
-  OperationControlError,
-  OperationQueue,
-} = require('../src/runtime/operation-queue');
-const { WorkerProcessError, runIsolatedProcess } = require(
-  '../src/runtime/process-runner',
-);
-const {
-  FixedWindowRateLimiter,
-  createRateLimitMiddleware,
-} = require('../src/http/rate-limit');
+const { OperationControlError, OperationQueue } = require('../src/runtime/operation-queue');
+const { WorkerProcessError, runIsolatedProcess } = require('../src/runtime/process-runner');
+const { FixedWindowRateLimiter, createRateLimitMiddleware } = require('../src/http/rate-limit');
 const { HttpError } = require('../src/http/validation');
 const { createPreparedPdf } = require('../src/signing/pades');
 
@@ -65,21 +57,26 @@ test('operation queue bounds global and per-key concurrency', async () => {
   let maxActive = 0;
   const activeByKey = new Map();
   const maxByKey = new Map();
-  const work = (key) => queue.run(async () => {
-    active += 1;
-    maxActive = Math.max(maxActive, active);
-    activeByKey.set(key, (activeByKey.get(key) || 0) + 1);
-    maxByKey.set(key, Math.max(maxByKey.get(key) || 0, activeByKey.get(key)));
-    await delay(40);
-    active -= 1;
-    activeByKey.set(key, activeByKey.get(key) - 1);
-    return key;
-  }, { key });
+  const work = (key) =>
+    queue.run(
+      async () => {
+        active += 1;
+        maxActive = Math.max(maxActive, active);
+        activeByKey.set(key, (activeByKey.get(key) || 0) + 1);
+        maxByKey.set(key, Math.max(maxByKey.get(key) || 0, activeByKey.get(key)));
+        await delay(40);
+        active -= 1;
+        activeByKey.set(key, activeByKey.get(key) - 1);
+        return key;
+      },
+      { key },
+    );
 
-  assert.deepEqual(
-    await Promise.all([work('same'), work('same'), work('other')]),
-    ['same', 'same', 'other'],
-  );
+  assert.deepEqual(await Promise.all([work('same'), work('same'), work('other')]), [
+    'same',
+    'same',
+    'other',
+  ]);
   assert.equal(maxActive, 2);
   assert.equal(maxByKey.get('same'), 1);
   assert.deepEqual(queue.stats(), {
@@ -106,9 +103,7 @@ test('operation queue rejects overflow and aborts timed-out work', async () => {
   const second = queue.run(() => Promise.resolve('second'), { key: 'second' });
   await assert.rejects(
     queue.run(() => Promise.resolve('third'), { key: 'third' }),
-    (error) => (
-      error instanceof OperationControlError && error.code === 'QUEUE_FULL'
-    ),
+    (error) => error instanceof OperationControlError && error.code === 'QUEUE_FULL',
   );
   release('first');
   assert.equal(await first, 'first');
@@ -116,15 +111,13 @@ test('operation queue rejects overflow and aborts timed-out work', async () => {
 
   await assert.rejects(
     queue.run(
-      (signal) => new Promise((_resolve, reject) => {
-        signal.addEventListener('abort', () => reject(new Error('aborted')));
-      }),
+      (signal) =>
+        new Promise((_resolve, reject) => {
+          signal.addEventListener('abort', () => reject(new Error('aborted')));
+        }),
       { key: 'timeout' },
     ),
-    (error) => (
-      error instanceof OperationControlError
-      && error.code === 'OPERATION_TIMEOUT'
-    ),
+    (error) => error instanceof OperationControlError && error.code === 'OPERATION_TIMEOUT',
   );
   assert.equal(queue.stats().active, 0);
 });
@@ -194,19 +187,16 @@ test('isolated worker is asynchronous and timeout kills its process group', asyn
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pdf-worker-test-'));
   const childPidPath = path.join(tempDir, 'child.pid');
   try {
-    const operation = runIsolatedProcess(
-      'python3',
-      [WORKER_FIXTURE, 'spawn-child', childPidPath],
-      { cwd: tempDir, timeoutMs: 300 },
-    );
+    const operation = runIsolatedProcess('python3', [WORKER_FIXTURE, 'spawn-child', childPidPath], {
+      cwd: tempDir,
+      timeoutMs: 300,
+    });
     await waitFor(() => fs.existsSync(childPidPath));
     const childPid = Number(fs.readFileSync(childPidPath, 'ascii'));
     const started = Date.now();
     await assert.rejects(
       operation,
-      (error) => (
-        error instanceof WorkerProcessError && error.code === 'WORKER_TIMEOUT'
-      ),
+      (error) => error instanceof WorkerProcessError && error.code === 'WORKER_TIMEOUT',
     );
     // A grandchild that survives keeps the worker's pipes open for its whole
     // 60 s sleep, so a late settlement means the group was not killed.
@@ -220,26 +210,18 @@ test('isolated worker is asynchronous and timeout kills its process group', asyn
 
 test('aborted PDF worker removes its private temporary directory', async () => {
   const prefix = 'pdf-signing-pyhanko-';
-  const before = new Set(
-    fs.readdirSync(os.tmpdir()).filter((name) => name.startsWith(prefix)),
-  );
+  const before = new Set(fs.readdirSync(os.tmpdir()).filter((name) => name.startsWith(prefix)));
   const controller = new AbortController();
   const operation = createPreparedPdf({
-    sourceBuffer: fs.readFileSync(
-      path.join(__dirname, 'fixtures', 'pdf', 'simple.pdf'),
-    ),
+    sourceBuffer: fs.readFileSync(path.join(__dirname, 'fixtures', 'pdf', 'simple.pdf')),
     signal: controller.signal,
   });
   setTimeout(() => controller.abort(), 20);
   await assert.rejects(
     operation,
-    (error) => (
-      error instanceof WorkerProcessError && error.code === 'WORKER_ABORTED'
-    ),
+    (error) => error instanceof WorkerProcessError && error.code === 'WORKER_ABORTED',
   );
   await delay(50);
-  const after = new Set(
-    fs.readdirSync(os.tmpdir()).filter((name) => name.startsWith(prefix)),
-  );
+  const after = new Set(fs.readdirSync(os.tmpdir()).filter((name) => name.startsWith(prefix)));
   assert.deepEqual(after, before);
 });

@@ -8,8 +8,7 @@ from pyhanko.sign import signers
 def main():
     if len(sys.argv) not in {5, 6}:
         raise SystemExit(
-            'usage: create_cms.py <content.bin> <cert.pem> <key.pem> '
-            '<output.der> [--attached]',
+            'usage: create_cms.py <content.bin> <cert.pem> <key.pem> <output.der> [--attached]',
         )
     content_path, cert_path, key_path, output_path = map(Path, sys.argv[1:5])
     signer = signers.SimpleSigner.load(

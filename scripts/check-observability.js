@@ -18,7 +18,9 @@ function parseMetrics(text) {
 
 function metric(metrics, name, labels = null) {
   const suffix = labels
-    ? `{${Object.entries(labels).map(([key, value]) => `${key}="${value}"`).join(',')}}`
+    ? `{${Object.entries(labels)
+        .map(([key, value]) => `${key}="${value}"`)
+        .join(',')}}`
     : '';
   return metrics.get(`${name}${suffix}`) || 0;
 }
@@ -56,7 +58,8 @@ function evaluate(snapshot, previous = {}) {
   if (sessionLimit > 0 && sessionUsed / sessionLimit >= 0.8) {
     persistent.push('session_memory_high');
   }
-  const resultUsed = metric(metrics, 'pdf_signing_result_disk_bytes', { kind: 'used' })
+  const resultUsed =
+    metric(metrics, 'pdf_signing_result_disk_bytes', { kind: 'used' })
     + metric(metrics, 'pdf_signing_result_disk_bytes', { kind: 'pending' });
   const resultLimit = metric(metrics, 'pdf_signing_result_disk_bytes', { kind: 'limit' });
   if (resultLimit > 0 && resultUsed / resultLimit >= 0.8) {
@@ -117,7 +120,12 @@ async function collect() {
     ['--user', 'show', 'pdf-signing-demo.service', '-p', 'ActiveState', '-p', 'NRestarts'],
     { encoding: 'utf8', timeout: 5000 },
   );
-  const properties = Object.fromEntries(serviceProperties.trim().split('\n').map((line) => line.split('=')));
+  const properties = Object.fromEntries(
+    serviceProperties
+      .trim()
+      .split('\n')
+      .map((line) => line.split('=')),
+  );
   return {
     checkedAt: new Date().toISOString(),
     localReady: await fetchOk(`${localBase}health/ready`),
@@ -149,25 +157,29 @@ async function main() {
   const tempPath = `${statePath}.${process.pid}.tmp`;
   await fsp.writeFile(tempPath, `${JSON.stringify(state)}\n`, { mode: 0o600 });
   await fsp.rename(tempPath, statePath);
-  process.stdout.write(`${JSON.stringify({
-    ok: evaluated.persistent.length === 0,
-    checkedAt: snapshot.checkedAt,
-    alerts: evaluated.alerts,
-    recovered: evaluated.recovered,
-    events: evaluated.events,
-    serviceState: snapshot.serviceState,
-    restarts: snapshot.restarts,
-    diskAvailableBytes: snapshot.diskAvailableBytes,
-  })}\n`);
+  process.stdout.write(
+    `${JSON.stringify({
+      ok: evaluated.persistent.length === 0,
+      checkedAt: snapshot.checkedAt,
+      alerts: evaluated.alerts,
+      recovered: evaluated.recovered,
+      events: evaluated.events,
+      serviceState: snapshot.serviceState,
+      restarts: snapshot.restarts,
+      diskAvailableBytes: snapshot.diskAvailableBytes,
+    })}\n`,
+  );
 }
 
 if (require.main === module) {
   main().catch((error) => {
-    process.stderr.write(`${JSON.stringify({
-      ok: false,
-      event: 'observability_check_failed',
-      message: String(error?.message || error).slice(0, 500),
-    })}\n`);
+    process.stderr.write(
+      `${JSON.stringify({
+        ok: false,
+        event: 'observability_check_failed',
+        message: String(error?.message || error).slice(0, 500),
+      })}\n`,
+    );
     process.exitCode = 1;
   });
 }

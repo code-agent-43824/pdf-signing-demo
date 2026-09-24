@@ -3,11 +3,19 @@ const os = require('os');
 const path = require('path');
 const { runIsolatedProcess } = require('../runtime/process-runner');
 
-const PREPARE_PYHANKO_SCRIPT_PATH = path.join(__dirname, '..', '..', 'scripts', 'prepare-pyhanko.py');
+const PREPARE_PYHANKO_SCRIPT_PATH = path.join(
+  __dirname,
+  '..',
+  '..',
+  'scripts',
+  'prepare-pyhanko.py',
+);
 const DEFAULT_SIGNATURE_LENGTH = 16000;
 
 function findLastByteRange(pdf) {
-  const matches = [...pdf.toString('latin1').matchAll(/\/ByteRange\s*\[\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s*\]/g)];
+  const matches = [
+    ...pdf.toString('latin1').matchAll(/\/ByteRange\s*\[\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s*\]/g),
+  ];
   if (!matches.length) {
     throw new Error('ByteRange not found');
   }
@@ -35,11 +43,10 @@ async function createPreparedPdfWithPyhanko({
         ...stampConfig,
         ...(requestedStampPosition ? { requestedStampPosition } : {}),
       };
-      await fsp.writeFile(
-        tempConfigPath,
-        `${JSON.stringify(effectiveConfig, null, 2)}\n`,
-        { encoding: 'utf8', mode: 0o600 },
-      );
+      await fsp.writeFile(tempConfigPath, `${JSON.stringify(effectiveConfig, null, 2)}\n`, {
+        encoding: 'utf8',
+        mode: 0o600,
+      });
     }
     await runIsolatedProcess(
       'python3',
@@ -81,7 +88,7 @@ async function createPreparedPdf({
   requestedStampPosition = null,
   signal = null,
 }) {
-  const source = sourceBuffer || await fsp.readFile(sourcePath);
+  const source = sourceBuffer || (await fsp.readFile(sourcePath));
   return createPreparedPdfWithPyhanko({
     source,
     signer,
@@ -94,11 +101,15 @@ async function createPreparedPdf({
 function embedCmsSignature({ preparedPdf, byteRange, cmsBase64, placeholderLength }) {
   const raw = Buffer.from(cmsBase64, 'base64');
   if (raw.length * 2 > placeholderLength) {
-    throw new Error(`CMS signature exceeds placeholder length: ${raw.length * 2} > ${placeholderLength}`);
+    throw new Error(
+      `CMS signature exceeds placeholder length: ${raw.length * 2} > ${placeholderLength}`,
+    );
   }
 
   let signatureHex = raw.toString('hex');
-  signatureHex += Buffer.from(String.fromCharCode(0).repeat(placeholderLength / 2 - raw.length)).toString('hex');
+  signatureHex += Buffer.from(
+    String.fromCharCode(0).repeat(placeholderLength / 2 - raw.length),
+  ).toString('hex');
 
   return Buffer.concat([
     preparedPdf.slice(0, byteRange[1]),

@@ -1,19 +1,9 @@
 const crypto = require('crypto');
 const path = require('path');
-const {
-  FixedWindowRateLimiter,
-} = require('./http/rate-limit');
-const {
-  OperationQueue,
-  positiveInteger,
-} = require('./runtime/operation-queue');
-const {
-  createResultStore,
-  createSessionStore,
-} = require('./storage/lifecycle');
-const {
-  createStampConfiguration,
-} = require('./stamp/configuration');
+const { FixedWindowRateLimiter } = require('./http/rate-limit');
+const { OperationQueue, positiveInteger } = require('./runtime/operation-queue');
+const { createResultStore, createSessionStore } = require('./storage/lifecycle');
+const { createStampConfiguration } = require('./stamp/configuration');
 const { createApplication } = require('./application');
 const { startServer } = require('./bootstrap');
 const { createObservabilityMetrics } = require('./observability/metrics');
@@ -31,11 +21,9 @@ const resultsDir = process.env.RESULTS_DIR
 const resultsRelativeToPublic = path.relative(publicDir, resultsDir);
 if (
   resultsRelativeToPublic === ''
-  || (
-    !resultsRelativeToPublic.startsWith(`..${path.sep}`)
+  || (!resultsRelativeToPublic.startsWith(`..${path.sep}`)
     && resultsRelativeToPublic !== '..'
-    && !path.isAbsolute(resultsRelativeToPublic)
-  )
+    && !path.isAbsolute(resultsRelativeToPublic))
 ) {
   throw new Error('RESULTS_DIR must be outside the public web root.');
 }
@@ -65,12 +53,7 @@ const sessions = createSessionStore({
   ttlMs: sessionTtlMs,
   tombstoneTtlMs: sessionTtlMs,
   maxSessions: positiveInteger(process.env.SIGNING_MAX_SESSIONS, 16, 1, 256),
-  maxSessionsPerOwner: positiveInteger(
-    process.env.SIGNING_MAX_SESSIONS_PER_IP,
-    3,
-    1,
-    32,
-  ),
+  maxSessionsPerOwner: positiveInteger(process.env.SIGNING_MAX_SESSIONS_PER_IP, 3, 1, 32),
   maxMemoryBytes: positiveInteger(
     process.env.SIGNING_SESSION_MEMORY_BYTES,
     64 * 1024 * 1024,
@@ -94,12 +77,7 @@ const operationQueue = new OperationQueue({
   concurrency: positiveInteger(process.env.SIGNING_CONCURRENCY, 1, 1, 8),
   maxQueue: positiveInteger(process.env.SIGNING_MAX_QUEUE, 8, 1, 64),
   perKeyConcurrency: 1,
-  queueTimeoutMs: positiveInteger(
-    process.env.SIGNING_QUEUE_TIMEOUT_MS,
-    5000,
-    100,
-    60000,
-  ),
+  queueTimeoutMs: positiveInteger(process.env.SIGNING_QUEUE_TIMEOUT_MS, 5000, 100, 60000),
   operationTimeoutMs: positiveInteger(
     process.env.SIGNING_OPERATION_TIMEOUT_MS,
     60000,
@@ -129,10 +107,7 @@ const stampConfiguration = createStampConfiguration({
 const metrics = createObservabilityMetrics();
 
 function ownerKeyForRequest(req) {
-  return crypto
-    .createHmac('sha256', storageOwnerSecret)
-    .update(req.ip)
-    .digest('hex');
+  return crypto.createHmac('sha256', storageOwnerSecret).update(req.ip).digest('hex');
 }
 
 const app = createApplication({

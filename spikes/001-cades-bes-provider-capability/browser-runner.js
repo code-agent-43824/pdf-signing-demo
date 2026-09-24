@@ -16,7 +16,9 @@
   async function fixtureSha256() {
     const bytes = Uint8Array.from(FIXTURE_HEX.match(/../g), (part) => Number.parseInt(part, 16));
     const digest = await root.crypto.subtle.digest('SHA-256', bytes);
-    return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+    return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join(
+      '',
+    );
   }
 
   function selectedCertificate(provider) {
@@ -38,7 +40,12 @@
 
   async function signCryptoPro(plugin, certificate, detached) {
     const signer = await createCryptoProObject(plugin, 'CAdESCOM.CPSigner');
-    await setCryptoProProperty(signer, 'propset_Certificate', 'Certificate', certificate.certificate);
+    await setCryptoProProperty(
+      signer,
+      'propset_Certificate',
+      'Certificate',
+      certificate.certificate,
+    );
     const signedData = await createCryptoProObject(plugin, 'CAdESCOM.CadesSignedData');
     await setCryptoProProperty(
       signedData,
@@ -47,11 +54,7 @@
       plugin.CADESCOM_BASE64_TO_BINARY,
     );
     await setCryptoProProperty(signedData, 'propset_Content', 'Content', fixtureBase64());
-    return normalizeBase64(await signedData.SignCades(
-      signer,
-      plugin.CADESCOM_CADES_BES,
-      detached,
-    ));
+    return normalizeBase64(await signedData.SignCades(signer, plugin.CADESCOM_CADES_BES, detached));
   }
 
   async function runCryptoPro() {
@@ -64,18 +67,20 @@
   }
 
   async function signRutoken(plugin, certificate, detached) {
-    return normalizeBase64(await plugin.sign(
-      certificate.deviceId,
-      certificate.certId,
-      fixtureBase64(),
-      plugin.DATA_FORMAT_BASE64,
-      {
-        detached,
-        addUserCertificate: true,
-        addSignTime: true,
-        addEssCert: true,
-      },
-    ));
+    return normalizeBase64(
+      await plugin.sign(
+        certificate.deviceId,
+        certificate.certId,
+        fixtureBase64(),
+        plugin.DATA_FORMAT_BASE64,
+        {
+          detached,
+          addUserCertificate: true,
+          addSignTime: true,
+          addEssCert: true,
+        },
+      ),
+    );
   }
 
   async function runRutoken() {
@@ -118,5 +123,11 @@
     results.clear();
   }
 
-  root.CadesBesProviderSpike = Object.freeze({ clear, exportBundle, runCryptoPro, runRutoken, status });
-}(window));
+  root.CadesBesProviderSpike = Object.freeze({
+    clear,
+    exportBundle,
+    runCryptoPro,
+    runRutoken,
+    status,
+  });
+})(window);

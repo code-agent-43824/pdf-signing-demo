@@ -9,14 +9,8 @@ const PROJECT_ROOT = path.resolve(__dirname, '..');
 const VENDOR_DIR = path.join(PROJECT_ROOT, 'public', 'vendor');
 
 test('runtime crypto scripts are local, checksummed and SRI-pinned', () => {
-  const manifest = fs.readFileSync(
-    path.join(VENDOR_DIR, 'SHA256SUMS'),
-    'utf8',
-  );
-  const app = fs.readFileSync(
-    path.join(PROJECT_ROOT, 'public', 'app.js'),
-    'utf8',
-  );
+  const manifest = fs.readFileSync(path.join(VENDOR_DIR, 'SHA256SUMS'), 'utf8');
+  const app = fs.readFileSync(path.join(PROJECT_ROOT, 'public', 'app.js'), 'utf8');
   const entries = manifest
     .trim()
     .split('\n')
@@ -26,26 +20,18 @@ test('runtime crypto scripts are local, checksummed and SRI-pinned', () => {
       return { expected: match[1], name: match[2] };
     });
 
-  assert.deepEqual(
-    entries.map(({ name }) => name).sort(),
-    ['cadesplugin_api.js', 'rutoken-plugin.min.js'],
-  );
+  assert.deepEqual(entries.map(({ name }) => name).sort(), [
+    'cadesplugin_api.js',
+    'rutoken-plugin.min.js',
+  ]);
   for (const { expected, name } of entries) {
     const content = fs.readFileSync(path.join(VENDOR_DIR, name));
-    assert.equal(
-      crypto.createHash('sha256').update(content).digest('hex'),
-      expected,
-    );
-    const sri = `sha384-${crypto
-      .createHash('sha384')
-      .update(content)
-      .digest('base64')}`;
+    assert.equal(crypto.createHash('sha256').update(content).digest('hex'), expected);
+    const sri = `sha384-${crypto.createHash('sha384').update(content).digest('base64')}`;
     assert.match(app, new RegExp(sri.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   }
 
-  const runtimeConfig = app.match(
-    /const CRYPTO_SCRIPTS = \{[\s\S]*?\n\};/,
-  )?.[0] || '';
+  const runtimeConfig = app.match(/const CRYPTO_SCRIPTS = \{[\s\S]*?\n\};/)?.[0] || '';
   assert.match(runtimeConfig, /cryptopro:[\s\S]*\.\/vendor\/cadesplugin_api\.js/);
   assert.match(runtimeConfig, /rutoken:[\s\S]*\.\/vendor\/rutoken-plugin\.min\.js/);
   assert.doesNotMatch(runtimeConfig, /https?:\/\//);
@@ -110,15 +96,15 @@ test('CryptoPro loader reads the install-prompt flag when its load timer fires',
 
   const prompting = loadCryptoProLoaderInFirefox();
   prompting.timers[0]();
-  assert.deepEqual(prompting.appended.map(({ id }) => id), ['cadesplugin_ovr']);
+  assert.deepEqual(
+    prompting.appended.map(({ id }) => id),
+    ['cadesplugin_ovr'],
+  );
   await assert.rejects(prompting.sandbox.cadesplugin, /Истекло время ожидания загрузки плагина/);
 });
 
 test('HTML has no inline script or event-handler escape hatch', () => {
-  const html = fs.readFileSync(
-    path.join(PROJECT_ROOT, 'public', 'index.html'),
-    'utf8',
-  );
+  const html = fs.readFileSync(path.join(PROJECT_ROOT, 'public', 'index.html'), 'utf8');
   const scripts = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)];
   assert.ok(scripts.length > 0);
   for (const script of scripts) {

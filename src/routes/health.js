@@ -41,10 +41,7 @@ function createHealthRouter({
 
     try {
       const config = stampConfiguration.parse(stampConfiguration.read());
-      const clientConfig = stampConfiguration.toClient(
-        config,
-        stampConfiguration.createCatalog(),
-      );
+      const clientConfig = stampConfiguration.toClient(config, stampConfiguration.createCatalog());
       validateStampConfig(clientConfig);
       checks.config = true;
     } catch {}
@@ -63,9 +60,7 @@ function createHealthRouter({
 
   async function getReadiness() {
     const now = Date.now();
-    let base = readinessValue && now < readinessExpiresAt
-      ? readinessValue
-      : null;
+    let base = readinessValue && now < readinessExpiresAt ? readinessValue : null;
     if (!base) {
       if (!readinessInFlight) {
         readinessInFlight = computeReadiness()
@@ -81,8 +76,7 @@ function createHealthRouter({
       base = await readinessInFlight;
     }
     const queueStats = operationQueue.stats();
-    const workerQueue = queueStats.concurrency > 0
-      && queueStats.queued <= queueStats.maxQueue;
+    const workerQueue = queueStats.concurrency > 0 && queueStats.queued <= queueStats.maxQueue;
     return {
       ...base,
       ok: base.ok && workerQueue,
@@ -112,11 +106,13 @@ function createHealthRouter({
   });
 
   router.get('/metrics', (_req, res) => {
-    res.type('text/plain; version=0.0.4; charset=utf-8').send(metrics.render({
-      operationQueue,
-      results,
-      sessions,
-    }));
+    res.type('text/plain; version=0.0.4; charset=utf-8').send(
+      metrics.render({
+        operationQueue,
+        results,
+        sessions,
+      }),
+    );
   });
 
   return router;

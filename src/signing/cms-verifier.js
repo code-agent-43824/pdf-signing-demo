@@ -1,10 +1,7 @@
 const fsp = require('fs/promises');
 const os = require('os');
 const path = require('path');
-const {
-  WorkerProcessError,
-  runIsolatedProcess,
-} = require('../runtime/process-runner');
+const { WorkerProcessError, runIsolatedProcess } = require('../runtime/process-runner');
 
 const VERIFY_CMS_SCRIPT_PATH = path.join(__dirname, '..', '..', 'scripts', 'verify-cms.py');
 
@@ -38,16 +35,12 @@ async function withPrivateTempDir(callback) {
 
 async function runVerifier(args, { cwd, signal } = {}) {
   try {
-    const result = await runIsolatedProcess(
-      'python3',
-      [VERIFY_CMS_SCRIPT_PATH, ...args],
-      {
-        cwd,
-        signal,
-        timeoutMs: 15000,
-        maxBuffer: 1024 * 1024,
-      },
-    );
+    const result = await runIsolatedProcess('python3', [VERIFY_CMS_SCRIPT_PATH, ...args], {
+      cwd,
+      signal,
+      timeoutMs: 15000,
+      maxBuffer: 1024 * 1024,
+    });
     return JSON.parse(result.stdout);
   } catch (error) {
     if (
@@ -68,10 +61,7 @@ function inspectCertificate(certificateDer, { signal = null } = {}) {
   return withPrivateTempDir(async (tempDir) => {
     const certificatePath = path.join(tempDir, 'certificate.der');
     await writePrivateFile(certificatePath, certificateDer);
-    return runVerifier(
-      ['inspect-certificate', certificatePath],
-      { cwd: tempDir, signal },
-    );
+    return runVerifier(['inspect-certificate', certificatePath], { cwd: tempDir, signal });
   });
 }
 
@@ -84,16 +74,16 @@ async function verifyCmsSignature({
   return withPrivateTempDir(async (tempDir) => {
     const cmsPath = path.join(tempDir, 'signature.der');
     const contentPath = path.join(tempDir, 'content.bin');
-    await Promise.all([
-      writePrivateFile(cmsPath, cmsDer),
-      writePrivateFile(contentPath, content),
-    ]);
-    return runVerifier([
-      'verify',
-      cmsPath,
-      contentPath,
-      ...(expectedCertificateSha256 ? [expectedCertificateSha256] : []),
-    ], { cwd: tempDir, signal });
+    await Promise.all([writePrivateFile(cmsPath, cmsDer), writePrivateFile(contentPath, content)]);
+    return runVerifier(
+      [
+        'verify',
+        cmsPath,
+        contentPath,
+        ...(expectedCertificateSha256 ? [expectedCertificateSha256] : []),
+      ],
+      { cwd: tempDir, signal },
+    );
   });
 }
 
@@ -113,7 +103,7 @@ function readDerLength(payload) {
   }
   const contentLength = payload
     .subarray(2, 2 + lengthOctets)
-    .reduce((value, octet) => (value * 256) + octet, 0);
+    .reduce((value, octet) => value * 256 + octet, 0);
   if (contentLength < 128) {
     throw new CmsVerificationError('NON_CANONICAL_CMS_DER');
   }
@@ -166,24 +156,25 @@ function extractEmbeddedSignatures(pdf) {
   return signatures;
 }
 
-async function verifyEveryEmbeddedSignature(pdf, {
-  expectedLastCertificateSha256 = null,
-  signal = null,
-} = {}) {
+async function verifyEveryEmbeddedSignature(
+  pdf,
+  { expectedLastCertificateSha256 = null, signal = null } = {},
+) {
   const signatures = extractEmbeddedSignatures(pdf);
   if (signatures.length === 0) {
     throw new CmsVerificationError('PDF_SIGNATURE_NOT_FOUND');
   }
   const results = [];
   for (const [index, signature] of signatures.entries()) {
-    results.push(await verifyCmsSignature({
-      cmsDer: signature.cmsDer,
-      content: signature.content,
-      expectedCertificateSha256: (
-        index === signatures.length - 1 ? expectedLastCertificateSha256 : null
-      ),
-      signal,
-    }));
+    results.push(
+      await verifyCmsSignature({
+        cmsDer: signature.cmsDer,
+        content: signature.content,
+        expectedCertificateSha256:
+          index === signatures.length - 1 ? expectedLastCertificateSha256 : null,
+        signal,
+      }),
+    );
   }
   return results;
 }

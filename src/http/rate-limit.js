@@ -1,10 +1,5 @@
 class FixedWindowRateLimiter {
-  constructor({
-    limit,
-    windowMs,
-    now = () => Date.now(),
-    maxEntries = 10000,
-  }) {
+  constructor({ limit, windowMs, now = () => Date.now(), maxEntries = 10000 }) {
     this.limit = limit;
     this.windowMs = windowMs;
     this.now = now;
@@ -53,11 +48,9 @@ function createRateLimitMiddleware({ limiter, HttpError, scope }) {
     res.setHeader('RateLimit-Reset', Math.max(1, Math.ceil(result.retryAfterMs / 1000)));
     if (result.allowed) return next();
     res.setHeader('Retry-After', Math.max(1, Math.ceil(result.retryAfterMs / 1000)));
-    return next(new HttpError(
-      429,
-      'RATE_LIMITED',
-      'Слишком много запросов. Повторите попытку позже.',
-    ));
+    return next(
+      new HttpError(429, 'RATE_LIMITED', 'Слишком много запросов. Повторите попытку позже.'),
+    );
   };
 }
 

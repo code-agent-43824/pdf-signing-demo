@@ -2,17 +2,15 @@
   function isCertificateDateWindowValid(validFromDate, validToDate, now = Date.now()) {
     const validFrom = new Date(validFromDate);
     const validTo = new Date(validToDate);
-    return !Number.isNaN(validFrom.getTime())
+    return (
+      !Number.isNaN(validFrom.getTime())
       && !Number.isNaN(validTo.getTime())
       && validFrom.getTime() <= now
-      && validTo.getTime() > now;
+      && validTo.getTime() > now
+    );
   }
 
-  function isSigningKeyUsageAllowed({
-    present,
-    digitalSignature,
-    nonRepudiation,
-  }) {
+  function isSigningKeyUsageAllowed({ present, digitalSignature, nonRepudiation }) {
     return present === false || digitalSignature === true || nonRepudiation === true;
   }
 
@@ -49,7 +47,10 @@
         const separatorIndex = part.indexOf('=');
         if (separatorIndex === -1) return accumulator;
         const key = part.slice(0, separatorIndex).trim();
-        const valuePart = part.slice(separatorIndex + 1).trim().replace(/^"|"$/g, '');
+        const valuePart = part
+          .slice(separatorIndex + 1)
+          .trim()
+          .replace(/^"|"$/g, '');
         if (key) accumulator[key] = valuePart;
         return accumulator;
       }, {});
@@ -85,4 +86,4 @@
     isSigningKeyUsageAllowed,
     parseDistinguishedName,
   });
-}(window));
+})(window);

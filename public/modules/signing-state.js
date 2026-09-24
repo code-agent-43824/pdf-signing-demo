@@ -28,11 +28,15 @@
 
     return Object.freeze({
       can,
-      get phase() { return phase; },
-      get active() { return activePhases.has(phase); },
+      get phase() {
+        return phase;
+      },
+      get active() {
+        return activePhases.has(phase);
+      },
       transition,
     });
   }
 
   root.PdfSigningState = Object.freeze({ createSigningStateMachine });
-}(window));
+})(window);

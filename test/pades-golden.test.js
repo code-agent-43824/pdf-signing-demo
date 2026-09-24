@@ -6,10 +6,7 @@ const path = require('node:path');
 const { execFileSync, spawnSync } = require('node:child_process');
 const { after, before, test } = require('node:test');
 
-const {
-  createPreparedPdf,
-  embedCmsSignature,
-} = require('../src/signing/pades');
+const { createPreparedPdf, embedCmsSignature } = require('../src/signing/pades');
 const {
   CmsVerificationError,
   verifyCmsSignature,
@@ -43,7 +40,7 @@ function derPayloadLength(payload) {
   assert.ok(lengthOctets > 0 && lengthOctets <= 4, 'unsupported DER length');
   let contentLength = 0;
   for (let index = 0; index < lengthOctets; index += 1) {
-    contentLength = (contentLength * 256) + payload[2 + index];
+    contentLength = contentLength * 256 + payload[2 + index];
   }
   return 2 + lengthOctets + contentLength;
 }
@@ -108,11 +105,7 @@ function validateEveryCmsWithOpenSsl(pdf, label) {
 }
 
 function validatePdfWithPyHanko(pdfPath) {
-  const raw = run('python3', [
-    path.join('test', 'validate_pdf.py'),
-    pdfPath,
-    certPath,
-  ]);
+  const raw = run('python3', [path.join('test', 'validate_pdf.py'), pdfPath, certPath]);
   return JSON.parse(raw);
 }
 
@@ -264,10 +257,12 @@ test('one through four incremental signatures preserve and validate every signat
 
     const cms = createCms(prepared.contentToSign, signatureIndex);
     assert.equal(
-      (await verifyCmsSignature({
-        cmsDer: cms,
-        content: prepared.contentToSign,
-      })).ok,
+      (
+        await verifyCmsSignature({
+          cmsDer: cms,
+          content: prepared.contentToSign,
+        })
+      ).ok,
       true,
     );
     currentPdf = embedCmsSignature({
@@ -281,15 +276,9 @@ test('one through four incremental signatures preserve and validate every signat
     const signedPdfPath = path.join(tempDir, `signed-${signatureIndex}.pdf`);
     fs.writeFileSync(signedPdfPath, currentPdf);
 
-    const opensslResults = validateEveryCmsWithOpenSsl(
-      currentPdf,
-      `signed-${signatureIndex}`,
-    );
+    const opensslResults = validateEveryCmsWithOpenSsl(currentPdf, `signed-${signatureIndex}`);
     assert.equal(opensslResults.length, signatureIndex);
-    assert.equal(
-      (await verifyEveryEmbeddedSignature(currentPdf)).length,
-      signatureIndex,
-    );
+    assert.equal((await verifyEveryEmbeddedSignature(currentPdf)).length, signatureIndex);
 
     const pyhankoResult = validatePdfWithPyHanko(signedPdfPath);
     assert.equal(pyhankoResult.ok, true);
@@ -305,15 +294,19 @@ test('one through four incremental signatures preserve and validate every signat
 
 test('malformed PDF is rejected by the preparation pipeline', async () => {
   const outputPath = path.join(tempDir, 'malformed-prepared.pdf');
-  const preparation = spawnSync('python3', [
-    path.join(PROJECT_ROOT, 'scripts', 'prepare-pyhanko.py'),
-    path.join(FIXTURE_ROOT, 'invalid', 'malformed.pdf'),
-    '{}',
-    outputPath,
-  ], {
-    cwd: PROJECT_ROOT,
-    encoding: 'utf8',
-  });
+  const preparation = spawnSync(
+    'python3',
+    [
+      path.join(PROJECT_ROOT, 'scripts', 'prepare-pyhanko.py'),
+      path.join(FIXTURE_ROOT, 'invalid', 'malformed.pdf'),
+      '{}',
+      outputPath,
+    ],
+    {
+      cwd: PROJECT_ROOT,
+      encoding: 'utf8',
+    },
+  );
   assert.notEqual(preparation.status, 0);
   assert.match(preparation.stderr, /PdfReadError|malformed PDF/i);
   assert.equal(fs.existsSync(outputPath), false);
@@ -335,9 +328,7 @@ test('CMS verifier rejects malformed CMS and content or signature tampering', as
 
   await assert.rejects(
     verifyCmsSignature({
-      cmsDer: fs.readFileSync(
-        path.join(FIXTURE_ROOT, 'invalid', 'malformed-cms.der'),
-      ),
+      cmsDer: fs.readFileSync(path.join(FIXTURE_ROOT, 'invalid', 'malformed-cms.der')),
       content: prepared.contentToSign,
     }),
     CmsVerificationError,
@@ -347,10 +338,7 @@ test('CMS verifier rejects malformed CMS and content or signature tampering', as
   tamperedContent[0] ^= 0x01;
   await assert.rejects(
     verifyCmsSignature({ cmsDer: cms, content: tamperedContent }),
-    (error) => (
-      error instanceof CmsVerificationError
-      && error.code === 'CONTENT_DIGEST_MISMATCH'
-    ),
+    (error) => error instanceof CmsVerificationError && error.code === 'CONTENT_DIGEST_MISMATCH',
   );
 
   const tamperedCms = Buffer.from(cms);
@@ -368,10 +356,7 @@ test('CMS verifier rejects malformed CMS and content or signature tampering', as
       cmsDer: createCms(prepared.contentToSign, 'attached', { attached: true }),
       content: prepared.contentToSign,
     }),
-    (error) => (
-      error instanceof CmsVerificationError
-      && error.code === 'CMS_MUST_BE_DETACHED'
-    ),
+    (error) => error instanceof CmsVerificationError && error.code === 'CMS_MUST_BE_DETACHED',
   );
 
   await assert.rejects(
@@ -379,9 +364,6 @@ test('CMS verifier rejects malformed CMS and content or signature tampering', as
       cmsDer: createNonCadesCms(prepared.contentToSign, 'missing-ess'),
       content: prepared.contentToSign,
     }),
-    (error) => (
-      error instanceof CmsVerificationError
-      && error.code === 'INVALID_SIGNED_ATTRIBUTES'
-    ),
+    (error) => error instanceof CmsVerificationError && error.code === 'INVALID_SIGNED_ATTRIBUTES',
   );
 });

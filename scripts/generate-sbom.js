@@ -97,11 +97,5 @@ function generatePythonSbom() {
 }
 
 fs.mkdirSync(outputDir, { recursive: true });
-fs.writeFileSync(
-  path.join(outputDir, 'node.cdx.json'),
-  stableJson(generateNodeSbom()),
-);
-fs.writeFileSync(
-  path.join(outputDir, 'python.cdx.json'),
-  stableJson(generatePythonSbom()),
-);
+fs.writeFileSync(path.join(outputDir, 'node.cdx.json'), stableJson(generateNodeSbom()));
+fs.writeFileSync(path.join(outputDir, 'python.cdx.json'), stableJson(generatePythonSbom()));

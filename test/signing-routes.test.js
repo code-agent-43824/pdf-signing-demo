@@ -1,8 +1,6 @@
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
-const {
-  createVerificationResult,
-} = require('../src/routes/signing');
+const { createVerificationResult } = require('../src/routes/signing');
 
 test('signing verification response preserves independent status semantics', () => {
   const result = createVerificationResult(

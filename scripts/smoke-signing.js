@@ -51,43 +51,48 @@ async function main() {
   const signedPdfPath = path.join(tempDir, 'signed.pdf');
 
   run('openssl', [
-    'req', '-x509', '-newkey', 'rsa:2048', '-nodes',
-    '-subj', '/CN=PDF Signing Deployment Smoke',
-    '-keyout', keyPath, '-out', certPath, '-days', '2',
+    'req',
+    '-x509',
+    '-newkey',
+    'rsa:2048',
+    '-nodes',
+    '-subj',
+    '/CN=PDF Signing Deployment Smoke',
+    '-keyout',
+    keyPath,
+    '-out',
+    certPath,
+    '-days',
+    '2',
   ]);
-  run('openssl', [
-    'x509', '-in', certPath, '-outform', 'DER', '-out', certDerPath,
-  ]);
+  run('openssl', ['x509', '-in', certPath, '-outform', 'DER', '-out', certDerPath]);
 
-  const ready = JSON.parse(await expectOk(
-    await fetch(new URL('health/ready', baseUrl)),
-    'readiness',
-  ));
+  const ready = JSON.parse(
+    await expectOk(await fetch(new URL('health/ready', baseUrl)), 'readiness'),
+  );
   assert.equal(ready.ok, true);
 
-  const prepare = JSON.parse(await expectOk(
-    await postJson('api/sign/prepare', {
-      signer: { certificateBase64: fs.readFileSync(certDerPath).toString('base64') },
-    }),
-    'prepare',
-  ));
+  const prepare = JSON.parse(
+    await expectOk(
+      await postJson('api/sign/prepare', {
+        signer: { certificateBase64: fs.readFileSync(certDerPath).toString('base64') },
+      }),
+      'prepare',
+    ),
+  );
   assert.equal(prepare.ok, true);
   fs.writeFileSync(contentPath, Buffer.from(prepare.contentToSignBase64, 'base64'));
-  run('python3', [
-    path.join('test', 'create_cms.py'),
-    contentPath,
-    certPath,
-    keyPath,
-    cmsPath,
-  ]);
+  run('python3', [path.join('test', 'create_cms.py'), contentPath, certPath, keyPath, cmsPath]);
 
-  const complete = JSON.parse(await expectOk(
-    await postJson('api/sign/complete', {
-      sessionId: prepare.sessionId,
-      cmsSignatureBase64: fs.readFileSync(cmsPath).toString('base64'),
-    }),
-    'complete',
-  ));
+  const complete = JSON.parse(
+    await expectOk(
+      await postJson('api/sign/complete', {
+        sessionId: prepare.sessionId,
+        cmsSignatureBase64: fs.readFileSync(cmsPath).toString('base64'),
+      }),
+      'complete',
+    ),
+  );
   assert.equal(complete.verification.integrity.status, 'valid');
   assert.equal(complete.verification.trust.status, 'not_checked');
   assert.equal(complete.verification.qualified.status, 'not_checked');
@@ -96,30 +101,31 @@ async function main() {
   const preview2 = await fetchPdf(complete.signedPdfUrl, 'preview 2');
   const download1 = await fetchPdf(complete.downloadUrl, 'download 1');
   const download2 = await fetchPdf(complete.downloadUrl, 'download 2');
-  const hashes = [preview1, preview2, download1, download2]
-    .map((payload) => crypto.createHash('sha256').update(payload).digest('hex'));
+  const hashes = [preview1, preview2, download1, download2].map((payload) =>
+    crypto.createHash('sha256').update(payload).digest('hex'),
+  );
   assert.equal(new Set(hashes).size, 1, 'preview/download payloads differ');
 
   fs.writeFileSync(signedPdfPath, download1);
-  const validation = JSON.parse(run('python3', [
-    path.join('test', 'validate_pdf.py'),
-    signedPdfPath,
-    certPath,
-  ]));
+  const validation = JSON.parse(
+    run('python3', [path.join('test', 'validate_pdf.py'), signedPdfPath, certPath]),
+  );
   assert.equal(validation.ok, true);
   assert.equal(validation.signatures.length, 1);
   assert.equal(validation.signatures[0].coverage, 'ENTIRE_FILE');
 
-  process.stdout.write(`${JSON.stringify({
-    ok: true,
-    sha256: hashes[0],
-    verification: {
-      integrity: complete.verification.integrity.status,
-      trust: complete.verification.trust.status,
-      qualified: complete.verification.qualified.status,
-    },
-    pdfValidation: validation.signatures[0],
-  })}\n`);
+  process.stdout.write(
+    `${JSON.stringify({
+      ok: true,
+      sha256: hashes[0],
+      verification: {
+        integrity: complete.verification.integrity.status,
+        trust: complete.verification.trust.status,
+        qualified: complete.verification.qualified.status,
+      },
+      pdfValidation: validation.signatures[0],
+    })}\n`,
+  );
 }
 
 main()

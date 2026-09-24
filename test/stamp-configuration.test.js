@@ -5,9 +5,7 @@ const path = require('node:path');
 const { afterEach, test } = require('node:test');
 
 const { HttpError } = require('../src/http/validation');
-const {
-  createStampConfiguration,
-} = require('../src/stamp/configuration');
+const { createStampConfiguration } = require('../src/stamp/configuration');
 
 const temporaryDirectories = [];
 
@@ -49,12 +47,7 @@ function createFixture() {
 }
 
 test('stamp configuration maps server font paths to opaque IDs and back', () => {
-  const {
-    boldFont,
-    config,
-    regularFont,
-    service,
-  } = createFixture();
+  const { boldFont, config, regularFont, service } = createFixture();
   const catalog = service.createCatalog();
   const clientConfig = service.toClient(config, catalog);
 
@@ -68,7 +61,10 @@ test('stamp configuration maps server font paths to opaque IDs and back', () => 
     catalog.fonts.map((font) => ({ id: font.id, label: font.label })),
   );
   assert.deepEqual(
-    service.listAvailable(catalog).map((font) => font.label).sort(),
+    service
+      .listAvailable(catalog)
+      .map((font) => font.label)
+      .sort(),
     ['Bold', 'Regular'],
   );
 
@@ -93,11 +89,7 @@ test('stamp configuration rejects unavailable paths and unknown opaque IDs', () 
   clientConfig.appearance.fonts.title.path = 'font-0000000000000000';
   assert.throws(
     () => service.toServer(clientConfig, catalog),
-    (error) => (
-      error instanceof HttpError
-      && error.status === 400
-      && error.code === 'UNKNOWN_FONT'
-    ),
+    (error) => error instanceof HttpError && error.status === 400 && error.code === 'UNKNOWN_FONT',
   );
 });
 

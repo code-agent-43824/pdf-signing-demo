@@ -3,11 +3,7 @@ const fs = require('fs');
 const { HttpError, validateStampConfig } = require('../http/validation');
 const { sendSafeError } = require('../http/errors');
 
-function createPublicRouter({
-  formPdfName,
-  formPdfPath,
-  stampConfiguration,
-}) {
+function createPublicRouter({ formPdfName, formPdfPath, stampConfiguration }) {
   const router = express.Router();
 
   router.get('/api/stamp-config', (req, res) => {
@@ -19,9 +15,10 @@ function createPublicRouter({
       validateStampConfig(clientConfig);
       res.json({ ok: true, config: clientConfig });
     } catch (error) {
-      const serverError = error instanceof HttpError
-        ? new Error(`Server stamp configuration validation failed: ${error.message}`)
-        : error;
+      const serverError =
+        error instanceof HttpError
+          ? new Error(`Server stamp configuration validation failed: ${error.message}`)
+          : error;
       sendSafeError(req, res, serverError);
     }
   });

@@ -24,12 +24,7 @@ class OperationQueue {
     this.maxQueue = positiveInteger(maxQueue, 8, 1, 128);
     this.perKeyConcurrency = positiveInteger(perKeyConcurrency, 1, 1, 8);
     this.queueTimeoutMs = positiveInteger(queueTimeoutMs, 5000, 100, 60000);
-    this.operationTimeoutMs = positiveInteger(
-      operationTimeoutMs,
-      60000,
-      1000,
-      300000,
-    );
+    this.operationTimeoutMs = positiveInteger(operationTimeoutMs, 60000, 1000, 300000);
     this.active = 0;
     this.activeByKey = new Map();
     this.pending = [];

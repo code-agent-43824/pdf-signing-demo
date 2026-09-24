@@ -105,37 +105,47 @@ function createApplication({
     }
     return next();
   });
-  app.use(express.json({
-    limit: '15mb',
-    strict: true,
-  }));
+  app.use(
+    express.json({
+      limit: '15mb',
+      strict: true,
+    }),
+  );
 
   const router = express.Router();
-  router.use('/health', createHealthRouter({
-    metrics,
-    operationQueue,
-    results,
-    resultsDir,
-    sessions,
-    stampConfiguration,
-  }));
-  router.use(createPublicRouter({
-    formPdfName,
-    formPdfPath,
-    stampConfiguration,
-  }));
+  router.use(
+    '/health',
+    createHealthRouter({
+      metrics,
+      operationQueue,
+      results,
+      resultsDir,
+      sessions,
+      stampConfiguration,
+    }),
+  );
+  router.use(
+    createPublicRouter({
+      formPdfName,
+      formPdfPath,
+      stampConfiguration,
+    }),
+  );
   router.use('/api/results', createResultsRouter({ results }));
-  router.use('/api/sign', createSigningRouter({
-    completeRateLimiter,
-    formPdfPath,
-    metrics,
-    operationQueue,
-    ownerKeyForRequest,
-    prepareRateLimiter,
-    results,
-    sessions,
-    stampConfiguration,
-  }));
+  router.use(
+    '/api/sign',
+    createSigningRouter({
+      completeRateLimiter,
+      formPdfPath,
+      metrics,
+      operationQueue,
+      ownerKeyForRequest,
+      prepareRateLimiter,
+      results,
+      sessions,
+      stampConfiguration,
+    }),
+  );
   router.use(express.static(publicDir, { extensions: ['html'] }));
   app.use(basePath, router);
   app.use((error, req, res, _next) => {
@@ -143,22 +153,14 @@ function createApplication({
       return sendSafeError(
         req,
         res,
-        new HttpError(
-          413,
-          'REQUEST_TOO_LARGE',
-          'Размер запроса превышает допустимый лимит.',
-        ),
+        new HttpError(413, 'REQUEST_TOO_LARGE', 'Размер запроса превышает допустимый лимит.'),
       );
     }
     if (error instanceof SyntaxError && error?.type === 'entity.parse.failed') {
       return sendSafeError(
         req,
         res,
-        new HttpError(
-          400,
-          'INVALID_JSON',
-          'Передан некорректный JSON.',
-        ),
+        new HttpError(400, 'INVALID_JSON', 'Передан некорректный JSON.'),
       );
     }
     return sendSafeError(req, res, error);

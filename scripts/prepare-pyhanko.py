@@ -17,7 +17,10 @@ from pyhanko.sign import fields
 from pyhanko.sign.fields import enumerate_sig_fields
 from pyhanko.sign.signers import cms_embedder, pdf_byterange
 
-CONFIG_PATH = Path(os.environ.get('STAMP_CONFIG_PATH') or Path(__file__).resolve().parents[1] / 'config' / 'stamp-config.json')
+CONFIG_PATH = Path(
+    os.environ.get('STAMP_CONFIG_PATH')
+    or Path(__file__).resolve().parents[1] / 'config' / 'stamp-config.json'
+)
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 STAMP_FONT_DIR = PROJECT_ROOT / 'public' / 'assets' / 'fonts' / 'stamp'
 BACKGROUND_LAYOUT = layout.SimpleBoxLayoutRule(
@@ -78,7 +81,12 @@ DEFAULT_CONFIG = {
     'content': {
         'title': ['Документ подписан', 'электронной подписью'],
         'rows': [
-            {'label': 'ID сертификата', 'value': '{signer.cert_id}', 'breakAnywhere': True, 'maxLines': 2},
+            {
+                'label': 'ID сертификата',
+                'value': '{signer.cert_id}',
+                'breakAnywhere': True,
+                'maxLines': 2,
+            },
             {'label': 'ФИО владельца', 'value': '{signer.name}', 'maxLines': 2},
             {'label': 'Кем выдан', 'value': '{signer.issuer}', 'maxLines': 2},
             {'label': 'Срок действия', 'value': '{signer.valid_to}', 'maxLines': 2},
@@ -149,14 +157,16 @@ def normalize(value, fallback=''):
 
 
 def split_dn(value):
-    return [part.strip() for part in re.split(r',(?=(?:[^\\]|\\.)*$)', str(value or '')) if part.strip()]
+    return [
+        part.strip() for part in re.split(r',(?=(?:[^\\]|\\.)*$)', str(value or '')) if part.strip()
+    ]
 
 
 def extract_dn_field(dn, field_name):
     prefix = f'{field_name}='.upper()
     for part in split_dn(dn):
         if part.upper().startswith(prefix):
-            return part[len(field_name) + 1:].strip()
+            return part[len(field_name) + 1 :].strip()
     return ''
 
 
@@ -184,8 +194,12 @@ def render_template(template, context):
 
 
 def build_signer_context(signer):
-    name = normalize(extract_dn_field(signer.get('subjectName'), 'CN') or signer.get('subjectName'), 'Подписант')
-    issuer = normalize(extract_dn_field(signer.get('issuerName'), 'CN') or signer.get('issuerName'), 'не указан')
+    name = normalize(
+        extract_dn_field(signer.get('subjectName'), 'CN') or signer.get('subjectName'), 'Подписант'
+    )
+    issuer = normalize(
+        extract_dn_field(signer.get('issuerName'), 'CN') or signer.get('issuerName'), 'не указан'
+    )
     cert_id = normalize(signer.get('thumbprint') or signer.get('serialNumber'), 'не указан')
     valid_to = normalize(signer.get('validToDate'), 'не указан')
     return {
@@ -207,12 +221,16 @@ def build_rendered_metadata(config, signer):
 
     rows = []
     for row in content_cfg.get('rows', []):
-        rows.append({
-            'label': render_template(row.get('label', ''), context),
-            'value': render_template(row.get('value', ''), context),
-            'breakAnywhere': bool(row.get('breakAnywhere', False)),
-            'maxLines': int(row.get('maxLines') or config['appearance']['layout']['defaultMaxLines']),
-        })
+        rows.append(
+            {
+                'label': render_template(row.get('label', ''), context),
+                'value': render_template(row.get('value', ''), context),
+                'breakAnywhere': bool(row.get('breakAnywhere', False)),
+                'maxLines': int(
+                    row.get('maxLines') or config['appearance']['layout']['defaultMaxLines']
+                ),
+            }
+        )
 
     title_lines = [render_template(line, context) for line in content_cfg.get('title', [])]
 
@@ -225,7 +243,9 @@ def build_rendered_metadata(config, signer):
         'contact_info': render_template(signature_cfg.get('contactInfo', ''), context),
         'location': render_template(signature_cfg.get('location', ''), context),
         'bytes_reserved': int(signature_cfg.get('bytesReserved', 16000)),
-        'subfilter': SUPPORTED_SUBFILTERS.get(str(signature_cfg.get('subfilter', 'PADES')).upper(), fields.SigSeedSubFilter.PADES),
+        'subfilter': SUPPORTED_SUBFILTERS.get(
+            str(signature_cfg.get('subfilter', 'PADES')).upper(), fields.SigSeedSubFilter.PADES
+        ),
     }
 
 
@@ -312,9 +332,18 @@ def render_stamp_image(config, metadata):
             width=int(separator_cfg.get('width', 1)),
         )
 
-    title_font = ImageFont.truetype(resolve_font_path(appearance['fonts']['title']['path']), int(appearance['fonts']['title']['size']))
-    label_font = ImageFont.truetype(resolve_font_path(appearance['fonts']['label']['path']), int(appearance['fonts']['label']['size']))
-    value_font = ImageFont.truetype(resolve_font_path(appearance['fonts']['value']['path']), int(appearance['fonts']['value']['size']))
+    title_font = ImageFont.truetype(
+        resolve_font_path(appearance['fonts']['title']['path']),
+        int(appearance['fonts']['title']['size']),
+    )
+    label_font = ImageFont.truetype(
+        resolve_font_path(appearance['fonts']['label']['path']),
+        int(appearance['fonts']['label']['size']),
+    )
+    value_font = ImageFont.truetype(
+        resolve_font_path(appearance['fonts']['value']['path']),
+        int(appearance['fonts']['value']['size']),
+    )
 
     content_left = int(layout_cfg['contentLeft'])
     content_right = width - int(layout_cfg['contentRight'])
@@ -329,7 +358,7 @@ def render_stamp_image(config, metadata):
     y += int(layout_cfg['afterTitleGap'])
 
     for row in metadata['rows']:
-        label_text = f"{row['label']}:" if row['label'] else ''
+        label_text = f'{row["label"]}:' if row['label'] else ''
         if label_text:
             draw.text((content_left, y), label_text, font=label_font, fill=appearance['textColor'])
         y += int(layout_cfg['rowLabelGap'])
@@ -398,7 +427,9 @@ def page_dimensions(writer, page_ix):
 def to_page_index(page_number, total_pages):
     page_number = int(page_number)
     if page_number < 1 or page_number > total_pages:
-        raise ValueError(f'Configured page {page_number} is outside the document range 1..{total_pages}.')
+        raise ValueError(
+            f'Configured page {page_number} is outside the document range 1..{total_pages}.'
+        )
     return page_number - 1
 
 
@@ -439,7 +470,9 @@ def rule_matches(rule, signature_index):
         return True
     if 'signatureIndex' in match and int(match['signatureIndex']) != signature_index:
         return False
-    if 'signatureIndexes' in match and signature_index not in {int(v) for v in match['signatureIndexes']}:
+    if 'signatureIndexes' in match and signature_index not in {
+        int(v) for v in match['signatureIndexes']
+    }:
         return False
     if 'signatureIndexFrom' in match and signature_index < int(match['signatureIndexFrom']):
         return False
@@ -455,7 +488,9 @@ def find_rule(config, signature_index):
         slot = QUICK_POSITION_PRESETS[requested_slot]
         return {
             'name': f'quick-{requested_slot}',
-            'pages': dict(base_rule.get('pages') or {'mode': 'single', 'page': 1, 'widgetPageMode': 'first'}),
+            'pages': dict(
+                base_rule.get('pages') or {'mode': 'single', 'page': 1, 'widgetPageMode': 'first'}
+            ),
             'placement': {
                 'mode': 'anchored',
                 'anchor': slot['anchor'],
@@ -482,7 +517,9 @@ def matching_slot(rule, signature_index):
     return slot
 
 
-def resolve_anchor_position(page_width, page_height, stamp_width, stamp_height, anchor, offset_x, offset_y):
+def resolve_anchor_position(
+    page_width, page_height, stamp_width, stamp_height, anchor, offset_x, offset_y
+):
     anchor = str(anchor or 'bottom-left').lower()
     if anchor == 'bottom-left':
         return offset_x, offset_y
@@ -493,7 +530,9 @@ def resolve_anchor_position(page_width, page_height, stamp_width, stamp_height, 
     if anchor == 'middle-left':
         return offset_x, (page_height - stamp_height) / 2 + offset_y
     if anchor == 'center':
-        return (page_width - stamp_width) / 2 + offset_x, (page_height - stamp_height) / 2 + offset_y
+        return (page_width - stamp_width) / 2 + offset_x, (
+            page_height - stamp_height
+        ) / 2 + offset_y
     if anchor == 'middle-right':
         return page_width - stamp_width - offset_x, (page_height - stamp_height) / 2 + offset_y
     if anchor == 'top-left':
@@ -555,7 +594,9 @@ def build_placement_plan(config, writer, signature_index):
     stamp_height = int(config['appearance']['height'])
 
     positions = {
-        page_ix: resolve_position(writer, placement_cfg, stamp_width, stamp_height, page_ix, slot_index)
+        page_ix: resolve_position(
+            writer, placement_cfg, stamp_width, stamp_height, page_ix, slot_index
+        )
         for page_ix in selected_pages
     }
 
@@ -568,14 +609,20 @@ def build_placement_plan(config, writer, signature_index):
 
 
 def apply_extra_stamps(writer, config, metadata, placement_plan):
-    extra_pages = [page_ix for page_ix in placement_plan['selected_pages'] if page_ix != placement_plan['widget_page_ix']]
+    extra_pages = [
+        page_ix
+        for page_ix in placement_plan['selected_pages']
+        if page_ix != placement_plan['widget_page_ix']
+    ]
     if not extra_pages:
         return
 
     static_stamp = stamp.StaticContentStamp(
         writer,
         build_static_style(config, metadata),
-        box=layout.BoxConstraints(width=int(config['appearance']['width']), height=int(config['appearance']['height'])),
+        box=layout.BoxConstraints(
+            width=int(config['appearance']['width']), height=int(config['appearance']['height'])
+        ),
     )
 
     for page_ix in extra_pages:
@@ -652,17 +699,21 @@ def main():
         )
 
         output_path.write_bytes(output.getvalue())
-        print(json.dumps({
-            'fieldName': field_name,
-            'box': list(box),
-            'existingCount': existing_count,
-            'signatureIndex': signature_index,
-            'selectedPages': [page_ix + 1 for page_ix in placement_plan['selected_pages']],
-            'widgetPage': placement_plan['widget_page_ix'] + 1,
-            'reservedStart': prepared_digest.reserved_region_start,
-            'reservedEnd': prepared_digest.reserved_region_end,
-            'configPath': str(CONFIG_PATH),
-        }))
+        print(
+            json.dumps(
+                {
+                    'fieldName': field_name,
+                    'box': list(box),
+                    'existingCount': existing_count,
+                    'signatureIndex': signature_index,
+                    'selectedPages': [page_ix + 1 for page_ix in placement_plan['selected_pages']],
+                    'widgetPage': placement_plan['widget_page_ix'] + 1,
+                    'reservedStart': prepared_digest.reserved_region_start,
+                    'reservedEnd': prepared_digest.reserved_region_end,
+                    'configPath': str(CONFIG_PATH),
+                }
+            )
+        )
 
 
 if __name__ == '__main__':

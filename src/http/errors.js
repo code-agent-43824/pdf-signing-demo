@@ -1,13 +1,7 @@
 const { HttpError } = require('./validation');
-const {
-  OperationControlError,
-} = require('../runtime/operation-queue');
-const {
-  WorkerProcessError,
-} = require('../runtime/process-runner');
-const {
-  StorageLimitError,
-} = require('../storage/lifecycle');
+const { OperationControlError } = require('../runtime/operation-queue');
+const { WorkerProcessError } = require('../runtime/process-runner');
+const { StorageLimitError } = require('../storage/lifecycle');
 
 function createCmsIntegrityError(error) {
   return new HttpError(
@@ -51,11 +45,7 @@ function createOperationError(error) {
       );
     }
     if (['QUEUE_FULL', 'QUEUE_TIMEOUT'].includes(error.code)) {
-      return new HttpError(
-        503,
-        'SERVER_BUSY',
-        'Сервис занят. Повторите попытку позже.',
-      );
+      return new HttpError(503, 'SERVER_BUSY', 'Сервис занят. Повторите попытку позже.');
     }
   }
   if (error instanceof WorkerProcessError && error.code === 'WORKER_TIMEOUT') {
@@ -72,24 +62,16 @@ function shouldSkipResponse(res, error) {
   return (
     res.destroyed
     || res.writableEnded
-    || (
-      error instanceof OperationControlError
-      && error.code === 'REQUEST_ABORTED'
-    )
-    || (
-      error instanceof WorkerProcessError
-      && error.code === 'WORKER_ABORTED'
-    )
+    || (error instanceof OperationControlError && error.code === 'REQUEST_ABORTED')
+    || (error instanceof WorkerProcessError && error.code === 'WORKER_ABORTED')
   );
 }
 
 function logRequestError(req, res, error, stage, code) {
-  const requestPath = (
-    req.path.startsWith('/api/results/')
-    || /\/api\/results\/[^/?]+/.test(req.originalUrl || '')
-  )
-    ? '/api/results/:capability'
-    : req.path;
+  const requestPath =
+    req.path.startsWith('/api/results/') || /\/api\/results\/[^/?]+/.test(req.originalUrl || '')
+      ? '/api/results/:capability'
+      : req.path;
   const record = {
     timestamp: new Date().toISOString(),
     level: error instanceof HttpError ? 'warn' : 'error',
@@ -114,9 +96,7 @@ function sendSafeError(req, res, error, stage = null) {
   const known = error instanceof HttpError;
   const status = known ? error.status : 500;
   const code = known ? error.code : 'INTERNAL_ERROR';
-  const message = known
-    ? error.publicMessage
-    : 'Сервис временно не может выполнить операцию.';
+  const message = known ? error.publicMessage : 'Сервис временно не может выполнить операцию.';
   res.locals.errorCode = code;
   logRequestError(req, res, error, stage, code);
 

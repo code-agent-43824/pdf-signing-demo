@@ -42,13 +42,16 @@
         });
         workflow.transition('prepared');
 
-        status(`Прошу ${context.providerLabel} подписать хеш сертификатом: ${context.certificate.label}`);
+        status(
+          `Прошу ${context.providerLabel} подписать хеш сертификатом: ${context.certificate.label}`,
+        );
         let cmsSignatureBase64;
         try {
           if (context.mode === 'rutoken') await ensureRutokenLogin(context.certificate.deviceId);
-          cmsSignatureBase64 = context.mode === 'rutoken'
-            ? await signRutoken(context.certificate, prepared.contentToSignBase64)
-            : await signCryptoPro(context.certificate, prepared.contentToSignBase64);
+          cmsSignatureBase64 =
+            context.mode === 'rutoken'
+              ? await signRutoken(context.certificate, prepared.contentToSignBase64)
+              : await signCryptoPro(context.certificate, prepared.contentToSignBase64);
         } finally {
           if (context.mode === 'rutoken') await context.logoutRutoken(context.certificate.deviceId);
         }
@@ -62,10 +65,10 @@
         const resultExpiresAt = showResult(completed);
         status(
           'Готово. Подписанный PDF можно просматривать и скачивать несколько раз '
-          + `до ${resultExpiresAt.toLocaleTimeString('ru-RU', {
-            hour: '2-digit',
-            minute: '2-digit',
-          })} (15 минут).`,
+            + `до ${resultExpiresAt.toLocaleTimeString('ru-RU', {
+              hour: '2-digit',
+              minute: '2-digit',
+            })} (15 минут).`,
         );
         workflow.transition('completed');
         return completed;
@@ -81,4 +84,4 @@
   }
 
   root.PdfSigningOrchestrator = Object.freeze({ createSigningOrchestrator });
-}(window));
+})(window);

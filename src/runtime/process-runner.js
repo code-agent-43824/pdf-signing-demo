@@ -59,14 +59,7 @@ function createLimitedCommand(command, args, limits = {}) {
   );
   return {
     command: PRLIMIT_PATH,
-    args: [
-      `--as=${memoryBytes}`,
-      `--cpu=${cpuSeconds}`,
-      '--nofile=128',
-      '--',
-      command,
-      ...args,
-    ],
+    args: [`--as=${memoryBytes}`, `--cpu=${cpuSeconds}`, '--nofile=128', '--', command, ...args],
   };
 }
 
@@ -79,15 +72,19 @@ function killProcessGroup(child, signal) {
   }
 }
 
-function runIsolatedProcess(command, args, {
-  cwd,
-  env = {},
-  input = null,
-  timeoutMs = 15000,
-  maxBuffer = DEFAULT_MAX_BUFFER,
-  signal = null,
-  limits = {},
-} = {}) {
+function runIsolatedProcess(
+  command,
+  args,
+  {
+    cwd,
+    env = {},
+    input = null,
+    timeoutMs = 15000,
+    maxBuffer = DEFAULT_MAX_BUFFER,
+    signal = null,
+    limits = {},
+  } = {},
+) {
   return new Promise((resolve, reject) => {
     const limited = createLimitedCommand(command, args, limits);
     const child = spawn(limited.command, limited.args, {
@@ -146,11 +143,13 @@ function runIsolatedProcess(command, args, {
       clearTimeout(timeout);
       clearTimeout(killTimer);
       signal?.removeEventListener('abort', abort);
-      reject(new WorkerProcessError(
-        'WORKER_SPAWN_FAILED',
-        'Unable to start isolated worker process',
-        { cause: error, stdout: stdout.toString(), stderr: stderr.toString() },
-      ));
+      reject(
+        new WorkerProcessError('WORKER_SPAWN_FAILED', 'Unable to start isolated worker process', {
+          cause: error,
+          stdout: stdout.toString(),
+          stderr: stderr.toString(),
+        }),
+      );
     });
     child.once('close', (code, closeSignal) => {
       if (settled) return;
@@ -165,17 +164,17 @@ function runIsolatedProcess(command, args, {
         stderr: stderr.toString('utf8'),
       };
       if (failureCode) {
-        reject(new WorkerProcessError(
-          failureCode,
-          `Isolated worker failed: ${failureCode}`,
-          details,
-        ));
+        reject(
+          new WorkerProcessError(failureCode, `Isolated worker failed: ${failureCode}`, details),
+        );
       } else if (code !== 0) {
-        reject(new WorkerProcessError(
-          'WORKER_EXIT_FAILED',
-          `Isolated worker exited with code ${code}`,
-          details,
-        ));
+        reject(
+          new WorkerProcessError(
+            'WORKER_EXIT_FAILED',
+            `Isolated worker exited with code ${code}`,
+            details,
+          ),
+        );
       } else {
         resolve(details);
       }

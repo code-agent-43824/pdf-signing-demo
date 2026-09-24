@@ -1,8 +1,18 @@
 (function attachPlacement(root) {
   const presets = Object.freeze({
     left: Object.freeze({ label: 'Слева', anchor: 'bottom-left', offsetX: 24, offsetY: 24 }),
-    'center-left': Object.freeze({ label: 'По центру слева', anchor: 'bottom-left', offsetX: 163, offsetY: 24 }),
-    'center-right': Object.freeze({ label: 'По центру справа', anchor: 'bottom-right', offsetX: 163, offsetY: 24 }),
+    'center-left': Object.freeze({
+      label: 'По центру слева',
+      anchor: 'bottom-left',
+      offsetX: 163,
+      offsetY: 24,
+    }),
+    'center-right': Object.freeze({
+      label: 'По центру справа',
+      anchor: 'bottom-right',
+      offsetX: 163,
+      offsetY: 24,
+    }),
     right: Object.freeze({ label: 'Справа', anchor: 'bottom-right', offsetX: 24, offsetY: 24 }),
   });
 
@@ -11,11 +21,12 @@
     const anchor = String(placement.anchor || 'bottom-right');
     const offsetX = Number(placement.offsetX || 0);
     const offsetY = Number(placement.offsetY || 0);
-    return Object.entries(presets).find(([, preset]) => (
-      preset.anchor === anchor
-      && preset.offsetX === offsetX
-      && preset.offsetY === offsetY
-    ))?.[0] || 'right';
+    return (
+      Object.entries(presets).find(
+        ([, preset]) =>
+          preset.anchor === anchor && preset.offsetX === offsetX && preset.offsetY === offsetY,
+      )?.[0] || 'right'
+    );
   }
 
   function createPlacementController({
@@ -65,4 +76,4 @@
   }
 
   root.PdfSigningPlacement = Object.freeze({ createPlacementController, findPreset, presets });
-}(window));
+})(window);

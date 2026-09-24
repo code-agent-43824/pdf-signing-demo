@@ -132,9 +132,7 @@ def unique_attribute(signed_attrs, oid):
 
 def select_signer_certificate(signed_data, signer_info):
     certificates = [
-        item.chosen
-        for item in signed_data['certificates']
-        if item.name == 'certificate'
+        item.chosen for item in signed_data['certificates'] if item.name == 'certificate'
     ]
     sid = signer_info['sid']
     if sid.name == 'issuer_and_serial_number':
@@ -185,10 +183,10 @@ def parse_tlv(data, offset):
     length_octet = data[offset]
     offset += 1
     if length_octet & 0x80:
-        count = length_octet & 0x7f
+        count = length_octet & 0x7F
         if count == 0 or count > 4 or offset + count > len(data):
             fail('INVALID_ASN1')
-        length = int.from_bytes(data[offset:offset + count], 'big')
+        length = int.from_bytes(data[offset : offset + count], 'big')
         if length < 128:
             fail('NON_CANONICAL_DER_LENGTH')
         offset += count
@@ -209,8 +207,8 @@ def gost_public_key_and_curve(certificate):
         fail('INVALID_GOST_PUBLIC_KEY')
 
     try:
-        _algorithm_oid_header, _algorithm_oid_content, parameter_offset = (
-            parse_tlv(algorithm_content, 0)
+        _algorithm_oid_header, _algorithm_oid_content, parameter_offset = parse_tlv(
+            algorithm_content, 0
         )
         parameter_header, parameter_content, parameter_end = parse_tlv(
             algorithm_content,
@@ -254,8 +252,7 @@ def verify_gost_signature(certificate, signature_oid, digest_oid, payload, signa
     # X.509 stores each coordinate little-endian. CMS stores s || r, while
     # gostcrypto accepts big-endian x || y, r || s and a big-endian digest.
     public_key_for_verifier = (
-        public_key[:coordinate_size][::-1]
-        + public_key[coordinate_size:][::-1]
+        public_key[:coordinate_size][::-1] + public_key[coordinate_size:][::-1]
     )
     signature_for_verifier = signature[coordinate_size:] + signature[:coordinate_size]
     digest_for_verifier = digest_bytes(digest_oid, payload)[::-1]
@@ -324,9 +321,7 @@ def verify_cms(cms_der, content, expected_certificate_sha256=None):
 
     signer_info = signed_data['signer_infos'][0]
     digest_oid = signer_info['digest_algorithm']['algorithm'].dotted
-    digest_algorithms = {
-        item['algorithm'].dotted for item in signed_data['digest_algorithms']
-    }
+    digest_algorithms = {item['algorithm'].dotted for item in signed_data['digest_algorithms']}
     if digest_algorithms != {digest_oid}:
         fail('DIGEST_ALGORITHM_NOT_DECLARED')
     for algorithm_oid in digest_algorithms:

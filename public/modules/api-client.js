@@ -10,32 +10,32 @@
     }
 
     return Object.freeze({
-      loadStampConfig: () => requestJson(
-        './api/stamp-config', undefined, 'Не удалось загрузить конфиг штампа.',
-      ),
-      loadFonts: () => requestJson(
-        './api/fonts', undefined, 'Не удалось загрузить список шрифтов.',
-      ),
-      prepare: (payload) => requestJson(
-        './api/sign/prepare',
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        },
-        'Не удалось подготовить PDF.',
-      ),
-      complete: (payload) => requestJson(
-        './api/sign/complete',
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        },
-        'Не удалось встроить подпись в PDF.',
-      ),
+      loadStampConfig: () =>
+        requestJson('./api/stamp-config', undefined, 'Не удалось загрузить конфиг штампа.'),
+      loadFonts: () =>
+        requestJson('./api/fonts', undefined, 'Не удалось загрузить список шрифтов.'),
+      prepare: (payload) =>
+        requestJson(
+          './api/sign/prepare',
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          },
+          'Не удалось подготовить PDF.',
+        ),
+      complete: (payload) =>
+        requestJson(
+          './api/sign/complete',
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          },
+          'Не удалось встроить подпись в PDF.',
+        ),
     });
   }
 
   root.PdfSigningApi = Object.freeze({ createApiClient });
-}(window));
+})(window);

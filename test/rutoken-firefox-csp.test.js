@@ -34,7 +34,8 @@ function syntheticContentScript({ injectWebpage = true } = {}) {
   }());`;
 }
 
-const sha256 = (text) => `'sha256-${crypto.createHash('sha256').update(text, 'utf8').digest('base64')}'`;
+const sha256 = (text) =>
+  `'sha256-${crypto.createHash('sha256').update(text, 'utf8').digest('base64')}'`;
 
 test('Rutoken Firefox CSP hashes cover exactly the inline scripts the extension injects', async () => {
   const input = {

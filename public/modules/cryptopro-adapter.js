@@ -32,8 +32,12 @@
     const keyUsage = await getProp(certificate, 'KeyUsage', 'KeyUsage');
     const usage = {
       present: Boolean(await getProp(keyUsage, 'IsPresent', 'IsPresent')),
-      digitalSignature: Boolean(await getProp(keyUsage, 'IsDigitalSignatureEnabled', 'IsDigitalSignatureEnabled')),
-      nonRepudiation: Boolean(await getProp(keyUsage, 'IsNonRepudiationEnabled', 'IsNonRepudiationEnabled')),
+      digitalSignature: Boolean(
+        await getProp(keyUsage, 'IsDigitalSignatureEnabled', 'IsDigitalSignatureEnabled'),
+      ),
+      nonRepudiation: Boolean(
+        await getProp(keyUsage, 'IsNonRepudiationEnabled', 'IsNonRepudiationEnabled'),
+      ),
     };
     return {
       validFromDate,
@@ -66,9 +70,15 @@
         } catch (_error) {
           continue;
         }
-        if (!certificates.isCertificateDateWindowValid(capability.validFromDate, capability.validToDate)
+        if (
+          !certificates.isCertificateDateWindowValid(
+            capability.validFromDate,
+            capability.validToDate,
+          )
           || !capability.hasPrivateKey
-          || !capability.keyUsageAllowed) continue;
+          || !capability.keyUsageAllowed
+        )
+          continue;
         const publicKey = await certificate.PublicKey();
         const algorithm = await publicKey.Algorithm;
         const friendlyName = await getProp(algorithm, 'FriendlyName', 'FriendlyName');
@@ -102,15 +112,27 @@
 
   function detectHashAlgorithmConstant(certificate, plugin) {
     const name = `${certificate.algorithm} ${certificate.label}`.toLowerCase();
-    if (name.includes('2012') && name.includes('512')) return plugin.CADESCOM_HASH_ALGORITHM_CP_GOST_3411_2012_512;
-    if (name.includes('2012') && name.includes('256')) return plugin.CADESCOM_HASH_ALGORITHM_CP_GOST_3411_2012_256;
+    if (name.includes('2012') && name.includes('512'))
+      return plugin.CADESCOM_HASH_ALGORITHM_CP_GOST_3411_2012_512;
+    if (name.includes('2012') && name.includes('256'))
+      return plugin.CADESCOM_HASH_ALGORITHM_CP_GOST_3411_2012_256;
     return plugin.CADESCOM_HASH_ALGORITHM_CP_GOST_3411;
   }
 
   async function sign(plugin, certificate, contentToSignBase64) {
     const hashedData = await createObject(plugin, 'CAdESCOM.HashedData');
-    await setProp(hashedData, 'propset_Algorithm', 'Algorithm', detectHashAlgorithmConstant(certificate, plugin));
-    await setProp(hashedData, 'propset_DataEncoding', 'DataEncoding', plugin.CADESCOM_BASE64_TO_BINARY);
+    await setProp(
+      hashedData,
+      'propset_Algorithm',
+      'Algorithm',
+      detectHashAlgorithmConstant(certificate, plugin),
+    );
+    await setProp(
+      hashedData,
+      'propset_DataEncoding',
+      'DataEncoding',
+      plugin.CADESCOM_BASE64_TO_BINARY,
+    );
     await hashedData.Hash(contentToSignBase64);
     const signer = await createObject(plugin, 'CAdESCOM.CPSigner');
     await setProp(signer, 'propset_Certificate', 'Certificate', certificate.certificate);
@@ -121,7 +143,8 @@
 
   async function exportCertificate(plugin, certificate) {
     if (certificate.certificateBase64) return normalizeBase64(certificate.certificateBase64);
-    if (!certificate.certificate) throw new Error('Выбранный сертификат нельзя экспортировать для серверной проверки.');
+    if (!certificate.certificate)
+      throw new Error('Выбранный сертификат нельзя экспортировать для серверной проверки.');
     const exported = await certificate.certificate.Export(plugin.CADESCOM_ENCODE_BASE64);
     const normalized = normalizeBase64(exported);
     if (!normalized) throw new Error('Не удалось экспортировать выбранный сертификат.');
@@ -165,10 +188,12 @@
     }
 
     function isOperational(provider) {
-      return Boolean(provider?.client)
+      return (
+        Boolean(provider?.client)
         && provider.diagnostics?.extension?.state === 'ready'
         && provider.diagnostics?.plugin?.state === 'ready'
-        && provider.diagnostics?.csp?.state === 'ready';
+        && provider.diagnostics?.csp?.state === 'ready'
+      );
     }
 
     // Aborting `signal` stops the wait for the plugin, skips the CSP and
@@ -225,4 +250,4 @@
     getErrorMessage,
     sign,
   });
-}(window));
+})(window);

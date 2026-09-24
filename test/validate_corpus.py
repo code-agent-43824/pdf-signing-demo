@@ -50,13 +50,17 @@ def main():
     else:
         raise AssertionError('malformed-cms.der unexpectedly parsed as valid CMS')
 
-    print(json.dumps({
-        'ok': True,
-        'fixtures': len(MANIFEST['files']),
-        'dynamicSignatureCounts': (
-            MANIFEST['dynamicScenarios']['incrementalSignatures']['signatureCounts']
-        ),
-    }))
+    print(
+        json.dumps(
+            {
+                'ok': True,
+                'fixtures': len(MANIFEST['files']),
+                'dynamicSignatureCounts': (
+                    MANIFEST['dynamicScenarios']['incrementalSignatures']['signatureCounts']
+                ),
+            }
+        )
+    )
 
 
 if __name__ == '__main__':

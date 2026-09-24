@@ -31,21 +31,21 @@ def main():
                 signature,
                 signer_validation_context=context,
             )
-            results.append({
-                'fieldName': signature.field_name,
-                'intact': bool(status.intact),
-                'valid': bool(status.valid),
-                'trusted': bool(status.trusted),
-                'bottomLine': bool(status.bottom_line),
-                'coverage': status.coverage.name,
-            })
+            results.append(
+                {
+                    'fieldName': signature.field_name,
+                    'intact': bool(status.intact),
+                    'valid': bool(status.valid),
+                    'trusted': bool(status.trusted),
+                    'bottomLine': bool(status.bottom_line),
+                    'coverage': status.coverage.name,
+                }
+            )
 
     payload = {
-        'ok': bool(results) and all(
-            item['intact']
-            and item['valid']
-            and item['trusted']
-            and item['bottomLine']
+        'ok': bool(results)
+        and all(
+            item['intact'] and item['valid'] and item['trusted'] and item['bottomLine']
             for item in results
         ),
         'signatures': results,

@@ -37,8 +37,12 @@ async function captureInjectedScripts({ contentScript, webpageScript, extensionI
       if (tag !== 'script') throw new Error(`Unexpected element: ${tag}`);
       return {
         text: '',
-        set textContent(value) { this.text = String(value); },
-        appendChild(node) { this.text += node.text; },
+        set textContent(value) {
+          this.text = String(value);
+        },
+        appendChild(node) {
+          this.text += node.text;
+        },
       };
     },
     createTextNode: (text) => ({ text: String(text) }),
@@ -62,13 +66,22 @@ async function captureInjectedScripts({ contentScript, webpageScript, extensionI
     extension: { getURL: (file) => file },
   };
 
-  vm.runInNewContext(contentScript, { window, document, XMLHttpRequest, browser }, {
-    filename: 'content.js',
-    timeout: 1000,
-  });
-  const initialize = { source: window, data: { rutoken: { ext: extensionId, source: 'webpage', action: 'initialize' } } };
+  vm.runInNewContext(
+    contentScript,
+    { window, document, XMLHttpRequest, browser },
+    {
+      filename: 'content.js',
+      timeout: 1000,
+    },
+  );
+  const initialize = {
+    source: window,
+    data: { rutoken: { ext: extensionId, source: 'webpage', action: 'initialize' } },
+  };
   messageListeners.forEach((listener) => listener(initialize));
-  await new Promise((resolve) => { setImmediate(resolve); });
+  await new Promise((resolve) => {
+    setImmediate(resolve);
+  });
   return injected;
 }
 

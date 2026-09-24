@@ -37,10 +37,7 @@ test('result routes keep preview and download security contracts distinct', () =
 
   assert.equal(preview['Content-Disposition'], 'inline; filename="signed-formular.pdf"');
   assert.equal(preview['X-Frame-Options'], 'SAMEORIGIN');
-  assert.equal(
-    preview['Content-Security-Policy'],
-    "default-src 'none'; frame-ancestors 'self'",
-  );
+  assert.equal(preview['Content-Security-Policy'], "default-src 'none'; frame-ancestors 'self'");
   assert.equal(download['Content-Disposition'], 'attachment; filename="signed-formular.pdf"');
   assert.equal(Object.hasOwn(download, 'X-Frame-Options'), false);
   assert.equal(Object.hasOwn(download, 'Content-Security-Policy'), false);
@@ -97,10 +94,12 @@ test('public routes preserve form metadata and close legacy generated storage', 
   const formPdfPath = path.join(publicDir, 'assets', 'formular.pdf');
   fs.mkdirSync(path.dirname(formPdfPath), { recursive: true });
   fs.writeFileSync(formPdfPath, '%PDF-form');
-  const app = createApplication(applicationDependencies({
-    formPdfPath,
-    publicDir,
-  }));
+  const app = createApplication(
+    applicationDependencies({
+      formPdfPath,
+      publicDir,
+    }),
+  );
   const server = await new Promise((resolve, reject) => {
     const listener = app.listen(0, '127.0.0.1', () => resolve(listener));
     listener.once('error', reject);
@@ -117,9 +116,7 @@ test('public routes preserve form metadata and close legacy generated storage', 
       size: 9,
     });
 
-    const generatedResponse = await fetch(
-      `${origin}/pdf-signing/generated/legacy.pdf`,
-    );
+    const generatedResponse = await fetch(`${origin}/pdf-signing/generated/legacy.pdf`);
     assert.equal(generatedResponse.status, 404);
     assert.match(generatedResponse.headers.get('cache-control'), /no-store/);
     const generated = await generatedResponse.json();

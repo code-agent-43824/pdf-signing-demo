@@ -16,10 +16,7 @@ test('production deployment keeps required safety gates', () => {
     'utf8',
   );
   const deploy = fs.readFileSync(deployPath, 'utf8');
-  const caddy = fs.readFileSync(
-    path.join(projectRoot, 'deploy', 'mescheryakov.pro.caddy'),
-    'utf8',
-  );
+  const caddy = fs.readFileSync(path.join(projectRoot, 'deploy', 'mescheryakov.pro.caddy'), 'utf8');
 
   execFileSync('bash', ['-n', deployPath]);
   execFileSync('bash', ['-n', storagePath]);
@@ -79,7 +76,7 @@ test('deploy storage preflight cleans stale transients and enforces headroom', (
     const freshArchive = path.join(root, 'incoming', `release-${'e'.repeat(40)}.tar.gz`);
     fs.writeFileSync(oldArchive, 'old');
     fs.writeFileSync(freshArchive, 'fresh');
-    const oldTime = new Date(Date.now() - (2 * 60 * 60 * 1000));
+    const oldTime = new Date(Date.now() - 2 * 60 * 60 * 1000);
     fs.utimesSync(oldArchive, oldTime, oldTime);
 
     execFileSync(script, ['preflight', root, activeStaging], {
@@ -141,10 +138,7 @@ test('deploy retention keeps rollback releases, recent backups and evidence', ()
       '20260826T150000Z-cicd-dddddddddddd',
     ];
     for (const name of backupNames) fs.mkdirSync(path.join(root, 'backups', name));
-    fs.writeFileSync(
-      path.join(root, 'backups', backupNames[0], 'rollback-drill.log'),
-      'evidence',
-    );
+    fs.writeFileSync(path.join(root, 'backups', backupNames[0], 'rollback-drill.log'), 'evidence');
     fs.mkdirSync(path.join(root, 'backups', 'manual-baseline'));
 
     const dryRun = execFileSync(script, ['prune', root, current, previous], {

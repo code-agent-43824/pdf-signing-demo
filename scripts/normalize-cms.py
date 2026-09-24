@@ -14,16 +14,18 @@ def parse_children(content):
     while offset < len(content):
         cls, method, tag, header, child_content, trailer = parser.parse(content[offset:])
         total = len(header) + len(child_content) + len(trailer)
-        raw = content[offset:offset + total]
-        items.append({
-            'class': cls,
-            'method': method,
-            'tag': tag,
-            'header': header,
-            'content': child_content,
-            'trailer': trailer,
-            'raw': raw,
-        })
+        raw = content[offset : offset + total]
+        items.append(
+            {
+                'class': cls,
+                'method': method,
+                'tag': tag,
+                'header': header,
+                'content': child_content,
+                'trailer': trailer,
+                'raw': raw,
+            }
+        )
         offset += total
     return items
 
@@ -81,11 +83,7 @@ def needs_gost_signature_parameter_fix(signer_info):
 
 def select_signer_certificate(certificates, signer_info):
     sid = signer_info['sid']
-    candidates = [
-        item.chosen
-        for item in certificates
-        if item.name == 'certificate'
-    ]
+    candidates = [item.chosen for item in certificates if item.name == 'certificate']
     if sid.name == 'issuer_and_serial_number':
         issuer_and_serial = sid.chosen
         matches = [

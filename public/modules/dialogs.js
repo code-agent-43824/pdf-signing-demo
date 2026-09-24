@@ -26,7 +26,9 @@
     function openPin({ title = 'Введите PIN-код токена.', errorMessage = '' } = {}) {
       return new Promise((resolve, reject) => {
         close();
-        const fragment = document.getElementById('rutokenPinDialogTemplate').content.cloneNode(true);
+        const fragment = document
+          .getElementById('rutokenPinDialogTemplate')
+          .content.cloneNode(true);
         const backdrop = fragment.querySelector('.dialog-backdrop');
         const prompt = fragment.querySelector('#rutokenPinPrompt');
         const input = fragment.querySelector('#rutokenPinInput');
@@ -84,19 +86,29 @@
     function openSigningConfirmation({ documentName, documentDigest, certificate }) {
       return new Promise((resolve, reject) => {
         close();
-        const fragment = document.getElementById('signingConfirmationDialogTemplate').content.cloneNode(true);
+        const fragment = document
+          .getElementById('signingConfirmationDialogTemplate')
+          .content.cloneNode(true);
         const backdrop = fragment.querySelector('.dialog-backdrop');
         fragment.querySelector('#confirmationDocumentName').textContent = documentName;
         fragment.querySelector('#confirmationDocumentDigest').textContent = documentDigest;
-        fragment.querySelector('#confirmationCertificateName').textContent = certificate.commonName || certificate.label || '—';
-        fragment.querySelector('#confirmationCertificateFingerprint').textContent = certificate.thumbprint || '—';
+        fragment.querySelector('#confirmationCertificateName').textContent =
+          certificate.commonName || certificate.label || '—';
+        fragment.querySelector('#confirmationCertificateFingerprint').textContent =
+          certificate.thumbprint || '—';
         const confirm = fragment.querySelector('#confirmSigning');
         const cancel = fragment.querySelector('#cancelSigning');
         activeDialog = backdrop;
-        confirm.addEventListener('click', () => { close(); resolve(); });
-        cancel.addEventListener('click', () => rejectAndClose(reject, 'Подписание отменено пользователем.'));
+        confirm.addEventListener('click', () => {
+          close();
+          resolve();
+        });
+        cancel.addEventListener('click', () =>
+          rejectAndClose(reject, 'Подписание отменено пользователем.'),
+        );
         backdrop.addEventListener('click', (event) => {
-          if (event.target === backdrop) rejectAndClose(reject, 'Подписание отменено пользователем.');
+          if (event.target === backdrop)
+            rejectAndClose(reject, 'Подписание отменено пользователем.');
         });
         document.body.appendChild(backdrop);
         root.requestAnimationFrame(() => confirm.focus());
@@ -122,19 +134,26 @@
           return;
         }
         close();
-        const fragment = document.getElementById('certificateDialogTemplate').content.cloneNode(true);
+        const fragment = document
+          .getElementById('certificateDialogTemplate')
+          .content.cloneNode(true);
         const backdrop = fragment.querySelector('.dialog-backdrop');
         const list = fragment.querySelector('#certificateList');
         const confirm = fragment.querySelector('#confirmCertificate');
         const cancel = fragment.querySelector('#cancelCertificate');
         const preselectedKey = getCertificateKey(preselectedCertificate);
-        let selectedIndex = Math.max(0, certificates.findIndex(
-          (certificate) => getCertificateKey(certificate) === preselectedKey,
-        ));
+        let selectedIndex = Math.max(
+          0,
+          certificates.findIndex(
+            (certificate) => getCertificateKey(certificate) === preselectedKey,
+          ),
+        );
         activeDialog = backdrop;
         const render = () => {
           list.innerHTML = certificates
-            .map((certificate, index) => renderCertificateCard(certificate, index, index === selectedIndex))
+            .map((certificate, index) =>
+              renderCertificateCard(certificate, index, index === selectedIndex),
+            )
             .join('');
           list.querySelectorAll('.certificate-card').forEach((card) => {
             card.addEventListener('click', () => {
@@ -149,7 +168,9 @@
           close();
           resolve(picked);
         });
-        cancel.addEventListener('click', () => rejectAndClose(reject, 'Выбор сертификата отменён.'));
+        cancel.addEventListener('click', () =>
+          rejectAndClose(reject, 'Выбор сертификата отменён.'),
+        );
         backdrop.addEventListener('click', (event) => {
           if (event.target === backdrop) rejectAndClose(reject, 'Выбор сертификата отменён.');
         });
@@ -161,4 +182,4 @@
   }
 
   root.PdfSigningDialogs = Object.freeze({ createDialogManager });
-}(window));
+})(window);

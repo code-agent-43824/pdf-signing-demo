@@ -17,8 +17,7 @@ function bufferBytes(value) {
     return value.reduce((total, item) => total + bufferBytes(item), 0);
   }
   if (!value || typeof value !== 'object') return 0;
-  return Object.values(value)
-    .reduce((total, item) => total + bufferBytes(item), 0);
+  return Object.values(value).reduce((total, item) => total + bufferBytes(item), 0);
 }
 
 function createSessionStore({
@@ -112,10 +111,7 @@ function createSessionStore({
     cleanup(timestamp = now()) {
       for (const [id, session] of sessions.entries()) {
         expireIfNeeded(session, timestamp);
-        if (
-          session.state !== 'prepared'
-          && timestamp - session.finishedAt >= tombstoneTtlMs
-        ) {
+        if (session.state !== 'prepared' && timestamp - session.finishedAt >= tombstoneTtlMs) {
           sessions.delete(id);
         }
       }
@@ -149,13 +145,7 @@ function tokenHash(token) {
 const RESULT_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const TOKEN_HASH_PATTERN = /^[0-9a-f]{64}$/;
 
-function createResultStore({
-  resultsDir,
-  ttlMs,
-  maxResults,
-  maxDiskBytes,
-  now = Date.now,
-}) {
+function createResultStore({ resultsDir, ttlMs, maxResults, maxDiskBytes, now = Date.now }) {
   const results = new Map();
   const capabilities = new Map();
   const deletions = new Map();
@@ -170,11 +160,14 @@ function createResultStore({
   function scheduleExpiry(result) {
     const existing = expiryTimers.get(result.id);
     if (existing) clearTimeout(existing);
-    const timer = setTimeout(() => {
-      void deleteResult(result.id).catch(() => {
-        // The background cleanup loop retries and reports filesystem failures.
-      });
-    }, Math.max(0, result.expiresAt - now()));
+    const timer = setTimeout(
+      () => {
+        void deleteResult(result.id).catch(() => {
+          // The background cleanup loop retries and reports filesystem failures.
+        });
+      },
+      Math.max(0, result.expiresAt - now()),
+    );
     timer.unref?.();
     expiryTimers.set(result.id, timer);
   }
@@ -193,7 +186,7 @@ function createResultStore({
         const id = match[1];
         const filePath = path.join(resultsDir, `result-${id}.pdf`);
         const stats = fs.lstatSync(filePath);
-        const valid = (
+        const valid =
           metadata?.schemaVersion === 1
           && id === metadata.id
           && RESULT_ID_PATTERN.test(id)
@@ -210,8 +203,7 @@ function createResultStore({
           && TOKEN_HASH_PATTERN.test(metadata.downloadTokenHash)
           && metadata.previewTokenHash !== metadata.downloadTokenHash
           && !capabilities.has(metadata.previewTokenHash)
-          && !capabilities.has(metadata.downloadTokenHash)
-        );
+          && !capabilities.has(metadata.downloadTokenHash);
         if (!valid) continue;
 
         fs.chmodSync(filePath, 0o600);
@@ -241,10 +233,7 @@ function createResultStore({
 
     for (const entry of entries) {
       const entryPath = path.join(resultsDir, entry.name);
-      if (
-        (entry.isFile() || entry.isSymbolicLink())
-        && !retainedPaths.has(entryPath)
-      ) {
+      if ((entry.isFile() || entry.isSymbolicLink()) && !retainedPaths.has(entryPath)) {
         fs.unlinkSync(entryPath);
       }
     }
@@ -296,10 +285,7 @@ function createResultStore({
       if (results.size + pendingCount >= maxResults) {
         throw new StorageLimitError('RESULT_COUNT_LIMIT');
       }
-      if (
-        buffer.length > maxDiskBytes
-        || diskBytes + pendingBytes + buffer.length > maxDiskBytes
-      ) {
+      if (buffer.length > maxDiskBytes || diskBytes + pendingBytes + buffer.length > maxDiskBytes) {
         throw new StorageLimitError('RESULT_DISK_LIMIT');
       }
       pendingCount += 1;
@@ -339,11 +325,10 @@ function createResultStore({
       try {
         try {
           await fsp.writeFile(tempPath, buffer, { mode: 0o600, flag: 'wx' });
-          await fsp.writeFile(
-            tempMetadataPath,
-            `${JSON.stringify(metadata)}\n`,
-            { mode: 0o600, flag: 'wx' },
-          );
+          await fsp.writeFile(tempMetadataPath, `${JSON.stringify(metadata)}\n`, {
+            mode: 0o600,
+            flag: 'wx',
+          });
           await fsp.rename(tempPath, filePath);
           await fsp.rename(tempMetadataPath, metadataPath);
         } catch (error) {

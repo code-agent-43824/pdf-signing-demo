@@ -68,29 +68,30 @@ before(async () => {
   fs.mkdirSync(testResultsDir);
   const publicGeneratedDir = path.join(PROJECT_ROOT, 'public', 'generated');
   fs.mkdirSync(publicGeneratedDir, { recursive: true });
-  publicLeakProbePath = path.join(
-    publicGeneratedDir,
-    `surface-leak-probe-${process.pid}.pdf`,
-  );
+  publicLeakProbePath = path.join(publicGeneratedDir, `surface-leak-probe-${process.pid}.pdf`);
   fs.writeFileSync(publicLeakProbePath, '%PDF-public-leak-probe');
   testCertPath = path.join(tempDir, 'surface-cert.pem');
   testKeyPath = path.join(tempDir, 'surface-key.pem');
   const testCertDerPath = path.join(tempDir, 'surface-cert.der');
-  execFileSync('openssl', [
-    'req',
-    '-x509',
-    '-newkey',
-    'rsa:2048',
-    '-nodes',
-    '-subj',
-    '/CN=PDF Signing Surface Test Signer',
-    '-keyout',
-    testKeyPath,
-    '-out',
-    testCertPath,
-    '-days',
-    '2',
-  ], { stdio: 'ignore' });
+  execFileSync(
+    'openssl',
+    [
+      'req',
+      '-x509',
+      '-newkey',
+      'rsa:2048',
+      '-nodes',
+      '-subj',
+      '/CN=PDF Signing Surface Test Signer',
+      '-keyout',
+      testKeyPath,
+      '-out',
+      testCertPath,
+      '-days',
+      '2',
+    ],
+    { stdio: 'ignore' },
+  );
   execFileSync('openssl', [
     'x509',
     '-in',
@@ -103,21 +104,25 @@ before(async () => {
   testCertificateBase64 = fs.readFileSync(testCertDerPath).toString('base64');
   otherCertPath = path.join(tempDir, 'other-cert.pem');
   otherKeyPath = path.join(tempDir, 'other-key.pem');
-  execFileSync('openssl', [
-    'req',
-    '-x509',
-    '-newkey',
-    'rsa:2048',
-    '-nodes',
-    '-subj',
-    '/CN=Unexpected Surface Test Signer',
-    '-keyout',
-    otherKeyPath,
-    '-out',
-    otherCertPath,
-    '-days',
-    '2',
-  ], { stdio: 'ignore' });
+  execFileSync(
+    'openssl',
+    [
+      'req',
+      '-x509',
+      '-newkey',
+      'rsa:2048',
+      '-nodes',
+      '-subj',
+      '/CN=Unexpected Surface Test Signer',
+      '-keyout',
+      otherKeyPath,
+      '-out',
+      otherCertPath,
+      '-days',
+      '2',
+    ],
+    { stdio: 'ignore' },
+  );
 
   serverPort = await reservePort();
   baseUrl = `http://127.0.0.1:${serverPort}${BASE_PATH}`;
@@ -161,10 +166,7 @@ function validSigner() {
   return { certificateBase64: testCertificateBase64 };
 }
 
-function createTestCms(content, label, {
-  certPath = testCertPath,
-  keyPath = testKeyPath,
-} = {}) {
+function createTestCms(content, label, { certPath = testCertPath, keyPath = testKeyPath } = {}) {
   const contentPath = path.join(tempDir, `${label}.bin`);
   const cmsPath = path.join(tempDir, `${label}.der`);
   fs.writeFileSync(contentPath, content);
@@ -224,10 +226,7 @@ function assertBrowserSecurityHeaders(response) {
   assert.equal(response.headers.get('referrer-policy'), 'no-referrer');
   assert.match(response.headers.get('permissions-policy') || '', /camera=\(\)/);
   assert.match(response.headers.get('permissions-policy') || '', /usb=\(\)/);
-  assert.equal(
-    response.headers.get('cache-control'),
-    'no-store, private, max-age=0',
-  );
+  assert.equal(response.headers.get('cache-control'), 'no-store, private, max-age=0');
   assert.equal(response.headers.get('pragma'), 'no-cache');
   assert.equal(response.headers.get('expires'), '0');
 }
@@ -296,9 +295,9 @@ test('font API exposes opaque identifiers rather than filesystem paths', async (
 test('client-facing font identifiers resolve during PDF preparation', async () => {
   const configResponse = await fetch(new URL('api/stamp-config', baseUrl));
   const { config } = await configResponse.json();
-  const pdfBase64 = fs.readFileSync(
-    path.join(PROJECT_ROOT, 'test', 'fixtures', 'pdf', 'simple.pdf'),
-  ).toString('base64');
+  const pdfBase64 = fs
+    .readFileSync(path.join(PROJECT_ROOT, 'test', 'fixtures', 'pdf', 'simple.pdf'))
+    .toString('base64');
 
   const response = await fetch(new URL('api/sign/prepare', baseUrl), {
     method: 'POST',
@@ -320,9 +319,9 @@ test('client-facing font identifiers resolve during PDF preparation', async () =
 test('prepare rejects unknown fields, paths and extreme stamp settings', async () => {
   const configResponse = await fetch(new URL('api/stamp-config', baseUrl));
   const { config } = await configResponse.json();
-  const pdfBase64 = fs.readFileSync(
-    path.join(PROJECT_ROOT, 'test', 'fixtures', 'pdf', 'simple.pdf'),
-  ).toString('base64');
+  const pdfBase64 = fs
+    .readFileSync(path.join(PROJECT_ROOT, 'test', 'fixtures', 'pdf', 'simple.pdf'))
+    .toString('base64');
   const validBody = {
     pdfBase64,
     stampConfig: config,
@@ -360,9 +359,9 @@ test('prepare rejects unknown fields, paths and extreme stamp settings', async (
 test('stamp, signer and placement limits reject every bounded field class', async () => {
   const configResponse = await fetch(new URL('api/stamp-config', baseUrl));
   const { config } = await configResponse.json();
-  const pdfBase64 = fs.readFileSync(
-    path.join(PROJECT_ROOT, 'test', 'fixtures', 'pdf', 'simple.pdf'),
-  ).toString('base64');
+  const pdfBase64 = fs
+    .readFileSync(path.join(PROJECT_ROOT, 'test', 'fixtures', 'pdf', 'simple.pdf'))
+    .toString('base64');
 
   const cases = [
     {
@@ -372,43 +371,48 @@ test('stamp, signer and placement limits reject every bounded field class', asyn
     },
     {
       name: 'oversized certificate',
-      signer: { certificateBase64: 'A'.repeat((128 * 1024) + 4) },
+      signer: { certificateBase64: 'A'.repeat(128 * 1024 + 4) },
       mutate: () => {},
     },
     {
       name: 'font size',
       signer: validSigner(),
-      mutate: (draft) => { draft.appearance.fonts.title.size = 73; },
+      mutate: (draft) => {
+        draft.appearance.fonts.title.size = 73;
+      },
     },
     {
       name: 'row count',
       signer: validSigner(),
       mutate: (draft) => {
-        draft.content.rows = Array.from(
-          { length: 21 },
-          () => ({
-            label: 'label',
-            value: 'value',
-            maxLines: 1,
-            breakAnywhere: false,
-          }),
-        );
+        draft.content.rows = Array.from({ length: 21 }, () => ({
+          label: 'label',
+          value: 'value',
+          maxLines: 1,
+          breakAnywhere: false,
+        }));
       },
     },
     {
       name: 'CMS reservation',
       signer: validSigner(),
-      mutate: (draft) => { draft.signatureObject.bytesReserved = 262145; },
+      mutate: (draft) => {
+        draft.signatureObject.bytesReserved = 262145;
+      },
     },
     {
       name: 'placement coordinate',
       signer: validSigner(),
-      mutate: (draft) => { draft.placements.rules[0].placement.offsetX = 20001; },
+      mutate: (draft) => {
+        draft.placements.rules[0].placement.offsetX = 20001;
+      },
     },
     {
       name: 'signature count',
       signer: validSigner(),
-      mutate: (draft) => { draft.limits.maxSignatures = 21; },
+      mutate: (draft) => {
+        draft.limits.maxSignatures = 21;
+      },
     },
     {
       name: 'configured page number',
@@ -458,7 +462,7 @@ test('prepare enforces strict base64, decoded size, magic bytes and page limits'
 
   await assertSafeError(
     await postJson('api/sign/prepare', {
-      pdfBase64: Buffer.alloc((10 * 1024 * 1024) + 1).toString('base64'),
+      pdfBase64: Buffer.alloc(10 * 1024 * 1024 + 1).toString('base64'),
       signer: validSigner(),
     }),
     413,
@@ -502,9 +506,9 @@ test('prepare rejects stamp page references outside the uploaded document', asyn
     page: 2,
     widgetPageMode: 'first',
   };
-  const pdfBase64 = fs.readFileSync(
-    path.join(PROJECT_ROOT, 'test', 'fixtures', 'pdf', 'simple.pdf'),
-  ).toString('base64');
+  const pdfBase64 = fs
+    .readFileSync(path.join(PROJECT_ROOT, 'test', 'fixtures', 'pdf', 'simple.pdf'))
+    .toString('base64');
 
   await assertSafeError(
     await postJson('api/sign/prepare', {
@@ -519,9 +523,9 @@ test('prepare rejects stamp page references outside the uploaded document', asyn
 });
 
 test('bounded queue keeps health responsive and rejects overflow', async () => {
-  const pdfBase64 = fs.readFileSync(
-    path.join(PROJECT_ROOT, 'test', 'fixtures', 'pdf', 'simple.pdf'),
-  ).toString('base64');
+  const pdfBase64 = fs
+    .readFileSync(path.join(PROJECT_ROOT, 'test', 'fixtures', 'pdf', 'simple.pdf'))
+    .toString('base64');
   const body = {
     pdfBase64,
     signer: validSigner(),
@@ -551,20 +555,15 @@ test('bounded queue keeps health responsive and rejects overflow', async () => {
     `health endpoint was blocked for ${healthDurationMs.toFixed(1)} ms`,
   );
 
-  await assertSafeError(
-    await postJson('api/sign/prepare', body),
-    503,
-    'SERVER_BUSY',
-    'prepare',
-  );
+  await assertSafeError(await postJson('api/sign/prepare', body), 503, 'SERVER_BUSY', 'prepare');
   assert.equal((await first).status, 200);
   assert.equal((await second).status, 200);
 });
 
 test('complete verifies CMS integrity, certificate binding and retry semantics', async () => {
-  const pdfBase64 = fs.readFileSync(
-    path.join(PROJECT_ROOT, 'test', 'fixtures', 'pdf', 'simple.pdf'),
-  ).toString('base64');
+  const pdfBase64 = fs
+    .readFileSync(path.join(PROJECT_ROOT, 'test', 'fixtures', 'pdf', 'simple.pdf'))
+    .toString('base64');
   const prepareResponse = await postJson('api/sign/prepare', {
     pdfBase64,
     signer: validSigner(),
@@ -642,42 +641,30 @@ test('complete verifies CMS integrity, certificate binding and retry semantics',
   assert.match(completed.downloadUrl, /^\.\/api\/results\/[A-Za-z0-9_-]{43}$/);
   assert.notEqual(completed.signedPdfUrl, completed.downloadUrl);
   assert.ok(Date.parse(completed.resultExpiresAt) > Date.now());
-  const signedPdfResponse = await fetch(
-    new URL(completed.signedPdfUrl, baseUrl),
-  );
+  const signedPdfResponse = await fetch(new URL(completed.signedPdfUrl, baseUrl));
   assert.equal(signedPdfResponse.status, 200);
   assert.equal(
     signedPdfResponse.headers.get('content-disposition'),
     'inline; filename="signed-formular.pdf"',
   );
   assert.equal(signedPdfResponse.headers.get('x-frame-options'), 'SAMEORIGIN');
-  assert.match(
-    signedPdfResponse.headers.get('content-security-policy'),
-    /frame-ancestors 'self'/,
-  );
-  assert.match(
-    signedPdfResponse.headers.get('cache-control'),
-    /no-store/,
-  );
+  assert.match(signedPdfResponse.headers.get('content-security-policy'), /frame-ancestors 'self'/);
+  assert.match(signedPdfResponse.headers.get('cache-control'), /no-store/);
   assert.equal(
-    Buffer.from(await signedPdfResponse.arrayBuffer()).subarray(0, 5).toString(),
+    Buffer.from(await signedPdfResponse.arrayBuffer())
+      .subarray(0, 5)
+      .toString(),
     '%PDF-',
   );
-  const repeatedPreview = await fetch(
-    new URL(completed.signedPdfUrl, baseUrl),
-  );
+  const repeatedPreview = await fetch(new URL(completed.signedPdfUrl, baseUrl));
   assert.equal(repeatedPreview.status, 200);
   await repeatedPreview.arrayBuffer();
 
-  const downloadHead = await fetch(
-    new URL(completed.downloadUrl, baseUrl),
-    { method: 'HEAD' },
-  );
+  const downloadHead = await fetch(new URL(completed.downloadUrl, baseUrl), { method: 'HEAD' });
   assert.equal(downloadHead.status, 405);
-  const downloadResponse = await fetch(
-    new URL(completed.downloadUrl, baseUrl),
-    { headers: { range: 'bytes=0-9' } },
-  );
+  const downloadResponse = await fetch(new URL(completed.downloadUrl, baseUrl), {
+    headers: { range: 'bytes=0-9' },
+  });
   assert.equal(downloadResponse.status, 200);
   assert.equal(downloadResponse.headers.has('accept-ranges'), false);
   assert.equal(
@@ -686,13 +673,17 @@ test('complete verifies CMS integrity, certificate binding and retry semantics',
   );
   assert.match(downloadResponse.headers.get('cache-control'), /no-store/);
   assert.equal(
-    Buffer.from(await downloadResponse.arrayBuffer()).subarray(0, 5).toString(),
+    Buffer.from(await downloadResponse.arrayBuffer())
+      .subarray(0, 5)
+      .toString(),
     '%PDF-',
   );
   const repeatedDownload = await fetch(new URL(completed.downloadUrl, baseUrl));
   assert.equal(repeatedDownload.status, 200);
   assert.equal(
-    Buffer.from(await repeatedDownload.arrayBuffer()).subarray(0, 5).toString(),
+    Buffer.from(await repeatedDownload.arrayBuffer())
+      .subarray(0, 5)
+      .toString(),
     '%PDF-',
   );
   await new Promise((resolve) => setTimeout(resolve, 1100));
@@ -718,9 +709,7 @@ test('complete verifies CMS integrity, certificate binding and retry semantics',
 });
 
 test('legacy public generated files are not served by either static route', async () => {
-  const response = await fetch(
-    new URL(`generated/${path.basename(publicLeakProbePath)}`, baseUrl),
-  );
+  const response = await fetch(new URL(`generated/${path.basename(publicLeakProbePath)}`, baseUrl));
   assert.equal(response.status, 404);
   assert.match(response.headers.get('cache-control'), /no-store/);
   const payload = await response.json();
@@ -728,9 +717,9 @@ test('legacy public generated files are not served by either static route', asyn
 });
 
 test('prepare rejects malformed certificate DER before PDF preparation', async () => {
-  const pdfBase64 = fs.readFileSync(
-    path.join(PROJECT_ROOT, 'test', 'fixtures', 'pdf', 'simple.pdf'),
-  ).toString('base64');
+  const pdfBase64 = fs
+    .readFileSync(path.join(PROJECT_ROOT, 'test', 'fixtures', 'pdf', 'simple.pdf'))
+    .toString('base64');
   await assertSafeError(
     await postJson('api/sign/prepare', {
       pdfBase64,
@@ -822,28 +811,31 @@ test('liveness and readiness are available only through the production base path
   const readyResponse = await fetch(new URL('health/ready', baseUrl));
   assert.equal(readyResponse.status, 200);
   const ready = await readyResponse.json();
-  assert.deepEqual({
-    ok: ready.ok,
-    service: ready.service,
-    checks: ready.checks,
-    workers: ready.workers,
-  }, {
-    ok: true,
-    service: 'pdf-signing-demo',
-    checks: {
-      python: true,
-      config: true,
-      storage: true,
-      workerLimits: true,
-      workerQueue: true,
+  assert.deepEqual(
+    {
+      ok: ready.ok,
+      service: ready.service,
+      checks: ready.checks,
+      workers: ready.workers,
     },
-    workers: {
-      active: 0,
-      queued: 0,
-      concurrency: 1,
-      maxQueue: 1,
+    {
+      ok: true,
+      service: 'pdf-signing-demo',
+      checks: {
+        python: true,
+        config: true,
+        storage: true,
+        workerLimits: true,
+        workerQueue: true,
+      },
+      workers: {
+        active: 0,
+        queued: 0,
+        concurrency: 1,
+        maxQueue: 1,
+      },
     },
-  });
+  );
   assert.equal(ready.storage.sessions.maxSessions, 128);
   assert.equal(ready.storage.sessions.maxSessionsPerOwner, 32);
   assert.equal(ready.storage.sessions.maxMemoryBytes, 256 * 1024 * 1024);
