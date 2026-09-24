@@ -336,6 +336,54 @@ test('Rutoken environment owns discovery, refresh events and debounced token mon
   assert.deepEqual(diagnostics.get('extension'), { state: 'error', text: 'не найдено' });
 });
 
+test('Rutoken initialization reports an extension or plugin that never answers', async () => {
+  const window = loadBrowserModules([
+    'certificates.js',
+    'rutoken-adapter.js',
+  ]);
+  const diagnostics = new Map();
+  const timers = new Map();
+  let nextTimer = 1;
+  const settle = () => new Promise((resolve) => setImmediate(resolve));
+  window.chrome = {};
+  const environment = window.PdfSigningRutoken.createEnvironment({
+    document: { hidden: false, addEventListener() {} },
+    async loadScript() {},
+    setDiagnostic(key, state, text) { diagnostics.set(key, { state, text }); },
+    schedule(callback) {
+      timers.set(nextTimer, callback);
+      nextTimer += 1;
+      return nextTimer - 1;
+    },
+    cancelSchedule(timer) { timers.delete(timer); },
+  });
+
+  window.rutoken = { ready: new Promise(() => {}) };
+  const waitingForExtension = environment.initialize();
+  await settle();
+  assert.equal(timers.size, 1);
+  [...timers.values()][0]();
+  await assert.rejects(waitingForExtension, /Расширение 'Адаптер Рутокен Плагина' не ответило/);
+  assert.equal(timers.size, 0);
+  assert.deepEqual(diagnostics.get('extension'), { state: 'error', text: 'не отвечает' });
+  assert.deepEqual(diagnostics.get('plugin'), { state: 'error', text: 'недоступен' });
+  assert.deepEqual(diagnostics.get('token'), { state: 'error', text: 'не найден' });
+
+  window.rutoken = {
+    ready: Promise.resolve(),
+    async isExtensionInstalled() { return true; },
+    async isPluginInstalled() { return true; },
+    loadPlugin: () => new Promise(() => {}),
+  };
+  const loadingPlugin = environment.initialize();
+  await settle();
+  assert.equal(timers.size, 1);
+  [...timers.values()][0]();
+  await assert.rejects(loadingPlugin, /Рутокен Плагин не ответил/);
+  assert.deepEqual(diagnostics.get('extension'), { state: 'ready', text: 'доступно' });
+  assert.deepEqual(diagnostics.get('plugin'), { state: 'error', text: 'не отвечает' });
+});
+
 test('signing state machine rejects duplicate and impossible workflow transitions', () => {
   const { PdfSigningState } = loadBrowserModule('signing-state.js');
   const changes = [];

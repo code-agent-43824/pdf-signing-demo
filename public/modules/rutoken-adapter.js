@@ -207,6 +207,16 @@
     return null;
   }
 
+  // Neither rutoken-plugin.min.js nor the extension bounds its answers: an
+  // extension or native plugin that never replies would keep initialization
+  // at «Проверка…» forever. The bound matches the CryptoPro loader's default
+  // load timeout (set_load_timeout in public/vendor/cadesplugin_api.js).
+  const RESPONSE_TIMEOUT_MS = 20000;
+  const RESPONSE_TIMEOUT_MESSAGES = {
+    extension: `Расширение 'Адаптер Рутокен Плагина' не ответило за ${RESPONSE_TIMEOUT_MS / 1000} с.`,
+    plugin: `Рутокен Плагин не ответил за ${RESPONSE_TIMEOUT_MS / 1000} с.`,
+  };
+
   function createEnvironment({
     document,
     loadScript,
@@ -219,6 +229,19 @@
     let monitorAttached = false;
     let monitorTimer = null;
     const diagnostic = (key, state, text) => setDiagnostic(key, state, text);
+
+    // `component` names the diagnostic that turns into «не отвечает».
+    function withResponseTimeout(promise, component) {
+      let timer = null;
+      const timeout = new Promise((_resolve, reject) => {
+        timer = schedule(() => {
+          const error = new Error(RESPONSE_TIMEOUT_MESSAGES[component]);
+          error.unresponsiveComponent = component;
+          reject(error);
+        }, RESPONSE_TIMEOUT_MS);
+      });
+      return Promise.race([promise, timeout]).finally(() => cancelSchedule(timer));
+    }
 
     function describeError(error) {
       return error?.providerMessage || getErrorMessage(error, client);
@@ -312,9 +335,9 @@
         await loadScript();
         if (!root.rutoken) throw new Error('Скрипт rutoken-plugin.min.js не загрузился');
 
-        await root.rutoken.ready;
+        await withResponseTimeout(root.rutoken.ready, 'extension');
         if (root.chrome || typeof root.InstallTrigger !== 'undefined') {
-          if (!await root.rutoken.isExtensionInstalled()) {
+          if (!await withResponseTimeout(root.rutoken.isExtensionInstalled(), 'extension')) {
             diagnostic('extension', 'error', 'не найдено');
             throw new Error("Не найдено расширение 'Адаптер Рутокен Плагина'.");
           }
@@ -322,11 +345,11 @@
         } else {
           diagnostic('extension', 'ready', 'не требуется');
         }
-        if (!await root.rutoken.isPluginInstalled()) {
+        if (!await withResponseTimeout(root.rutoken.isPluginInstalled(), 'plugin')) {
           throw new Error('Рутокен Плагин не установлен.');
         }
 
-        const plugin = await root.rutoken.loadPlugin();
+        const plugin = await withResponseTimeout(root.rutoken.loadPlugin(), 'plugin');
         if (!plugin?.valid) throw new Error('Не удалось загрузить Рутокен Плагин.');
         client = plugin;
         diagnostic('plugin', 'ready', 'доступен');
@@ -341,6 +364,7 @@
         diagnostic('plugin', 'error', 'недоступен');
         diagnostic('token', 'error', 'не найден');
         if (!root.rutoken) diagnostic('extension', 'error', 'не найдено');
+        if (error?.unresponsiveComponent) diagnostic(error.unresponsiveComponent, 'error', 'не отвечает');
         throw error;
       }
     }
