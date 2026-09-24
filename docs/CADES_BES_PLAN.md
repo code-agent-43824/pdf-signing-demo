@@ -1,7 +1,6 @@
 # План поддержки CAdES-BES attached/detached
 
-Статус: **этап 0 частично выполнен; real-provider gate ожидает доступ к
-пользовательскому компьютеру**.
+Текущее состояние этапов — в [`docs/STATUS.md`](STATUS.md).
 
 Этот документ фиксирует отдельный пользовательский сценарий создания
 CAdES-BES подписи произвольного файла через CryptoPro Browser Plugin или
@@ -45,17 +44,19 @@ CryptoPro должен подписывать исходные данные че
 используется для attached CAdES.
 
 Рутокен должен вызывать `plugin.sign` над исходными base64-данными с явным
-`options.detached=true|false`. Перед реализацией нужно на реально
-установленной поддерживаемой версии подтвердить используемые имена опций
-включения сертификата и ESSCertIDv2 (`addUserCertificate`/`addEssCert`) и
-зафиксировать их mock-контрактом.
+`options.detached=true|false`. Опции включения сертификата и ESSCertIDv2
+описаны в публичном API Рутокен Плагина: `addUserCertificate` (по умолчанию
+`true`) и `addEssCert` (по умолчанию `false`). Перед реализацией нужно
+подтвердить их поведение на реально установленной поддерживаемой версии и
+зафиксировать mock-контрактом.
 
 Основные источники:
 
 - [CryptoPro: `ICPSignedData2::SignCades`](https://docs.cryptopro.ru/cades/reference/cadescom/cadescom_interface/icpsigneddata2signcades);
 - [CryptoPro: пример отделённой CAdES-BES подписи](https://docs.cryptopro.ru/cades/plugin/plugin-samples/plugin-samples-sign-detached);
 - [Рутокен: встраивание Рутокен ЭЦП через Плагин](https://dev.rutoken.ru/pages/viewpage.action?pageId=15269905);
-- [Рутокен: `sign(deviceId, certId, data, isBase64, options)`](https://dev.rutoken.ru/pages/viewpage.action?pageId=17432716).
+- [Рутокен: `sign(deviceId, certId, data, isBase64, options)`](https://dev.rutoken.ru/pages/viewpage.action?pageId=17432716);
+- [Рутокен Плагин: документация API `CryptoPlugin`](https://plugin.api.rutoken.ru/CryptoPlugin.html).
 
 ## 3. Целевой пользовательский сценарий
 
@@ -177,12 +178,12 @@ fail-closed контракт и проверка всех PDF signatures не о
 - Если любой provider не создаёт требуемый CAdES-BES или меняет исходные
   байты, остановить реализацию и пересмотреть scope.
 
-Текущий результат: в
-[`spikes/001-cades-bes-provider-capability/`](../spikes/001-cades-bes-provider-capability/README.md)
-подготовлены общий бинарный fixture, точный browser runner и fail-closed
-анализатор четырёх CMS. Анализатор локально проверен на ephemeral RSA
-attached/detached CMS. Финальный verdict остаётся `PARTIAL`, пока те же проверки
-не пройдут на реальных CryptoPro и Рутокен; продуктовые этапы 1–5 не начаты.
+Этап 0 реализует spike в
+[`spikes/001-cades-bes-provider-capability/`](../spikes/001-cades-bes-provider-capability/README.md):
+общий бинарный fixture, точный browser runner и fail-closed анализатор
+четырёх CMS, который проверяется на эфемерных RSA attached/detached CMS
+(`self-test.sh`). Вердикт spike записан в его README, состояние этапов — в
+`docs/STATUS.md`.
 
 ### Этап 1 — verifier и API contracts
 
