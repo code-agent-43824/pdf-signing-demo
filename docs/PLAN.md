@@ -6,7 +6,7 @@
   advisories `npm audit`.
 - [x] Обновить `pypdf` до версии без advisories `pip-audit`.
 - [ ] Задеплоить исправления через CI и проверить production.
-- [ ] Подключить свод правил из `code-agent-43824/coding-rules`: `AGENTS.md` как
+- [~] Подключить свод правил из `code-agent-43824/coding-rules`: `AGENTS.md` как
   есть, импорт в `CLAUDE.md`, карта кода.
 
 ## Замечено попутно
