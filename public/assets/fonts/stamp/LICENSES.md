@@ -1,6 +1,6 @@
-# Stamp fonts
+# Шрифты штампа
 
-These open-source fonts were added for stamp selection:
+Эти шрифты с открытыми лицензиями добавлены для выбора в штампе:
 
 - PT Sans Caption Regular — SIL Open Font License 1.1
 - IBM Plex Sans Medium — SIL Open Font License 1.1
@@ -8,11 +8,13 @@ These open-source fonts were added for stamp selection:
 - Noto Sans SemiCondensed Medium — SIL Open Font License 1.1
 - Golos Text Medium — SIL Open Font License 1.1
 
-Source upstreams:
+Исходные репозитории:
 - https://github.com/google/fonts/tree/main/ofl/ptsanscaption
 - https://github.com/google/fonts/tree/main/ofl/ibmplexsans
 - https://github.com/google/fonts/tree/main/ofl/robotocondensed
 - https://github.com/google/fonts/tree/main/ofl/notosans
 - https://github.com/google/fonts/tree/main/ofl/golostext
 
-Note: `Noto Sans SemiCondensed Medium.ttf` was generated as a static instance from the upstream variable `NotoSans[wdth,wght].ttf` with `wdth=87.5` and `wght=500`.
+Примечание: `Noto Sans SemiCondensed Medium.ttf` — статический экземпляр,
+полученный из вариативного `NotoSans[wdth,wght].ttf` с `wdth=87.5` и
+`wght=500`.

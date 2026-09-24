@@ -1,37 +1,42 @@
-# CAdES-BES provider capability spike
+# Spike: возможности провайдеров для CAdES-BES
 
-## Verdict: PARTIAL
+## Вердикт: PARTIAL
 
-Question: can the installed CryptoPro Browser Plugin and Rutoken Plugin create
-canonical CAdES-BES attached and detached CMS over the same exact binary bytes?
+Вопрос: могут ли установленные CryptoPro Browser Plugin и Рутокен Плагин
+создать канонические CMS CAdES-BES в attached и detached упаковке над одними и
+теми же точными двоичными байтами?
 
-Prepared evidence:
+Подготовлено:
 
-- one 36-byte binary fixture containing NUL, non-UTF-8 bytes and mixed CR/LF;
-- `browser-runner.js`, executed only through Browser Relay on the existing
-  production page, calls the real provider APIs without changing application
-  code or sending data to a new endpoint; signing calls return only a safe
-  completion status, while raw CMS requires a separate explicit export;
-- `analyze.py` requires exactly four results, checks canonical DER, packaging,
-  byte-for-byte embedded content, one `signingCertificateV2`, certificate
-  inclusion and cryptographic validity through the existing RSA/GOST verifier;
-- `self-test.sh` exercises both packaging modes with ephemeral RSA material and
-  deletes all temporary keys, certificates and CMS on exit.
+- один двоичный fixture на 36 байт с NUL, байтами не из UTF-8 и смешанными
+  CR/LF;
+- `browser-runner.js`, который запускается только через Browser Relay на
+  существующей production-странице. Он вызывает реальные API провайдеров, не
+  меняя код приложения и не отправляя данные на новый endpoint. Вызовы подписи
+  возвращают только безопасный статус завершения, сырая CMS выгружается
+  отдельным явным экспортом;
+- `analyze.py` требует ровно четыре результата и проверяет канонический DER,
+  упаковку, побайтное совпадение вложенного содержимого, ровно один
+  `signingCertificateV2`, наличие сертификата и криптографическую валидность
+  через существующий верификатор RSA/ГОСТ;
+- `self-test.sh` проверяет обе упаковки на эфемерном RSA-материале и при
+  выходе удаляет все временные ключи, сертификаты и CMS.
 
-What remains: run `runCryptoPro()` and `runRutoken()` with the user's real
-certificates. The returned bundle is stored only in a temporary local file,
-analyzed, reduced to the safe report fields above and then deleted. Personal
-CMS, certificate names, serials and fingerprints must not be committed.
+Вердикт становится `VALIDATED` после прогона `runCryptoPro()` и `runRutoken()`
+с реальными сертификатами пользователя. Полученный набор хранится только во
+временном локальном файле, анализируется, сводится к безопасным полям отчёта
+выше и удаляется. Персональные CMS, имена из сертификатов, серийные номера и
+отпечатки не коммитятся.
 
-Provider contract under test:
+Проверяемый контракт провайдеров:
 
-- CryptoPro: set `ContentEncoding=CADESCOM_BASE64_TO_BINARY` before `Content`,
-  then call `SignCades(signer, CADESCOM_CADES_BES, detached)`;
-- Rutoken: call `plugin.sign(deviceId, certId, fixtureBase64,
+- CryptoPro: задать `ContentEncoding=CADESCOM_BASE64_TO_BINARY` до `Content`,
+  затем вызвать `SignCades(signer, CADESCOM_CADES_BES, detached)`;
+- Рутокен: вызвать `plugin.sign(deviceId, certId, fixtureBase64,
   DATA_FORMAT_BASE64, { detached, addUserCertificate: true, addSignTime: true,
-  addEssCert: true })`. `addEssCert` is accepted by the currently used adapter,
-  but is not documented in the public Rutoken API; the CMS attribute itself is
-  therefore the authoritative capability check.
+  addEssCert: true })`. `addEssCert` описан в публичном API Рутокен Плагина и
+  по умолчанию выключен; возможность подтверждает сам атрибут
+  `signingCertificateV2` в полученной CMS.
 
-Do not promote this spike code into the production adapters. Rewrite the two
-small signing methods normally after the verdict becomes `VALIDATED`.
+Код spike не переносится в production-адаптеры: после вердикта `VALIDATED` два
+небольших метода подписи переписываются обычным образом.

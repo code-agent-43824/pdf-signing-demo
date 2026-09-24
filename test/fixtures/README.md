@@ -1,31 +1,32 @@
-# Golden PDF corpus
+# Golden-корпус PDF
 
-The committed corpus contains structural PDF inputs that exercise the current
-preparation pipeline without including personal documents, production
-certificates or private keys.
+Закоммиченный корпус содержит структурные варианты PDF для текущего конвейера
+подготовки и не содержит персональных документов, production-сертификатов и
+закрытых ключей.
 
-`generate.py` produces:
+`generate.py` создаёт:
 
-- `simple.pdf` — one A4-like page;
-- `multipage.pdf` — three pages with different dimensions;
-- `acroform.pdf` — a document with an existing AcroForm;
-- `empty-signature-field.pdf` — an unsigned signature widget;
-- `nonstandard-geometry.pdf` — custom MediaBox/CropBox and page rotation;
-- `invalid/malformed.pdf` — a deliberately truncated PDF;
-- `invalid/malformed-cms.der` — deliberately truncated ASN.1.
+- `simple.pdf` — одна страница формата A4;
+- `multipage.pdf` — три страницы разного размера;
+- `acroform.pdf` — документ с существующей AcroForm;
+- `empty-signature-field.pdf` — пустой виджет подписи;
+- `nonstandard-geometry.pdf` — нестандартные MediaBox/CropBox и поворот
+  страницы;
+- `invalid/malformed.pdf` — намеренно обрезанный PDF;
+- `invalid/malformed-cms.der` — намеренно обрезанный ASN.1.
 
-Valid signed PDFs with one through four incremental signatures are generated
-at test time in a private temporary directory. The test certificate and key
-are ephemeral and are never committed. This keeps the repository free of
-reusable private keys while still exercising the exact application functions
-`createPreparedPdf` and `embedCmsSignature`.
+Подписанные PDF с несколькими последовательными инкрементальными подписями
+(набор сценариев — `dynamicScenarios` в `manifest.json`) создаются во время
+тестов в приватном временном каталоге. Тестовые сертификат и ключ эфемерны и
+не коммитятся. Так в репозитории нет пригодных к использованию закрытых
+ключей, а тесты при этом проходят через те же функции приложения —
+`createPreparedPdf` и `embedCmsSignature`.
 
-`manifest.json` records SHA-256, size and structural expectations for every
-committed fixture. Regenerate the corpus with:
+`manifest.json` фиксирует SHA-256, размер и структурные ожидания для каждого
+закоммиченного файла. Пересоздать корпус:
 
 ```bash
 npm run fixtures:generate
 ```
 
-The generated files must be reviewed and committed together with the updated
-manifest.
+Сгенерированные файлы проверяются и коммитятся вместе с обновлённым манифестом.

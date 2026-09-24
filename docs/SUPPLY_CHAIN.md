@@ -1,36 +1,38 @@
-# Dependency locks, audits and SBOM
+# Lock-файлы зависимостей, аудит и SBOM
 
-## Supported runtimes
+## Поддерживаемые версии
 
-- Node.js: `22.22.2`; `.node-version` is authoritative and
-  `package.json#engines` rejects other major versions.
-- npm: `10.9.8`, recorded in `package.json#packageManager`.
-- Python: `3.12` through `3.14`. CI exercises 3.12 and production uses
-  3.14.
+- Node.js — версия из `.node-version`; `package.json#engines` допускает только
+  Node 22 не ниже неё.
+- npm — версия из `package.json#packageManager`. CI ставит её глобально, деплой
+  на сервере использует отдельную копию этой версии (`NPM_CLI` в
+  `scripts/deploy-production.sh`).
+- Python — от 3.12 до 3.14. CI работает на версии из
+  `.github/workflows/ci.yml`, production — на 3.14.
 
-## Node dependencies
+## Зависимости Node
 
-`package-lock.json` is the installation authority. Runtime installation
-must use:
+Установка идёт только по `package-lock.json`. В runtime:
 
 ```bash
 npm ci --omit=dev
 ```
 
-Update dependencies with the pinned Node/npm toolchain, run
-`npm install --package-lock-only`, then `npm ci` and `npm run verify`.
-Do not use an uncommitted lockfile in a release.
+Зависимости обновляются закреплёнными Node и npm: `npm install
+--package-lock-only` (для транзитивного пакета — `npm update <пакет>
+--package-lock-only`), затем `npm ci` и `npm run verify`. Незакоммиченный
+lock-файл в релиз не попадает.
 
-## Python dependencies
+## Зависимости Python
 
-`requirements.in` contains direct runtime packages.
-`requirements.constraints.txt` pins the known-good production
-transitive closure. `requirements.txt` is the generated install lock and
-includes hashes for every accepted distribution.
+`requirements.in` перечисляет прямые runtime-пакеты.
+`requirements.constraints.txt` фиксирует проверенный в production
+транзитивный набор. `requirements.txt` — сгенерированный lock с хешами каждого
+допустимого дистрибутива.
 
-Regenerate with Python 3.12, `pip==26.1`, `pip-tools==7.6.0` and
-`click==8.1.8` (`pip-tools` 7.6.0 is not compatible with pip 26.2, and with
-click 8.5.0 it writes a spurious `--no-index` into the lock header):
+Lock пересоздаётся на Python 3.12 с `pip==26.1`, `pip-tools==7.6.0` и
+`click==8.1.8`: pip-tools 7.6.0 несовместим с pip 26.2, а с click 8.5.0 пишет в
+заголовок lock-файла лишний `--no-index`.
 
 ```bash
 python -m piptools compile \
@@ -41,7 +43,7 @@ python -m piptools compile \
   requirements.in
 ```
 
-Install only with:
+Устанавливать только так:
 
 ```bash
 python -m pip install \
@@ -49,30 +51,35 @@ python -m pip install \
   --requirement requirements.txt
 ```
 
-An intentional Python package update must change the direct pin or
-constraint first, regenerate the lock, pass the complete golden suite on
-Python 3.12 and the production Python 3.14 runtime, and preserve all
-existing PDF signature validation invariants.
+Намеренное обновление Python-пакета начинается с правки прямого пина или
+constraint, затем lock пересоздаётся. Изменение должно пройти весь
+golden-набор на Python 3.12 и на production Python 3.14 (его прогоняет
+`scripts/verify-release.sh` при деплое) и сохранить все инварианты проверки
+подписей PDF.
 
-## SBOM and audits
+## SBOM и аудит
 
-`npm run sbom:generate` produces deterministic CycloneDX 1.5 manifests:
+`npm run sbom:generate` детерминированно создаёт манифесты CycloneDX 1.5:
 
-- `sbom/node.cdx.json` from `package-lock.json`, omitting dev packages;
-- `sbom/python.cdx.json` from the complete hashed Python lock.
+- `sbom/node.cdx.json` — из `package-lock.json`, без dev-пакетов;
+- `sbom/python.cdx.json` — из полного lock Python с хешами.
 
-Volatile timestamps and UUIDs are deliberately omitted, both optional in
-CycloneDX, so `npm run sbom:check` can fail CI on a stale manifest.
+Изменчивые временные метки и UUID в CycloneDX необязательны и намеренно
+опущены, поэтому `npm run sbom:check` роняет CI на устаревшем манифесте. В
+`sbom/node.cdx.json` записывается версия npm, так что генерировать и проверять
+SBOM нужно npm из `packageManager`: другая версия даёт ложное расхождение.
 
-The CI supply-chain gates are:
+Гейты цепочки поставок в CI, в порядке выполнения
+(`scripts/bootstrap-and-test.sh` и `.github/workflows/ci.yml`):
 
-1. `npm ci`;
-2. hashed Python lock installation;
-3. committed fixture and SBOM reproducibility checks;
-4. complete test suite;
+1. установка lock-файла Python с проверкой хешей;
+2. `npm ci`;
+3. воспроизводимость закоммиченных фикстур;
+4. полный набор тестов;
 5. `npm audit --omit=dev --audit-level=high`;
-6. `pip-audit` against the complete Python lock.
+6. воспроизводимость закоммиченного SBOM;
+7. `pip-audit` по полному lock Python.
 
-Browser vendor scripts are not npm runtime dependencies. Their separate
-origin, version, checksum and SRI update rules are in
+Браузерные vendor-скрипты не входят в runtime-зависимости npm. Их
+происхождение, версии, контрольные суммы и SRI описаны в
 `docs/VENDOR_ASSETS.md`.

@@ -1,77 +1,80 @@
-# Browser crypto vendor assets
+# Браузерные vendor-компоненты криптографии
 
-The browser loads crypto adapters only from `public/vendor`. Runtime network
-loading of third-party JavaScript is prohibited by the application CSP.
-`public/vendor/SHA256SUMS` is checked by the test suite, while `public/app.js`
-also pins each dynamically inserted script with SHA-384 Subresource Integrity.
+Браузер загружает криптоадаптеры только из `public/vendor`; загрузку стороннего
+JavaScript из сети запрещает CSP приложения. Точные байты адаптеров закреплены
+в `public/vendor/SHA256SUMS` (его сверяет `test/vendor-assets.test.js`), а
+каждый динамически вставляемый скрипт дополнительно закреплён SHA-384 SRI в
+`CRYPTO_SCRIPTS` (`public/app.js`).
 
-## Pinned artifacts
+## Закреплённые файлы
 
 ### CryptoPro `cadesplugin_api.js`
 
-- Source:
-  `https://www.cryptopro.ru/sites/default/files/products/cades/cadesplugin_api.js`
-- Retrieved: 2026-07-30.
-- Source response `Last-Modified`: 2025-11-23 08:05:01 UTC.
-- Size: 42,363 bytes.
-- SHA-256:
-  `d54cfe9186c4b6dbe9ed73d83f289d31da7b50000b48ba3e7c278e820578086b`.
-- SHA-384 SRI:
-  `sha384-5w5a3gj2rEglmho8SnY3toHnjMQcHhMaXB5mtbfOLeQlxELCBi7zLlvwgG5pvUwT`.
+- Источник:
+  `https://www.cryptopro.ru/sites/default/files/products/cades/cadesplugin_api.js`.
+- Получен 2026-07-30; `Last-Modified` в ответе источника — 2025-11-23
+  08:05:01 UTC.
 
-This is CryptoPro's loader. On supported browsers it communicates with, or
-loads code from, the installed CryptoPro browser extension. The CSP therefore
-permits the `chrome-extension:` script scheme but no Internet script hosts.
+Это загрузчик CryptoPro. В поддерживаемых браузерах он общается с
+установленным расширением CryptoPro или загружает из него код
+(`chrome-extension://…/nmcades_plugin_api.js`). Поэтому CSP разрешает схему
+`chrome-extension:`, но не интернет-хосты.
 
-### Rutoken adapter
+### Адаптер Рутокен Плагина `rutoken-plugin.min.js`
 
-- Package: `@aktivco/rutoken-plugin@1.0.9`.
-- Registry:
+- Пакет: `@aktivco/rutoken-plugin@1.0.9`.
+- Реестр:
   `https://registry.npmjs.org/@aktivco/rutoken-plugin/-/rutoken-plugin-1.0.9.tgz`.
-- Upstream: `https://github.com/AktivCo/rutoken-plugin-js`.
-- License: BSD-2-Clause; local copy:
-  `public/vendor/LICENSE.rutoken-plugin.txt`.
-- Size: 2,897 bytes.
-- SHA-256:
-  `612514f867c0b54db498edf470908696e1eec3389914db5740e0c2252b339ce2`.
-- SHA-384 SRI:
-  `sha384-Lu5PgN+MfVF7y+8cpsOnSbHd03PcEWEAJPQYmsRlhDX3u1NuI/eR3N4r9z16f8YQ`.
+- Исходники: `https://github.com/AktivCo/rutoken-plugin-js`.
+- Лицензия: BSD-2-Clause, копия — `public/vendor/LICENSE.rutoken-plugin.txt`.
 
-## Update procedure
+При загрузке адаптер ищет объект, который внедряет в страницу расширение
+«Адаптер Рутокен Плагин» (раздел ниже). Если объекта нет, адаптер считает, что
+расширение не установлено.
 
-1. Download the candidate artifact into a temporary directory. Never overwrite
-   the checked-in file before review.
-2. Confirm the source URL/package owner and review the diff, upstream release
-   notes, and browser-extension compatibility.
-3. Copy the exact reviewed bytes into `public/vendor`.
-4. Recalculate SHA-256 in `public/vendor/SHA256SUMS` and SHA-384 SRI in
-   `public/app.js`.
-5. Run `npm test` and browser smoke tests with both real providers.
-6. Commit the artifact, checksum, provenance note, and SRI update together.
+## Процедура обновления
 
-An upstream change with the same URL is not accepted automatically: the local
-copy changes only through this review procedure.
+1. Скачать кандидата во временный каталог. До проверки не перезаписывать
+   закоммиченный файл.
+2. Сверить URL источника или владельца пакета, просмотреть diff, release notes
+   и совместимость с расширениями браузеров.
+3. Скопировать проверенные байты в `public/vendor`.
+4. Пересчитать SHA-256 в `public/vendor/SHA256SUMS` и SHA-384 SRI в
+   `CRYPTO_SCRIPTS` (`public/app.js`).
+5. Запустить `npm test` и проверить подпись в браузере обоими реальными
+   провайдерами.
+6. Закоммитить файл, контрольную сумму, запись о происхождении и SRI вместе.
 
-## Firefox-расширение «Адаптер Рутокен Плагин»
+Изменение источника по тому же URL не принимается автоматически: локальная
+копия меняется только через эту процедуру.
 
-Firefox-сборка расширения (MV2) внедряет свой API в страницу двумя
-inline-скриптами. При загрузке страницы первый скрипт создаёт объект
-`window["C3B7563B-BF85-45B7-88FC-7CFF1BD3C2DB"]`, а при `initialize()` второй
-скрипт вставляет `webpage.js`. CSP приложения запрещает inline-скрипты, а
-Firefox применяет CSP страницы и к скриптам расширений (Mozilla bug 1446231).
-Поэтому ровно эти два текста разрешены по SHA-256 — константа
-`RUTOKEN_FIREFOX_EXTENSION_SCRIPT_HASHES` в `src/application.js`. Chrome-сборка
-(MV3) внедряет API вне CSP страницы, и хеши ей не нужны. Любой другой
-inline-скрипт по-прежнему запрещён.
+## Расширение «Адаптер Рутокен Плагин»
 
-- Источник: `https://addons.mozilla.org/firefox/downloads/latest/adapter-rutoken-plugin/latest.xpi`,
+Расширение внедряет в страницу свой API — объект
+`window["C3B7563B-BF85-45B7-88FC-7CFF1BD3C2DB"]` и, после `initialize()`,
+страничный код `webpage.js`. Сборки для разных браузеров делают это по-разному.
+
+- Chrome-сборка (MV3) регистрирует `inject.js` как content-скрипт в
+  `world: "MAIN"`, а `webpage.js` подключает по адресу `chrome-extension://`.
+  CSP страницы на первое не действует, второе разрешено схемой
+  `chrome-extension:`.
+- Firefox-сборка (MV2) вставляет и объект, и `webpage.js` inline-скриптами.
+  CSP приложения запрещает inline-скрипты, а Firefox применяет CSP страницы и к
+  скриптам расширений (Mozilla bug 1446231). Поэтому ровно эти два текста
+  разрешены по SHA-256 — константа `RUTOKEN_FIREFOX_EXTENSION_SCRIPT_HASHES` в
+  `src/application.js`. Любой другой inline-скрипт по-прежнему запрещён.
+
+Происхождение Firefox-сборки, для которой посчитаны хеши:
+
+- Источник:
+  `https://addons.mozilla.org/firefox/downloads/latest/adapter-rutoken-plugin/latest.xpi`,
   расширение `rutokenplugin@rutoken.ru` версии 1.0.5.0, получено 2026-09-24.
 - XPI: 44 700 байт, SHA-256
   `00d7e9965f2039b1d69e8e235afc2df8089c3fd7171823dc62f3906078fb0df4`.
 - Хеши считает `scripts/rutoken-firefox-csp-hashes.js`: он выполняет
   `content.js` расширения на заглушках DOM и хеширует ровно вставленный текст.
 
-Процедура обновления, когда на AMO выходит новая версия расширения:
+Процедура обновления, когда на AMO выходит новая версия Firefox-сборки:
 
 1. Скачать XPI во временный каталог и распаковать его:
    `unzip latest.xpi -d rutoken-xpi`.

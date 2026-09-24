@@ -53,9 +53,21 @@ Firefox, когда Рутокен работал в последний раз, 
   `distribution/policies.json`; проверка TLS не отключалась.
 - Шаг 3: в разделе «Departures» в `CLAUDE.md` шрифты штампа записаны как
   решение владельца.
+- Шаг 4, перевод: на русский переведены `docs/SUPPLY_CHAIN.md`,
+  `docs/VENDOR_ASSETS.md`, `test/fixtures/README.md`, README spike и
+  `public/assets/fonts/stamp/LICENSES.md`. Текст лицензии
+  `public/vendor/LICENSE.rutoken-plugin.txt` оставлен в оригинале, `AGENTS.md`
+  и `CLAUDE.md` по своду остаются на английском. Попутно исправлены:
+  - порядок гейтов CI в `docs/SUPPLY_CHAIN.md`;
+  - утверждение spike, будто `addEssCert` не описан в публичном API Рутокена
+    (он описан, по умолчанию `false`).
+
+  Копии значений из кода (SHA-256 и SRI vendor-файлов, версии Node и npm)
+  заменены ссылками на `SHA256SUMS`, `CRYPTO_SCRIPTS`, `.node-version` и
+  `packageManager`.
 
 **Дальше.** Шаг 2 — проверка владельцем подписи реальным Рутокеном в Firefox.
-Шаг 4 — документация.
+Шаг 4 — расхождения и утверждения о состоянии в `README.md` и планах.
 
 ## 2026-09-24 — починка `npm audit` и переход на свод правил
 
