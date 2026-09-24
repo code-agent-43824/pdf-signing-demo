@@ -28,8 +28,9 @@ Do not use an uncommitted lockfile in a release.
 transitive closure. `requirements.txt` is the generated install lock and
 includes hashes for every accepted distribution.
 
-Regenerate with Python 3.12, `pip==26.1` and `pip-tools==7.6.0`
-(`pip-tools` 7.6.0 is not compatible with pip 26.2):
+Regenerate with Python 3.12, `pip==26.1`, `pip-tools==7.6.0` and
+`click==8.1.8` (`pip-tools` 7.6.0 is not compatible with pip 26.2, and with
+click 8.5.0 it writes a spurious `--no-index` into the lock header):
 
 ```bash
 python -m piptools compile \

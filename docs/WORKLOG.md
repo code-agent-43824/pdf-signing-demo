@@ -28,6 +28,11 @@
   три advisories (исправлены в 6.16.0 и 6.16.1). `pypdf` используют только
   `test/fixtures/generate.py` и `test/validate_corpus.py`, рантайм его не
   импортирует. Обновление — отдельным шагом по `docs/SUPPLY_CHAIN.md`.
+- `pypdf`: пин в `requirements.in` поднят до 6.16.2 (последний патч ветки 6.16,
+  закрывает все три advisories), `requirements.txt` пересоздан pip-tools на
+  Python 3.12; в lock-файле изменилась только запись `pypdf`. Фикстуры
+  воспроизводятся побайтно, `npm run verify` зелёный (73/73), `pip-audit` и
+  `pip check` чистые. Прогон на production Python 3.14 выполнит
+  `scripts/verify-release.sh` при деплое до переключения релиза.
 
-**Дальше.** Обновить `pypdf`, затем шаг 2. CI этого коммита упадёт на
-`pip-audit` до обновления `pypdf`.
+**Дальше.** Шаг 2: запушить, проверить CI, лог деплоя и production.
