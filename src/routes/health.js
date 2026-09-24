@@ -1,5 +1,5 @@
 const express = require('express');
-const fs = require('fs');
+const fs = require('node:fs');
 const { validateStampConfig } = require('../http/validation');
 const { sendSafeError } = require('../http/errors');
 const { runIsolatedProcess } = require('../runtime/process-runner');

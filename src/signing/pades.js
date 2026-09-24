@@ -1,6 +1,6 @@
-const fsp = require('fs/promises');
-const os = require('os');
-const path = require('path');
+const fsp = require('node:fs/promises');
+const os = require('node:os');
+const path = require('node:path');
 const { runIsolatedProcess } = require('../runtime/process-runner');
 
 const PREPARE_PYHANKO_SCRIPT_PATH = path.join(

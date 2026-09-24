@@ -1,5 +1,5 @@
 const express = require('express');
-const fs = require('fs');
+const fs = require('node:fs');
 const { HttpError, validateStampConfig } = require('../http/validation');
 const { sendSafeError } = require('../http/errors');
 
@@ -46,7 +46,7 @@ function createPublicRouter({ formPdfName, formPdfPath, stampConfiguration }) {
     }
   });
 
-  router.use('/generated', (req, res) => {
+  router.use('/generated', (_req, res) => {
     res
       .set({
         'Cache-Control': 'no-store',

@@ -3,6 +3,7 @@
   "version": "3.0.0",
   "description": "",
   "main": "index.js",
+  "type": "commonjs",
   "engines": {
     "node": ">=22.22.2 <23"
   },

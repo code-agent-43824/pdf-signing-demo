@@ -1,7 +1,7 @@
-const crypto = require('crypto');
-const fs = require('fs');
-const fsp = require('fs/promises');
-const path = require('path');
+const crypto = require('node:crypto');
+const fs = require('node:fs');
+const fsp = require('node:fs/promises');
+const path = require('node:path');
 
 class StorageLimitError extends Error {
   constructor(code) {
@@ -96,14 +96,14 @@ function createSessionStore({
 
     complete(id) {
       const session = sessions.get(id);
-      if (!session || session.state !== 'prepared') return false;
+      if (session?.state !== 'prepared') return false;
       transition(session, 'completed', now());
       return true;
     },
 
     fail(id) {
       const session = sessions.get(id);
-      if (!session || session.state !== 'prepared') return false;
+      if (session?.state !== 'prepared') return false;
       transition(session, 'failed', now());
       return true;
     },

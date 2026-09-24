@@ -20,7 +20,9 @@
       return result;
     }
     if (Array.isArray(value)) {
-      value.forEach((item) => collectKeyUsageTokens(item, result));
+      value.forEach((item) => {
+        collectKeyUsageTokens(item, result);
+      });
       return result;
     }
     if (value && typeof value === 'object') {

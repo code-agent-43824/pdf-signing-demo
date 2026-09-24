@@ -1,4 +1,4 @@
-const crypto = require('crypto');
+const crypto = require('node:crypto');
 const express = require('express');
 const { HttpError } = require('./http/validation');
 const { sendSafeError } = require('./http/errors');
@@ -75,7 +75,7 @@ function createApplication({
     });
     next();
   });
-  app.use((req, res, next) => {
+  app.use((_req, res, next) => {
     const requestId = crypto.randomUUID();
     res.locals.requestId = requestId;
     res.setHeader('x-request-id', requestId);

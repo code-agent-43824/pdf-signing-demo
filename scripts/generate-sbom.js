@@ -45,9 +45,8 @@ function generatePythonSbom() {
   const lock = fs.readFileSync(path.join(root, 'requirements.txt'), 'utf8');
   const components = [];
   const requirementPattern = /^([A-Za-z0-9_.-]+)==([^\s\\]+)\s*\\/gm;
-  let match;
 
-  while ((match = requirementPattern.exec(lock)) !== null) {
+  for (const match of lock.matchAll(requirementPattern)) {
     const name = normalizeName(match[1]);
     const version = match[2];
     components.push({

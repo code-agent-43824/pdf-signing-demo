@@ -78,7 +78,9 @@ async function captureInjectedScripts({ contentScript, webpageScript, extensionI
     source: window,
     data: { rutoken: { ext: extensionId, source: 'webpage', action: 'initialize' } },
   };
-  messageListeners.forEach((listener) => listener(initialize));
+  messageListeners.forEach((listener) => {
+    listener(initialize);
+  });
   await new Promise((resolve) => {
     setImmediate(resolve);
   });

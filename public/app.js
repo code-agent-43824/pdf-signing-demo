@@ -565,12 +565,6 @@ function revokeUploadedPdfObjectUrl() {
   }
 }
 
-function resetUploadedPdfSelection() {
-  revokeUploadedPdfObjectUrl();
-  state.uploadedPdfBase64 = null;
-  state.uploadedPdfName = null;
-}
-
 function resetSignedPdfPreview() {
   previewUi.resetSigned(Boolean(state.uploadedPdfBase64));
   updatePrimaryActionState();
@@ -1155,14 +1149,18 @@ function populateVisualForm(root, config) {
     ['fontTitleSize', 'fontTitleSizeValue'],
     ['fontLabelSize', 'fontLabelSizeValue'],
     ['fontValueSize', 'fontValueSizeValue'],
-  ].forEach(([inputId, outputId]) => bindRangeValue(root, inputId, outputId));
+  ].forEach(([inputId, outputId]) => {
+    bindRangeValue(root, inputId, outputId);
+  });
 
   [
     ['appearanceBackgroundColor', 'appearanceBackgroundColorText'],
     ['appearanceBorderColor', 'appearanceBorderColorText'],
     ['appearanceTextColor', 'appearanceTextColorText'],
     ['separatorColor', 'separatorColorText'],
-  ].forEach(([colorId, textId]) => bindColorPair(root, colorId, textId));
+  ].forEach(([colorId, textId]) => {
+    bindColorPair(root, colorId, textId);
+  });
 
   updateStampPreview(root, draft);
 }

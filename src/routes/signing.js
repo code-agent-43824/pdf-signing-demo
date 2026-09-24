@@ -1,6 +1,6 @@
 const express = require('express');
-const path = require('path');
-const fsp = require('fs/promises');
+const path = require('node:path');
+const fsp = require('node:fs/promises');
 const { createPreparedPdf, embedCmsSignature } = require('../signing/pades');
 const {
   CmsVerificationError,

@@ -1,5 +1,5 @@
-const crypto = require('crypto');
-const path = require('path');
+const crypto = require('node:crypto');
+const path = require('node:path');
 const { FixedWindowRateLimiter } = require('./http/rate-limit');
 const { OperationQueue, positiveInteger } = require('./runtime/operation-queue');
 const { createResultStore, createSessionStore } = require('./storage/lifecycle');

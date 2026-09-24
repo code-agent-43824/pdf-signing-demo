@@ -9,9 +9,9 @@ const MODULE_DIR = path.resolve(__dirname, '..', 'public', 'modules');
 function loadBrowserModules(names) {
   const window = {};
   const context = vm.createContext({ window });
-  names.forEach((name) =>
-    vm.runInContext(fs.readFileSync(path.join(MODULE_DIR, name), 'utf8'), context),
-  );
+  for (const name of names) {
+    vm.runInContext(fs.readFileSync(path.join(MODULE_DIR, name), 'utf8'), context);
+  }
   return window;
 }
 
