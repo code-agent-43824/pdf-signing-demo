@@ -1,0 +1,5 @@
+# Purely mechanical commits that `git blame` should skip; GitHub applies this
+# file automatically, locally use `git config blame.ignoreRevsFile .git-blame-ignore-revs`.
+
+# style: format JS with Biome and Python with Ruff
+d2ae486de84af0a0e7f9b3458d8278bf2123f7e6

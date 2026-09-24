@@ -9,7 +9,8 @@ cd "${project_dir}"
 python3 -m venv "${venv_dir}"
 "${venv_dir}/bin/python" -m pip install \
   --require-hashes \
-  --requirement requirements.txt
+  --requirement requirements.txt \
+  --requirement requirements-dev.txt
 npm ci
 
 PATH="${venv_dir}/bin:${PATH}" npm run verify

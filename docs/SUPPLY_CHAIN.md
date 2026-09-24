@@ -12,7 +12,8 @@
 
 ## Зависимости Node
 
-Установка идёт только по `package-lock.json`. В runtime:
+Установка идёт только по `package-lock.json`. Единственная dev-зависимость —
+Biome (раздел «Lint и форматирование»). В runtime dev-пакеты не ставятся:
 
 ```bash
 npm ci --omit=dev
@@ -25,7 +26,8 @@ lock-файл в релиз не попадает.
 
 ## Зависимости Python
 
-`requirements.in` перечисляет прямые runtime-пакеты.
+`requirements.in` перечисляет прямые runtime-пакеты, `requirements-dev.in` —
+инструменты разработки и CI (Ruff); на сервер они не попадают.
 `requirements.constraints.txt` фиксирует проверенный в production
 транзитивный набор. `requirements.txt` — сгенерированный lock с хешами каждого
 допустимого дистрибутива.
@@ -43,6 +45,9 @@ python -m piptools compile \
   requirements.in
 ```
 
+`requirements-dev.txt` собирается так же из `requirements-dev.in`
+(`--output-file requirements-dev.txt requirements-dev.in`).
+
 Устанавливать только так:
 
 ```bash
@@ -50,6 +55,9 @@ python -m pip install \
   --require-hashes \
   --requirement requirements.txt
 ```
+
+Для разработки и CI к нему добавляется `--requirement requirements-dev.txt`
+(так делает `scripts/bootstrap-and-test.sh`).
 
 Намеренное обновление Python-пакета начинается с правки прямого пина или
 constraint, затем lock пересоздаётся. Изменение должно пройти весь
@@ -73,17 +81,39 @@ SBOM нужно npm из `packageManager`: другая версия даёт л
 (`scripts/bootstrap-and-test.sh` и `.github/workflows/ci.yml`):
 
 1. поиск секретов по всей истории git (раздел ниже);
-2. установка lock-файла Python с проверкой хешей;
+2. установка обоих lock-файлов Python с проверкой хешей;
 3. `npm ci`;
-4. воспроизводимость закоммиченных фикстур;
-5. полный набор тестов;
-6. `npm audit --omit=dev --audit-level=high`;
-7. воспроизводимость закоммиченного SBOM;
-8. `pip-audit` по полному lock Python.
+4. lint и проверка форматирования (`npm run lint`, раздел ниже);
+5. воспроизводимость закоммиченных фикстур;
+6. полный набор тестов;
+7. `npm audit --omit=dev --audit-level=high`;
+8. воспроизводимость закоммиченного SBOM;
+9. `pip-audit` по обоим lock-файлам Python.
 
 Браузерные vendor-скрипты не входят в runtime-зависимости npm. Их
 происхождение, версии, контрольные суммы и SRI описаны в
 `docs/VENDOR_ASSETS.md`.
+
+## Lint и форматирование
+
+`npm run lint` — первый шаг `npm run verify`. Он запускает Biome
+(`biome ci --error-on-warnings`: форматирование и lint JS) и Ruff (`ruff check`
+и `ruff format --check`); `npm run format` переписывает код в нужном формате.
+Настройки лежат в `biome.jsonc` и `ruff.toml`, их отступления от правил по
+умолчанию объяснены там же в комментариях. Vendor-скрипты и Markdown
+инструменты не трогают.
+
+- Biome — точный пин в `devDependencies`. `package-lock.json` закрепляет
+  по integrity сборки под все платформы, а SBOM и деплой dev-пакеты не
+  включают. Обновление: `npm install --save-dev --save-exact
+  @biomejs/biome@<версия>` закреплённым npm, затем `npm run lint`.
+- Ruff — `requirements-dev.in`, lock с хешами — `requirements-dev.txt`
+  (раздел «Зависимости Python»). Обновление: правка пина в
+  `requirements-dev.in`, пересборка lock, `npm run lint`.
+
+Если новая версия форматирует иначе, код переформатируется отдельным коммитом
+`style:` без других изменений, и его SHA добавляется в
+`.git-blame-ignore-revs`.
 
 ## Поиск секретов
 

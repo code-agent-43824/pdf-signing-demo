@@ -9,8 +9,8 @@ function readJson(relativePath) {
   return JSON.parse(fs.readFileSync(path.join(root, relativePath), 'utf8'));
 }
 
-function lockedPythonPackages() {
-  const lock = fs.readFileSync(path.join(root, 'requirements.txt'), 'utf8');
+function lockedPythonPackages(lockFile = 'requirements.txt') {
+  const lock = fs.readFileSync(path.join(root, lockFile), 'utf8');
   const packages = new Map();
   const entries = lock.split(/(?=^[A-Za-z0-9_.-]+==)/m);
 
@@ -44,6 +44,20 @@ test('runtime dependency trees are minimal and fully locked', () => {
   for (const direct of ['asn1crypto', 'gostcrypto', 'pillow', 'pyhanko', 'pypdf', 'reportlab']) {
     assert.ok(pythonPackages.has(direct), `${direct} must be locked`);
   }
+});
+
+test('lint tools are exact dev pins that stay out of the runtime trees', () => {
+  const packageJson = readJson('package.json');
+  assert.deepEqual(Object.keys(packageJson.devDependencies), ['@biomejs/biome']);
+  assert.match(packageJson.devDependencies['@biomejs/biome'], /^\d+\.\d+\.\d+$/);
+
+  const devPythonPackages = lockedPythonPackages('requirements-dev.txt');
+  assert.deepEqual([...devPythonPackages.keys()], ['ruff']);
+  assert.equal(lockedPythonPackages().has('ruff'), false);
+
+  const deploy = fs.readFileSync(path.join(root, 'scripts', 'deploy-production.sh'), 'utf8');
+  assert.match(deploy, /ci --omit=dev/);
+  assert.doesNotMatch(deploy, /requirements-dev/);
 });
 
 test('committed CycloneDX manifests match both lockfiles', () => {

@@ -49,6 +49,7 @@ jobs:
           .venv/bin/python -m pip install pip-audit==2.10.1
           .venv/bin/python -m pip_audit \
             --requirement requirements.txt \
+            --requirement requirements-dev.txt \
             --disable-pip
 
   deploy-production:

@@ -24,7 +24,7 @@ throwaway certificates and verify CMS) and `prlimit` at `PRLIMIT_PATH`
 (`src/runtime/process-runner.js`; readiness fails without it).
 
 ```bash
-./scripts/bootstrap-and-test.sh   # clean checkout: .venv, hashed pip install, npm ci, npm run verify
+./scripts/bootstrap-and-test.sh   # clean checkout: .venv (runtime + dev locks), npm ci, npm run verify
 ```
 
 The script builds `.venv` with whatever `python3` is. If that is outside the
@@ -32,12 +32,14 @@ supported range, set up by hand with a supported interpreter:
 
 ```bash
 python3.12 -m venv .venv
-.venv/bin/python -m pip install --require-hashes --requirement requirements.txt
+.venv/bin/python -m pip install --require-hashes \
+  --requirement requirements.txt --requirement requirements-dev.txt
 npm ci
 ```
 
-The server and the tests spawn `python3` from `PATH`, so `.venv/bin` must come
-first; otherwise the Python-backed tests fail with `ModuleNotFoundError`.
+The server and the tests spawn `python3` from `PATH`, and `npm run lint` runs
+`ruff` from it, so `.venv/bin` must come first; otherwise the Python-backed
+tests fail with `ModuleNotFoundError`.
 
 ```bash
 export PATH="$PWD/.venv/bin:$PATH"
@@ -45,13 +47,18 @@ npm test                                   # all tests (node --test --test-concu
 node --test test/runtime-controls.test.js  # one file
 node --test --test-name-pattern="operation queue" test/runtime-controls.test.js  # one test by name
 npm run test:golden                        # golden PAdES corpus only (test/pades-golden.test.js)
-npm run verify                             # the CI gate: fixtures, tests, npm audit, SBOM
+npm run lint                               # Biome (JS) and Ruff (Python): lint + format check
+npm run format                             # rewrite JS and Python in the enforced format
+npm run verify                             # the CI gate: lint, fixtures, tests, npm audit, SBOM
 node src/server.js                         # loopback, PORT/BASE_PATH as in src/server.js
 ./scripts/scan-secrets.sh                  # pinned gitleaks over the full git history
 ```
 
-- No linter, formatter or build step; `public/` is served as is.
-- CI also runs `scripts/scan-secrets.sh` and `pip-audit` on `requirements.txt`
+- No build step; `public/` is served as is. Run `npm run format` before
+  committing: `verify` fails on unformatted JS or Python. Lint and format
+  settings live in `biome.jsonc` and `ruff.toml`; the one-off reformatting
+  commit is listed in `.git-blame-ignore-revs`.
+- CI also runs `scripts/scan-secrets.sh` and `pip-audit` on both Python locks
   (steps in `.github/workflows/ci.yml`); `npm run verify` runs neither. The
   secret scan needs Linux x86_64 and a clone with full history; its pinning
   and false-positive handling are in `docs/SUPPLY_CHAIN.md`.
@@ -59,8 +66,10 @@ node src/server.js                         # loopback, PORT/BASE_PATH as in src/
   `sbom:check` only with the npm from `packageManager` (CI installs it globally;
   or point `NPM_CLI` at that npm's `npm-cli.js`).
 - `npm run fixtures:generate` rebuilds `test/fixtures/` deterministically, and
-  `verify` fails if the output differs from the commit. A changed corpus is
-  committed together with `test/fixtures/manifest.json`.
+  `verify` fails if the output differs from the index (`git diff --exit-code --
+  test/fixtures`). Stage edits there, `generate.py` included, before a local
+  `verify`. A changed corpus is committed together with
+  `test/fixtures/manifest.json`.
 - Lock and SBOM updates: `docs/SUPPLY_CHAIN.md`. Browser vendor scripts:
   `docs/VENDOR_ASSETS.md`.
 

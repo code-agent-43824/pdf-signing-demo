@@ -15,7 +15,9 @@
     "baseline:capture": "node scripts/capture-production-baseline.js",
     "sbom:generate": "node scripts/generate-sbom.js",
     "sbom:check": "npm run sbom:generate && git diff --exit-code -- sbom",
-    "verify": "npm run fixtures:generate && git diff --exit-code -- test/fixtures && npm test && npm audit --omit=dev --audit-level=high && npm run sbom:check"
+    "lint": "biome ci --error-on-warnings . && ruff check . && ruff format --check .",
+    "format": "biome format --write . && ruff format .",
+    "verify": "npm run lint && npm run fixtures:generate && git diff --exit-code -- test/fixtures && npm test && npm audit --omit=dev --audit-level=high && npm run sbom:check"
   },
   "repository": {
     "type": "git",
