@@ -879,12 +879,12 @@
       ]
     },
     {
-      "bom-ref": "fast-uri@3.1.5",
+      "bom-ref": "fast-uri@3.1.8",
       "type": "library",
       "name": "fast-uri",
-      "version": "3.1.5",
+      "version": "3.1.8",
       "scope": "required",
-      "purl": "pkg:npm/fast-uri@3.1.5",
+      "purl": "pkg:npm/fast-uri@3.1.8",
       "properties": [
         {
           "name": "cdx:npm:package:path",
@@ -894,13 +894,13 @@
       "externalReferences": [
         {
           "type": "distribution",
-          "url": "https://registry.npmjs.org/fast-uri/-/fast-uri-3.1.5.tgz"
+          "url": "https://registry.npmjs.org/fast-uri/-/fast-uri-3.1.8.tgz"
         }
       ],
       "hashes": [
         {
           "alg": "SHA-512",
-          "content": "807c00d4ef4b0c870aba730a84e6d2fc78a6c2d7a13b59cf50408a02ee53a4a81a3b5f5f716125e1b96259ed635b1545bc85f3b498e34382fc5d0d4453d7fb27"
+          "content": "19932d6544cd4693952040a85f02cd652e7150613e99535b4c1f21ffb4708764c559c05088fcd3832662d39045f543192a42c9bfc5c14494e553bce0f3e65f32"
         }
       ],
       "licenses": [
@@ -1900,12 +1900,12 @@
       ]
     },
     {
-      "bom-ref": "qs@6.15.3",
+      "bom-ref": "qs@6.16.0",
       "type": "library",
       "name": "qs",
-      "version": "6.15.3",
+      "version": "6.16.0",
       "scope": "required",
-      "purl": "pkg:npm/qs@6.15.3",
+      "purl": "pkg:npm/qs@6.16.0",
       "properties": [
         {
           "name": "cdx:npm:package:path",
@@ -1915,13 +1915,13 @@
       "externalReferences": [
         {
           "type": "distribution",
-          "url": "https://registry.npmjs.org/qs/-/qs-6.15.3.tgz"
+          "url": "https://registry.npmjs.org/qs/-/qs-6.16.0.tgz"
         }
       ],
       "hashes": [
         {
           "alg": "SHA-512",
-          "content": "3bd825df30a5e61e5b970d4a194cd02a1039a145d297caf0508339a344b79c25cc9624afcb90f3c7bfc325c23e4b08080aff889de499c21061d684b210703bd4"
+          "content": "87a7e1388691ac80f609b118d9faacfbbb7e517668f8c2c09d4e60448abce6e16d76250f09db00a4c947857a202953381ccd8355b22318d4d3607d8e7263f5bc"
         }
       ],
       "licenses": [
@@ -2625,7 +2625,7 @@
       "ref": "ajv@8.20.0",
       "dependsOn": [
         "fast-deep-equal@3.1.3",
-        "fast-uri@3.1.5",
+        "fast-uri@3.1.8",
         "json-schema-traverse@1.0.0",
         "require-from-string@2.0.2"
       ]
@@ -2639,7 +2639,7 @@
         "http-errors@2.0.1",
         "iconv-lite@0.7.2",
         "on-finished@2.4.1",
-        "qs@6.15.3",
+        "qs@6.16.0",
         "raw-body@3.0.2",
         "type-is@2.1.0"
       ]
@@ -2753,7 +2753,7 @@
         "once@1.4.0",
         "parseurl@1.3.3",
         "proxy-addr@2.0.7",
-        "qs@6.15.3",
+        "qs@6.16.0",
         "range-parser@1.2.1",
         "router@2.2.0",
         "send@1.2.1",
@@ -2768,7 +2768,7 @@
       "dependsOn": []
     },
     {
-      "ref": "fast-uri@3.1.5",
+      "ref": "fast-uri@3.1.8",
       "dependsOn": []
     },
     {
@@ -2937,7 +2937,7 @@
       ]
     },
     {
-      "ref": "qs@6.15.3",
+      "ref": "qs@6.16.0",
       "dependsOn": [
         "es-define-property@1.0.1",
         "side-channel@1.1.1"
