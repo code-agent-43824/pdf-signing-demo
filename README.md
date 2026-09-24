@@ -165,7 +165,9 @@ handlers, а также `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`,
 `Cache-Control: no-store`. Узкие разрешения `chrome-extension:`,
 `object-src 'self'` и `cpnp-js-call:` необходимы официальным browser
 adapter-ам CryptoPro и Рутокен; произвольные Internet script origins не
-разрешены.
+разрешены. Единственное исключение из запрета inline-script — два скрипта,
+которые внедряет Firefox-сборка расширения «Адаптер Рутокен Плагин»: они
+разрешены по SHA-256 ровно в опубликованном виде (см. `docs/VENDOR_ASSETS.md`).
 Ответ preview PDF переопределяет только anti-framing границу на
 `frame-ancestors 'self'` / `X-Frame-Options: SAMEORIGIN`, чтобы встроенный
 просмотр работал без разрешения стороннего framing.

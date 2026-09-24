@@ -7,12 +7,19 @@ const { createPublicRouter } = require('./routes/public');
 const { createResultsRouter } = require('./routes/results');
 const { createSigningRouter } = require('./routes/signing');
 
+// The Firefox build of the Rutoken plugin adapter extension injects its page
+// API as two inline scripts; only their exact bytes are allowed. See
+// docs/VENDOR_ASSETS.md for provenance and the update procedure.
+const RUTOKEN_FIREFOX_EXTENSION_SCRIPT_HASHES = [
+  "'sha256-5epwHySnl/2Nz+M21+GuQjeIXDsN4lByEHvdC9H8YNE='",
+  "'sha256-5MyJ6ld/sjredewMYpOCTA4w1kqSSaYMzhVMWJECZ8o='",
+];
 const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
   "base-uri 'none'",
   "form-action 'none'",
   "frame-ancestors 'none'",
-  "script-src 'self' chrome-extension:",
+  `script-src 'self' chrome-extension: ${RUTOKEN_FIREFOX_EXTENSION_SCRIPT_HASHES.join(' ')}`,
   "script-src-attr 'none'",
   "style-src 'self'",
   "style-src-attr 'unsafe-inline'",

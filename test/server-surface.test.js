@@ -206,7 +206,12 @@ function assertBrowserSecurityHeaders(response) {
   const csp = response.headers.get('content-security-policy');
   assert.ok(csp);
   assert.match(csp, /(?:^|; )default-src 'self'(?:;|$)/);
-  assert.match(csp, /(?:^|; )script-src 'self' chrome-extension:(?:;|$)/);
+  assert.equal(
+    csp.match(/(?:^|; )script-src ([^;]+)/)?.[1],
+    "'self' chrome-extension:"
+      + " 'sha256-5epwHySnl/2Nz+M21+GuQjeIXDsN4lByEHvdC9H8YNE='"
+      + " 'sha256-5MyJ6ld/sjredewMYpOCTA4w1kqSSaYMzhVMWJECZ8o='",
+  );
   assert.match(csp, /(?:^|; )script-src-attr 'none'(?:;|$)/);
   assert.match(csp, /(?:^|; )frame-ancestors 'none'(?:;|$)/);
   assert.match(csp, /(?:^|; )object-src 'self'(?:;|$)/);

@@ -129,8 +129,11 @@ shape.
 - `test/frontend-modules.test.js` runs the modules in `node:vm` with a fake
   `window`, so a module must not touch the DOM at load time and takes its
   dependencies as factory arguments.
-- The CSP forbids inline scripts and `on*=` attributes. Vendor scripts in
-  `public/vendor/` are pinned by `SHA256SUMS` and by SHA-384 SRI in
+- The CSP forbids inline scripts and `on*=` attributes. The only exception is
+  the two inline scripts injected by the Firefox build of the Rutoken
+  extension, allowed by hash (`RUTOKEN_FIREFOX_EXTENSION_SCRIPT_HASHES` in
+  `src/application.js`; update procedure in `docs/VENDOR_ASSETS.md`). Vendor
+  scripts in `public/vendor/` are pinned by `SHA256SUMS` and by SHA-384 SRI in
   `CRYPTO_SCRIPTS` (`app.js`).
 
 ### Pitfalls
@@ -142,6 +145,10 @@ shape.
   config. Renaming a string or moving code between files means updating these
   tests on purpose.
 - The allowed runtime dependency set is asserted in `test/supply-chain.test.js`.
+- A browser check without the real CryptoPro and Rutoken extensions does not
+  exercise how they inject into the page. Verify a CSP change with the
+  published extensions in both Chrome and Firefox: the Firefox Rutoken build
+  injects inline scripts, the Chrome build does not (`docs/JOURNAL.md`).
 
 ### Other documents
 

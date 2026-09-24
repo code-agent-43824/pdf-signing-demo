@@ -51,3 +51,34 @@ permits the `chrome-extension:` script scheme but no Internet script hosts.
 
 An upstream change with the same URL is not accepted automatically: the local
 copy changes only through this review procedure.
+
+## Firefox-расширение «Адаптер Рутокен Плагин»
+
+Firefox-сборка расширения (MV2) внедряет свой API в страницу двумя
+inline-скриптами. При загрузке страницы первый скрипт создаёт объект
+`window["C3B7563B-BF85-45B7-88FC-7CFF1BD3C2DB"]`, а при `initialize()` второй
+скрипт вставляет `webpage.js`. CSP приложения запрещает inline-скрипты, а
+Firefox применяет CSP страницы и к скриптам расширений (Mozilla bug 1446231).
+Поэтому ровно эти два текста разрешены по SHA-256 — константа
+`RUTOKEN_FIREFOX_EXTENSION_SCRIPT_HASHES` в `src/application.js`. Chrome-сборка
+(MV3) внедряет API вне CSP страницы, и хеши ей не нужны. Любой другой
+inline-скрипт по-прежнему запрещён.
+
+- Источник: `https://addons.mozilla.org/firefox/downloads/latest/adapter-rutoken-plugin/latest.xpi`,
+  расширение `rutokenplugin@rutoken.ru` версии 1.0.5.0, получено 2026-09-24.
+- XPI: 44 700 байт, SHA-256
+  `00d7e9965f2039b1d69e8e235afc2df8089c3fd7171823dc62f3906078fb0df4`.
+- Хеши считает `scripts/rutoken-firefox-csp-hashes.js`: он выполняет
+  `content.js` расширения на заглушках DOM и хеширует ровно вставленный текст.
+
+Процедура обновления, когда на AMO выходит новая версия расширения:
+
+1. Скачать XPI во временный каталог и распаковать его:
+   `unzip latest.xpi -d rutoken-xpi`.
+2. Запустить `node scripts/rutoken-firefox-csp-hashes.js rutoken-xpi`. Скрипт
+   печатает хеши и помечает отсутствующие в CSP (тогда код выхода 1).
+3. Заменить значения в `RUTOKEN_FIREFOX_EXTENSION_SCRIPT_HASHES` и в проверке
+   CSP в `test/server-surface.test.js`, обновить здесь версию и SHA-256 XPI.
+4. Проверить в Firefox с установленным расширением: объект
+   `window["C3B7563B-BF85-45B7-88FC-7CFF1BD3C2DB"]` появляется, в консоли нет
+   нарушений CSP, а с реальным токеном проходит подпись.
