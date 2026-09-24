@@ -15,8 +15,10 @@
   production в Firefox 156 без расширения CryptoPro. С установленным CryptoPro
   переключение не проверялось — нужен компьютер владельца.
 - **Ствол `main`.** Зелёный: начиная с `4b279d2` проходят все гейты CI, включая
-  `npm audit` и `pip-audit`. Гейтов lint/форматирования и поиска секретов из
-  §10 `docs/REMEDIATION_PLAN.md` в `.github/workflows/ci.yml` нет.
+  `npm audit` и `pip-audit`. Поиск секретов по всей истории
+  (`scripts/scan-secrets.sh`) в `.github/workflows/ci.yml` есть, гейтов
+  lint/форматирования из §10 `docs/REMEDIATION_PLAN.md` пока нет (пункт в
+  `docs/PLAN.md`).
 - **Известные дефекты.** Нет.
 - **CAdES-BES (`docs/CADES_BES_PLAN.md`).** Этап 0 не закрыт: вердикт spike —
   `PARTIAL`, прогона с реальными провайдерами на компьютере владельца в

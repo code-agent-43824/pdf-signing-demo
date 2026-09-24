@@ -47,11 +47,14 @@ node --test --test-name-pattern="operation queue" test/runtime-controls.test.js 
 npm run test:golden                        # golden PAdES corpus only (test/pades-golden.test.js)
 npm run verify                             # the CI gate: fixtures, tests, npm audit, SBOM
 node src/server.js                         # loopback, PORT/BASE_PATH as in src/server.js
+./scripts/scan-secrets.sh                  # pinned gitleaks over the full git history
 ```
 
 - No linter, formatter or build step; `public/` is served as is.
-- CI also runs `pip-audit` on `requirements.txt` (step "Audit locked Python
-  dependencies" in `.github/workflows/ci.yml`); `npm run verify` does not.
+- CI also runs `scripts/scan-secrets.sh` and `pip-audit` on `requirements.txt`
+  (steps in `.github/workflows/ci.yml`); `npm run verify` runs neither. The
+  secret scan needs Linux x86_64 and a clone with full history; its pinning
+  and false-positive handling are in `docs/SUPPLY_CHAIN.md`.
 - The committed SBOM records the npm version: run `npm run sbom:generate` and
   `sbom:check` only with the npm from `packageManager` (CI installs it globally;
   or point `NPM_CLI` at that npm's `npm-cli.js`).
@@ -193,6 +196,10 @@ shape.
   (`spikes/001-cades-bes-provider-capability/README.md`).
 - **`requirements.constraints.txt` pins the transitive closure,** so CI and
   production Pythons resolve the same versions (see its header).
+- **CI carries lint/format and secret-scanning gates.** By the owner's decision
+  (2026-09-24), closing the gap against §10 of `docs/REMEDIATION_PLAN.md`. The
+  tools are CI and developer dependencies only and never reach the server;
+  their pins are in `docs/SUPPLY_CHAIN.md`.
 
 ## Departures from AGENTS.md
 
