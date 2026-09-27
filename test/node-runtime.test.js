@@ -5,6 +5,10 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { test } = require('node:test');
 const { parseNodeVersion, satisfiesPin } = require('../scripts/check-node-runtime');
+const {
+  compareVersions,
+  missedSecurityReleases,
+} = require('../scripts/check-node-security-releases');
 
 const GATE_PATH = path.join(__dirname, '..', 'scripts', 'check-node-runtime.js');
 
@@ -55,4 +59,35 @@ test('Node runtime gate reports the running Node and fails closed', () => {
   const malformed = runGate('lts');
   assert.equal(malformed.status, 1);
   assert.match(malformed.stderr, /not a Node\.js version/);
+});
+
+// Shape of nodejs.org/dist/index.json; versions and dates are made up.
+const RELEASE_INDEX = [
+  { version: 'v24.40.0', date: '2031-05-01', security: true },
+  { version: 'v22.41.1', date: '2031-04-20', security: false },
+  { version: 'v22.41.0', date: '2031-04-01', security: true },
+  { version: 'v22.40.2', date: '2031-03-01', security: true },
+  { version: 'v22.40.1', date: '2031-02-01', security: false },
+  { version: 'v22.40.0', date: '2031-01-01', security: true },
+  { version: 'v20.40.0', date: '2031-04-01', security: true },
+];
+
+test('weekly check lists security releases of the pinned major newer than the pin', () => {
+  assert.deepEqual(missedSecurityReleases('22.40.0', RELEASE_INDEX), [
+    '22.41.0 (2031-04-01)',
+    '22.40.2 (2031-03-01)',
+  ]);
+  assert.deepEqual(missedSecurityReleases('22.40.2', RELEASE_INDEX), ['22.41.0 (2031-04-01)']);
+  assert.deepEqual(missedSecurityReleases('22.41.1', RELEASE_INDEX), []);
+  assert.deepEqual(missedSecurityReleases('22.41.0', RELEASE_INDEX), []);
+
+  assert.ok(compareVersions('v22.40.10', '22.40.2') > 0);
+  assert.ok(compareVersions('22.9.0', '22.10.0') < 0);
+  assert.equal(compareVersions('v22.40.2', '22.40.2'), 0);
+
+  assert.throws(() => missedSecurityReleases('22.40.0', { releases: [] }), /not a list/);
+  assert.throws(
+    () => missedSecurityReleases('22.40.0', [{ version: 'latest', security: true }]),
+    /not a Node\.js version/,
+  );
 });

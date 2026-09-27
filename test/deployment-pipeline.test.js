@@ -31,6 +31,11 @@ test('production deployment keeps required safety gates', () => {
     workflow,
     /group: pdf-signing-\$\{\{ github\.event_name == 'schedule' && 'schedule'/,
   );
+  // Only the weekly run checks the Node pin against Node security releases.
+  assert.match(
+    workflow,
+    /\n {8}if: github\.event_name == 'schedule'\n {8}run: node scripts\/check-node-security-releases\.js\n/,
+  );
   assert.match(workflow, /PRODUCTION_KNOWN_HOSTS/);
   assert.match(deploy, /flock -n/);
   // The binary that will run the release is checked against the pin before

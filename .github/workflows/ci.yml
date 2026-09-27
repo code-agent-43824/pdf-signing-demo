@@ -58,6 +58,12 @@ jobs:
             --requirement requirements-dev.txt \
             --disable-pip
 
+      # Audits do not cover Node itself. Scheduled runs only: on push a new
+      # Node release would block every commit until the server is upgraded.
+      - name: Check for Node security releases newer than the pin
+        if: github.event_name == 'schedule'
+        run: node scripts/check-node-security-releases.js
+
   deploy-production:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && !contains(github.event.head_commit.message, '[skip deploy]')
     needs: golden-pades
