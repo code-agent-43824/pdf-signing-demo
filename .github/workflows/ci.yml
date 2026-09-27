@@ -4,12 +4,18 @@ on:
   push:
     branches: [main]
   pull_request:
+  schedule:
+    # Weekly run of every gate on main, so npm audit and pip-audit catch
+    # advisories published between pushes. deploy-production runs only on push.
+    - cron: '17 4 * * 1'
 
 permissions:
   contents: read
 
 concurrency:
-  group: pdf-signing-${{ github.ref }}
+  # Scheduled runs get their own group: in the push group of main a queued
+  # scheduled run would cancel a pending push run, and with it that deploy.
+  group: pdf-signing-${{ github.event_name == 'schedule' && 'schedule' || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:

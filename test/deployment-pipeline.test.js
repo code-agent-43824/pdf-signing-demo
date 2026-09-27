@@ -24,6 +24,13 @@ test('production deployment keeps required safety gates', () => {
   assert.match(workflow, /needs: golden-pades/);
   assert.match(workflow, /environment: production/);
   assert.match(workflow, /\[skip deploy\]/);
+  // The weekly audit run must never deploy or cancel a pending push run.
+  assert.match(workflow, /^ {2}schedule:\n(?: {4}#.*\n)* {4}- cron: '[^']+'$/m);
+  assert.match(workflow, /if: github\.event_name == 'push' && github\.ref == 'refs\/heads\/main'/);
+  assert.match(
+    workflow,
+    /group: pdf-signing-\$\{\{ github\.event_name == 'schedule' && 'schedule'/,
+  );
   assert.match(workflow, /PRODUCTION_KNOWN_HOSTS/);
   assert.match(deploy, /flock -n/);
   assert.match(deploy, /verify-release\.sh/);
