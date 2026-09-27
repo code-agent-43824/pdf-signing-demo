@@ -62,11 +62,12 @@ node src/server.js                         # loopback, PORT/BASE_PATH as in src/
   (steps in `.github/workflows/ci.yml`); `npm run verify` runs neither. The
   secret scan needs Linux x86_64 and a clone with full history; its pinning
   and false-positive handling are in `docs/SUPPLY_CHAIN.md`.
-- CI also runs weekly on a `schedule` against the head of `main` and never
-  deploys then. A red scheduled run with no new commit means a new advisory,
-  a drifted environment or, from `scripts/check-node-security-releases.js`
-  (scheduled runs only), a Node security release newer than the pin — not a
-  broken commit (`docs/SUPPLY_CHAIN.md`).
+- CI also runs weekly on a `schedule` against the head of `main`, and the same
+  checks run on demand (`workflow_dispatch`); neither deploys. A red run of
+  either kind with no new commit means a new advisory, a drifted environment
+  or, from `scripts/check-node-security-releases.js` (these runs only), a Node
+  security release newer than the pin — not a broken commit
+  (`docs/SUPPLY_CHAIN.md`).
 - The committed SBOM records the npm version: run `npm run sbom:generate` and
   `sbom:check` only with the npm from `packageManager` (CI installs it globally;
   or point `NPM_CLI` at that npm's `npm-cli.js`).

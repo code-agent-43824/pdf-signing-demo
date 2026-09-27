@@ -8,14 +8,16 @@ on:
     # Weekly run of every gate on main, so npm audit and pip-audit catch
     # advisories published between pushes. deploy-production runs only on push.
     - cron: '17 4 * * 1'
+  # The same checks on demand, e.g. right after a Node upgrade on the server.
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  # Scheduled runs get their own group: in the push group of main a queued
-  # scheduled run would cancel a pending push run, and with it that deploy.
-  group: pdf-signing-${{ github.event_name == 'schedule' && 'schedule' || github.ref }}
+  # Scheduled and manual runs get their own groups: in the push group of main
+  # a queued one would cancel a pending push run, and with it that deploy.
+  group: pdf-signing-${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && github.event_name || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -58,10 +60,11 @@ jobs:
             --requirement requirements-dev.txt \
             --disable-pip
 
-      # Audits do not cover Node itself. Scheduled runs only: on push a new
-      # Node release would block every commit until the server is upgraded.
+      # Audits do not cover Node itself. Scheduled and manual runs only: on
+      # push a new Node release would block every commit until the server is
+      # upgraded.
       - name: Check for Node security releases newer than the pin
-        if: github.event_name == 'schedule'
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         run: node scripts/check-node-security-releases.js
 
   deploy-production:

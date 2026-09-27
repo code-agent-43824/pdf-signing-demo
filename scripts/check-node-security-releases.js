@@ -4,9 +4,9 @@
 // Weekly CI check: fails when nodejs.org lists a security release of the
 // pinned major that is newer than .node-version. npm audit and pip-audit do
 // not cover Node itself, which is how the pin once fell two security releases
-// behind unnoticed (docs/JOURNAL.md, 2026-09-27). It runs only on schedule: on
-// push a new Node release would block every commit until the server is
-// upgraded (docs/SUPPLY_CHAIN.md, "Обновление Node").
+// behind unnoticed (docs/JOURNAL.md, 2026-09-27). It runs only in scheduled
+// and manual runs: on push a new Node release would block every commit until
+// the server is upgraded (docs/SUPPLY_CHAIN.md, "Обновление Node").
 
 const fs = require('node:fs');
 const path = require('node:path');

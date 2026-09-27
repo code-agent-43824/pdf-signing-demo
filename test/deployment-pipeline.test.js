@@ -24,17 +24,25 @@ test('production deployment keeps required safety gates', () => {
   assert.match(workflow, /needs: golden-pades/);
   assert.match(workflow, /environment: production/);
   assert.match(workflow, /\[skip deploy\]/);
-  // The weekly audit run must never deploy or cancel a pending push run.
+  // The weekly and manual check runs must never deploy or cancel a pending
+  // push run.
   assert.match(workflow, /^ {2}schedule:\n(?: {4}#.*\n)* {4}- cron: '[^']+'$/m);
+  assert.match(workflow, /^ {2}workflow_dispatch:$/m);
   assert.match(workflow, /if: github\.event_name == 'push' && github\.ref == 'refs\/heads\/main'/);
+  const checkRun =
+    "github\\.event_name == 'schedule' \\|\\| github\\.event_name == 'workflow_dispatch'";
   assert.match(
     workflow,
-    /group: pdf-signing-\$\{\{ github\.event_name == 'schedule' && 'schedule'/,
+    new RegExp(
+      `group: pdf-signing-\\$\\{\\{ \\(${checkRun}\\) && github\\.event_name \\|\\| github\\.ref \\}\\}`,
+    ),
   );
-  // Only the weekly run checks the Node pin against Node security releases.
+  // Only those runs check the Node pin against Node security releases.
   assert.match(
     workflow,
-    /\n {8}if: github\.event_name == 'schedule'\n {8}run: node scripts\/check-node-security-releases\.js\n/,
+    new RegExp(
+      `\\n {8}if: ${checkRun}\\n {8}run: node scripts/check-node-security-releases\\.js\\n`,
+    ),
   );
   assert.match(workflow, /PRODUCTION_KNOWN_HOSTS/);
   assert.match(deploy, /flock -n/);
