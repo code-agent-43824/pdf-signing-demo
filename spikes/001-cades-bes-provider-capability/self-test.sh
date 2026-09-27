@@ -88,7 +88,8 @@ vm.runInNewContext(fs.readFileSync(process.argv[2], 'utf8'), context);
 });
 JS
 
-xxd -r -p "$spike_dir/fixture.hex" > "$temp_dir/fixture.bin"
+python3 -c 'import pathlib, sys; sys.stdout.buffer.write(bytes.fromhex(pathlib.Path(sys.argv[1]).read_text(encoding="ascii").strip()))' \
+  "$spike_dir/fixture.hex" > "$temp_dir/fixture.bin"
 openssl req -x509 -newkey rsa:2048 -nodes -sha256 -days 1 \
   -subj '/CN=CAdES BES spike self-test' \
   -keyout "$temp_dir/key.pem" -out "$temp_dir/cert.pem" >/dev/null 2>&1
