@@ -240,8 +240,8 @@ fail-closed контракт и проверка всех PDF signatures не о
 - Result headers, safe filename, download-only capability, TTL/restart и disk
   capacity.
 - Browser flow для обоих providers и обоих packaging modes поверх mocks.
-- Полный regression существующих 73 тестов, 1–4 PAdES signatures, malformed
-  corpus, fixtures, SBOM и audits.
+- Полный regression существующего набора (`npm run verify`), 1–4 PAdES
+  signatures, malformed corpus, fixtures, SBOM и audits.
 
 ## 7. Definition of Done
 
