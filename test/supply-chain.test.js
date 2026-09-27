@@ -27,7 +27,7 @@ test('runtime dependency trees are minimal and fully locked', () => {
   const packageJson = readJson('package.json');
   assert.deepEqual(Object.keys(packageJson.dependencies).sort(), ['ajv', 'express', 'pdf-lib']);
   const nodePin = fs.readFileSync(path.join(root, '.node-version'), 'utf8').trim();
-  assert.equal(nodePin, '22.22.2');
+  assert.equal(nodePin, '22.23.3');
   // scripts/check-node-runtime.js enforces this range on the server at deploy.
   assert.equal(packageJson.engines.node, `>=${nodePin} <${Number(nodePin.split('.')[0]) + 1}`);
 
