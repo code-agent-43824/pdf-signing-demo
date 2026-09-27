@@ -3,12 +3,32 @@
 ## Поддерживаемые версии
 
 - Node.js — версия из `.node-version`; `package.json#engines` допускает только
-  Node 22 не ниже неё.
+  ту же major-версию не ниже неё. `npm ci` о несовпадении `engines` только
+  предупреждает, поэтому деплой сам проверяет Node на сервере
+  (`scripts/check-node-runtime.js`) до любых изменений и печатает его версию
+  в лог.
 - npm — версия из `package.json#packageManager`. CI ставит её глобально, деплой
   на сервере использует отдельную копию этой версии (`NPM_CLI` в
   `scripts/deploy-production.sh`).
 - Python — от 3.12 до 3.14. CI работает на версии из
   `.github/workflows/ci.yml`, production — на 3.14.
+
+### Обновление Node
+
+Node на сервере ставится вручную (`NODE_BIN` в
+`scripts/deploy-production.sh`); это ручная работа на общем хосте, её делает
+владелец или Watson (`AGENTS.md`, §5–6). Поэтому версия поднимается в два
+шага:
+
+1. На сервер ставится новый Node той же major-версии. Деплой примет его и при
+   старом пине.
+2. Одним коммитом меняются `.node-version`, `engines` в `package.json`, корень
+   `package-lock.json` (`npm install --package-lock-only`) и пин в
+   `test/supply-chain.test.js`. CI проверяет релиз на новом Node, деплой —
+   что сервер его уже получил.
+
+В обратном порядке деплой остановится на проверке версии, не тронув
+production.
 
 ## Зависимости Node
 

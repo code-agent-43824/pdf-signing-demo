@@ -337,7 +337,12 @@ host key — в секретах `PRODUCTION_SSH_KEY` и `PRODUCTION_KNOWN_HOSTS
 сервере отдельный и имеет SSH-ограничение `restrict`; административные ключи
 в CI не передаются. Деплой на сервере использует отдельную копию npm
 закреплённой версии (`NPM_CLI` в `scripts/deploy-production.sh`); npm не
-входит в runtime-зависимости приложения.
+входит в runtime-зависимости приложения. Node деплой берёт из `NODE_BIN` (по
+умолчанию — тот же бинарник, которым сервис запускается в
+`deploy/pdf-signing-demo.service`) и до любых изменений на сервере проверяет
+его `scripts/check-node-runtime.js`: major-версия должна совпадать с
+`.node-version`, а сама версия — быть не старше пина. Проверенная версия
+печатается в лог деплоя. Порядок обновления Node — в `docs/SUPPLY_CHAIN.md`.
 
 `scripts/check-observability.js` проверяет local и public readiness,
 состояние и рестарты systemd, свободное место на хосте, очередь воркеров,

@@ -33,6 +33,12 @@ test('production deployment keeps required safety gates', () => {
   );
   assert.match(workflow, /PRODUCTION_KNOWN_HOSTS/);
   assert.match(deploy, /flock -n/);
+  // The binary that will run the release is checked against the pin before
+  // the deploy changes anything on the server.
+  assert.match(
+    deploy,
+    /"\$\{node_bin\}" "\$\{staging_dir\}\/scripts\/check-node-runtime\.js"\n[\s\S]*"\$\{storage_script\}" preflight/,
+  );
   assert.match(deploy, /verify-release\.sh/);
   assert.match(deploy, /smoke-signing\.js/);
   assert.match(deploy, /pdf_signing_process_start_time_seconds/);

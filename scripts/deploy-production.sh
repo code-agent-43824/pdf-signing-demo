@@ -87,6 +87,7 @@ if [[ "$("${node_bin}" "${npm_cli}" --version)" != 10.9.8 ]]; then
   echo "pinned npm 10.9.8 is unavailable" >&2
   exit 1
 fi
+"${node_bin}" "${staging_dir}/scripts/check-node-runtime.js"
 
 "${storage_script}" preflight "${service_root}" "${staging_dir}"
 

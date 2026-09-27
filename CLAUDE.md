@@ -242,6 +242,11 @@ needs `npm run sbom:generate`.
   (`scripts/verify-release.sh`), smoke-tests a canary with
   `scripts/smoke-signing.js`, switches the `current` symlink atomically and
   rolls back on any later failure.
+- Node on the server is installed by hand (`NODE_BIN` in
+  `scripts/deploy-production.sh`). Before touching anything the deploy runs
+  `scripts/check-node-runtime.js` with that binary: the pinned major, no older
+  than `.node-version`. Bump the pin only after the server has that Node, or
+  the deploy stops there (`docs/SUPPLY_CHAIN.md`).
 - After a deploy, read the `deploy-production` job log (a successful run
   prints `deployed <sha>`), then check the public `health/ready` and the
   neighbouring site served by the same Caddy block
