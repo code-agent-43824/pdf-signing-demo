@@ -581,6 +581,7 @@ test('complete verifies CMS integrity, certificate binding and retry semantics',
     .toString('base64');
   const prepareResponse = await postJson('api/sign/prepare', {
     pdfBase64,
+    sourceName: 'Договор.v2.final.pdf',
     signer: validSigner(),
   });
   assert.equal(prepareResponse.status, 200);
@@ -655,12 +656,13 @@ test('complete verifies CMS integrity, certificate binding and retry semantics',
   assert.match(completed.signedPdfUrl, /^\.\/api\/results\/[A-Za-z0-9_-]{43}$/);
   assert.match(completed.downloadUrl, /^\.\/api\/results\/[A-Za-z0-9_-]{43}$/);
   assert.notEqual(completed.signedPdfUrl, completed.downloadUrl);
+  assert.equal(completed.downloadName, 'Договор.v2.final-signed.pdf');
   assert.ok(Date.parse(completed.resultExpiresAt) > Date.now());
   const signedPdfResponse = await fetch(new URL(completed.signedPdfUrl, baseUrl));
   assert.equal(signedPdfResponse.status, 200);
   assert.equal(
     signedPdfResponse.headers.get('content-disposition'),
-    'inline; filename="signed-formular.pdf"',
+    `inline; filename="signed-document.pdf"; filename*=UTF-8''${encodeURIComponent(completed.downloadName)}`,
   );
   assert.equal(signedPdfResponse.headers.get('x-frame-options'), 'SAMEORIGIN');
   assert.match(signedPdfResponse.headers.get('content-security-policy'), /frame-ancestors 'self'/);
@@ -684,7 +686,7 @@ test('complete verifies CMS integrity, certificate binding and retry semantics',
   assert.equal(downloadResponse.headers.has('accept-ranges'), false);
   assert.equal(
     downloadResponse.headers.get('content-disposition'),
-    'attachment; filename="signed-formular.pdf"',
+    `attachment; filename="signed-document.pdf"; filename*=UTF-8''${encodeURIComponent(completed.downloadName)}`,
   );
   assert.match(downloadResponse.headers.get('cache-control'), /no-store/);
   assert.equal(

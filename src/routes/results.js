@@ -1,8 +1,9 @@
 const express = require('express');
 const { HttpError } = require('../http/validation');
 const { sendSafeError } = require('../http/errors');
+const { contentDisposition } = require('../http/download-name');
 
-function resultHeaders(kind) {
+function resultHeaders(kind, downloadName = 'document-signed.pdf') {
   const headers = {
     'Cache-Control': 'no-store, private, max-age=0',
     Pragma: 'no-cache',
@@ -10,7 +11,7 @@ function resultHeaders(kind) {
     'Referrer-Policy': 'no-referrer',
     'X-Content-Type-Options': 'nosniff',
     'Cross-Origin-Resource-Policy': 'same-origin',
-    'Content-Disposition': `${kind === 'download' ? 'attachment' : 'inline'}; filename="signed-formular.pdf"`,
+    'Content-Disposition': contentDisposition(kind, downloadName),
   };
   if (kind === 'preview') {
     headers['Content-Security-Policy'] = "default-src 'none'; frame-ancestors 'self'";
@@ -44,7 +45,7 @@ function createResultsRouter({ results }) {
       result.filePath,
       {
         acceptRanges: result.kind !== 'download',
-        headers: resultHeaders(result.kind),
+        headers: resultHeaders(result.kind, result.downloadName),
       },
       (error) => {
         if (!error) return;

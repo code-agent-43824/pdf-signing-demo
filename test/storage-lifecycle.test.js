@@ -141,11 +141,12 @@ test('result capabilities survive restart and remain valid for the full TTL', as
     now: () => timestamp,
   };
   const firstStore = createResultStore(options);
-  const saved = await firstStore.save(Buffer.from('%PDF-restart'));
+  const saved = await firstStore.save(Buffer.from('%PDF-restart'), 'Договор.v2-signed.pdf');
   firstStore.close();
 
   const restoredStore = createResultStore(options);
   assert.equal(restoredStore.resolve(saved.previewToken).kind, 'preview');
+  assert.equal(restoredStore.resolve(saved.previewToken).downloadName, 'Договор.v2-signed.pdf');
   assert.equal(restoredStore.resolve(saved.downloadToken).kind, 'download');
   timestamp += 999;
   assert.equal(restoredStore.resolve(saved.previewToken).kind, 'preview');

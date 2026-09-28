@@ -68,7 +68,11 @@
 
     function resolve(serverConfig) {
       const saved = load();
-      return ensureShape(saved ? merge(serverConfig, saved) : serverConfig);
+      const resolved = ensureShape(saved ? merge(serverConfig, saved) : serverConfig);
+      if (resolved.signatureObject.reason === 'Выдан: {signer.issuer}') {
+        resolved.signatureObject.reason = '';
+      }
+      return resolved;
     }
 
     return Object.freeze({

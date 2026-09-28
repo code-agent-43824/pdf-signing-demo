@@ -28,6 +28,7 @@ const {
 const { createRateLimitMiddleware } = require('../http/rate-limit');
 const { WorkerProcessError, runIsolatedProcess } = require('../runtime/process-runner');
 const { StorageLimitError } = require('../storage/lifecycle');
+const { createDownloadName } = require('../http/download-name');
 
 const CMS_NORMALIZER_PATH = path.join(__dirname, '..', '..', 'scripts', 'normalize-cms.py');
 
@@ -182,6 +183,7 @@ function createSigningRouter({
             {
               ...prepared,
               expectedCertificateSha256: signer.certificateSha256,
+              downloadName: createDownloadName(req.body.sourceName),
             },
             ownerKeyForRequest(req),
           );
@@ -280,7 +282,7 @@ function createSigningRouter({
               throw error;
             }
 
-            const storedResult = await results.save(signedPdf);
+            const storedResult = await results.save(signedPdf, session.downloadName);
             sessions.complete(sessionId);
             return {
               storedResult,
@@ -305,7 +307,7 @@ function createSigningRouter({
         ok: true,
         signedPdfUrl: `./api/results/${completed.storedResult.previewToken}`,
         downloadUrl: `./api/results/${completed.storedResult.downloadToken}`,
-        downloadName: 'signed-formular.pdf',
+        downloadName: completed.storedResult.downloadName,
         resultExpiresAt: new Date(completed.storedResult.expiresAt).toISOString(),
         verification: createVerificationResult(completed.integrity, completed.embeddedIntegrity),
       });

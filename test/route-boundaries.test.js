@@ -6,6 +6,13 @@ const { test } = require('node:test');
 const { createApplication } = require('../src/application');
 const { startServer } = require('../src/bootstrap');
 const { resultHeaders } = require('../src/routes/results');
+const { createDownloadName } = require('../src/http/download-name');
+
+test('result names preserve Unicode and multiple dots without carrying paths or controls', () => {
+  assert.equal(createDownloadName('Договор.v2.final.pdf'), 'Договор.v2.final-signed.pdf');
+  assert.equal(createDownloadName('C:\\drafts\\x\r\n.pdf'), 'x-signed.pdf');
+  assert.equal(createDownloadName('..'), 'document-signed.pdf');
+});
 
 function applicationDependencies(overrides = {}) {
   const statsStore = { stats: () => ({}) };
@@ -35,10 +42,16 @@ test('result routes keep preview and download security contracts distinct', () =
   const preview = resultHeaders('preview');
   const download = resultHeaders('download');
 
-  assert.equal(preview['Content-Disposition'], 'inline; filename="signed-formular.pdf"');
+  assert.equal(
+    preview['Content-Disposition'],
+    'inline; filename="signed-document.pdf"; filename*=UTF-8\'\'document-signed.pdf',
+  );
   assert.equal(preview['X-Frame-Options'], 'SAMEORIGIN');
   assert.equal(preview['Content-Security-Policy'], "default-src 'none'; frame-ancestors 'self'");
-  assert.equal(download['Content-Disposition'], 'attachment; filename="signed-formular.pdf"');
+  assert.equal(
+    download['Content-Disposition'],
+    'attachment; filename="signed-document.pdf"; filename*=UTF-8\'\'document-signed.pdf',
+  );
   assert.equal(Object.hasOwn(download, 'X-Frame-Options'), false);
   assert.equal(Object.hasOwn(download, 'Content-Security-Policy'), false);
   assert.equal(download['Cache-Control'], 'no-store, private, max-age=0');

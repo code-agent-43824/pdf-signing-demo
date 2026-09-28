@@ -75,7 +75,7 @@
   },
   "signatureObject": {
     "name": "{signer.name}",
-    "reason": "Выдан: {signer.issuer}",
+    "reason": "",
     "contactInfo": "Cert ID: {signer.cert_id}",
     "location": "Web UI",
     "bytesReserved": 16000,

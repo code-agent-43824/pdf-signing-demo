@@ -383,6 +383,7 @@ const prepareSchema = {
   required: ['signer'],
   properties: {
     pdfBase64: boundedString(MAX_BASE64_PDF_LENGTH, 4),
+    sourceName: boundedString(255),
     stampConfig: { $ref: stampConfigSchema.$id },
     requestedStampPosition: {
       type: 'string',

@@ -36,6 +36,7 @@
         status('Подготавливаю PDF под PAdES…');
         const prepared = await apiClient.prepare({
           pdfBase64: context.pdfBase64,
+          sourceName: context.pdfName || 'document.pdf',
           stampConfig: context.stampConfig,
           requestedStampPosition: context.stampPosition,
           signer: { certificateBase64 },

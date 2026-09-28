@@ -2,12 +2,28 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { execFileSync } = require('node:child_process');
 const { afterEach, test } = require('node:test');
 
 const { HttpError } = require('../src/http/validation');
 const { createStampConfiguration } = require('../src/stamp/configuration');
 
 const temporaryDirectories = [];
+
+test('default stamp has no invented signing reason and renders certificate expiry in UTC', () => {
+  const script = `import json, runpy\nfrom copy import deepcopy\nm = runpy.run_path('scripts/prepare-pyhanko.py')\nsigner = {'issuerName': 'CN=Test CA', 'validToDate': '2027-09-28T16:36:05+03:00'}\nmetadata = m['build_rendered_metadata'](m['DEFAULT_CONFIG'], signer)\nlegacy = deepcopy(m['DEFAULT_CONFIG'])\nlegacy['signatureObject']['reason'] = 'Выдан: {signer.issuer}'\nlegacy_reason = m['build_rendered_metadata'](legacy, signer)['reason']\nlegacy['signatureObject']['reason'] = 'Согласовано'\nexplicit_reason = m['build_rendered_metadata'](legacy, signer)['reason']\nprint(json.dumps({'reason': metadata['reason'], 'row': metadata['rows'][-1]['value'], 'raw': signer['validToDate'], 'legacy': legacy_reason, 'explicit': explicit_reason}))`;
+  const result = JSON.parse(
+    execFileSync('python3', ['-c', script], {
+      cwd: path.resolve(__dirname, '..'),
+      encoding: 'utf8',
+    }),
+  );
+  assert.equal(result.reason, '');
+  assert.equal(result.legacy, '');
+  assert.equal(result.explicit, 'Согласовано');
+  assert.equal(result.row, '28.09.2027 13:36 UTC');
+  assert.equal(result.raw, '2027-09-28T16:36:05+03:00');
+});
 
 afterEach(() => {
   for (const directory of temporaryDirectories.splice(0)) {

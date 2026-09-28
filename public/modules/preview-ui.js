@@ -191,7 +191,7 @@
       clearExpiryTimer();
       currentResult = {
         downloadUrl: completeData.downloadUrl,
-        downloadName: completeData.downloadName || 'signed-formular.pdf',
+        downloadName: completeData.downloadName || 'document-signed.pdf',
         expiresAt: resultExpiresAt,
       };
       document.getElementById('signedPdf').src = completeData.signedPdfUrl;
@@ -199,7 +199,7 @@
       document.getElementById('viewerFileName').textContent = 'Подписанный документ';
       const downloadLink = document.getElementById('downloadLink');
       downloadLink.href = completeData.downloadUrl;
-      downloadLink.download = completeData.downloadName || 'signed-formular.pdf';
+      downloadLink.download = completeData.downloadName || 'document-signed.pdf';
       downloadLink.classList.remove('hidden');
       expiryTimer = schedule(checkExpiry, Math.max(0, resultExpiresAt.getTime() - now));
       return resultExpiresAt;

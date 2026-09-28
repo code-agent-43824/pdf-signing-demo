@@ -94,7 +94,7 @@ DEFAULT_CONFIG = {
     },
     'signatureObject': {
         'name': '{signer.name}',
-        'reason': 'Выдан: {signer.issuer}',
+        'reason': '',
         'contactInfo': 'Cert ID: {signer.cert_id}',
         'location': 'Web UI',
         'bytesReserved': 16000,
@@ -201,7 +201,14 @@ def build_signer_context(signer):
         extract_dn_field(signer.get('issuerName'), 'CN') or signer.get('issuerName'), 'не указан'
     )
     cert_id = normalize(signer.get('thumbprint') or signer.get('serialNumber'), 'не указан')
-    valid_to = normalize(signer.get('validToDate'), 'не указан')
+    raw_valid_to = signer.get('validToDate')
+    try:
+        valid_to_date = datetime.fromisoformat(str(raw_valid_to).replace('Z', '+00:00'))
+        if valid_to_date.tzinfo is None:
+            valid_to_date = valid_to_date.replace(tzinfo=timezone.utc)
+        valid_to = valid_to_date.astimezone(timezone.utc).strftime('%d.%m.%Y %H:%M UTC')
+    except (TypeError, ValueError):
+        valid_to = 'не указан'
     return {
         'name': name,
         'issuer': issuer,
@@ -239,7 +246,12 @@ def build_rendered_metadata(config, signer):
         'title_lines': title_lines,
         'rows': rows,
         'name': render_template(signature_cfg.get('name', '{signer.name}'), context),
-        'reason': render_template(signature_cfg.get('reason', ''), context),
+        'reason': render_template(
+            ''
+            if signature_cfg.get('reason') == 'Выдан: {signer.issuer}'
+            else signature_cfg.get('reason', ''),
+            context,
+        ),
         'contact_info': render_template(signature_cfg.get('contactInfo', ''), context),
         'location': render_template(signature_cfg.get('location', ''), context),
         'bytes_reserved': int(signature_cfg.get('bytesReserved', 16000)),

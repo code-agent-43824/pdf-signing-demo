@@ -201,6 +201,10 @@ function createResultStore({ resultsDir, ttlMs, maxResults, maxDiskBytes, now = 
           && metadata.expiresAt > timestamp
           && TOKEN_HASH_PATTERN.test(metadata.previewTokenHash)
           && TOKEN_HASH_PATTERN.test(metadata.downloadTokenHash)
+          && (metadata.downloadName === undefined
+            || (typeof metadata.downloadName === 'string'
+              && metadata.downloadName.length <= 255
+              && /^[^\p{Cc}<>:"\\/|?*]+\.pdf$/u.test(metadata.downloadName)))
           && metadata.previewTokenHash !== metadata.downloadTokenHash
           && !capabilities.has(metadata.previewTokenHash)
           && !capabilities.has(metadata.downloadTokenHash);
@@ -218,6 +222,7 @@ function createResultStore({ resultsDir, ttlMs, maxResults, maxDiskBytes, now = 
           expiresAt: metadata.expiresAt,
           previewTokenHash: metadata.previewTokenHash,
           downloadTokenHash: metadata.downloadTokenHash,
+          downloadName: metadata.downloadName || 'document-signed.pdf',
         };
         results.set(id, result);
         capabilities.set(result.previewTokenHash, { resultId: id, kind: 'preview' });
@@ -280,7 +285,7 @@ function createResultStore({ resultsDir, ttlMs, maxResults, maxDiskBytes, now = 
   }
 
   return {
-    async save(buffer) {
+    async save(buffer, downloadName = 'document-signed.pdf') {
       await cleanup();
       if (results.size + pendingCount >= maxResults) {
         throw new StorageLimitError('RESULT_COUNT_LIMIT');
@@ -311,6 +316,7 @@ function createResultStore({ resultsDir, ttlMs, maxResults, maxDiskBytes, now = 
         expiresAt: createdAt + ttlMs,
         previewTokenHash,
         downloadTokenHash,
+        downloadName,
       };
       const metadata = {
         schemaVersion: 1,
@@ -320,6 +326,7 @@ function createResultStore({ resultsDir, ttlMs, maxResults, maxDiskBytes, now = 
         expiresAt: result.expiresAt,
         previewTokenHash,
         downloadTokenHash,
+        downloadName,
       };
 
       try {
@@ -352,6 +359,7 @@ function createResultStore({ resultsDir, ttlMs, maxResults, maxDiskBytes, now = 
           previewToken,
           downloadToken,
           expiresAt: result.expiresAt,
+          downloadName,
         };
       } finally {
         pendingCount -= 1;
@@ -377,6 +385,7 @@ function createResultStore({ resultsDir, ttlMs, maxResults, maxDiskBytes, now = 
         filePath: result.filePath,
         size: result.size,
         expiresAt: result.expiresAt,
+        downloadName: result.downloadName,
       };
     },
 

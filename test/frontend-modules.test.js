@@ -1085,6 +1085,18 @@ test('stamp configuration store merges browser overrides without mutating defaul
   assert.equal(store.has(), false);
 });
 
+test('legacy issuer text is not presented as a signing reason', () => {
+  const { PdfSigningStampConfig } = loadBrowserModule('stamp-config.js');
+  const store = PdfSigningStampConfig.createStampConfigStore(
+    {
+      getItem: () => JSON.stringify({ signatureObject: { reason: 'Выдан: {signer.issuer}' } }),
+    },
+    'stamp',
+  );
+  const resolved = store.resolve({ signatureObject: { reason: '' } });
+  assert.equal(resolved.signatureObject.reason, '');
+});
+
 test('dialog manager fails closed before touching DOM when no certificate exists', async () => {
   const { PdfSigningDialogs } = loadBrowserModule('dialogs.js');
   const manager = PdfSigningDialogs.createDialogManager(
