@@ -2,6 +2,21 @@
 
 Гипотеза → что сделали → что показала проверка → вывод. Новые записи сверху.
 
+## 2026-09-28 — PAdES `/M` и CMS `signing-time` независимы
+
+- **Гипотеза.** Исправление времени в PDF достаточно для baseline.
+- **Что сделали.** Сверили [ETSI EN 319 142-1, таблицу 1](https://www.etsi.org/deliver/etsi_en/319100_319199/31914201/01.02.01_60/en_31914201v010201p.pdf),
+  [API Рутокена](https://download.rutoken.ru/Rutoken_Plugin/Current/rutoken-plugin-doc/CryptoPlugin.html)
+  и [CPSigner CryptoPro](https://docs.cryptopro.ru/cades/reference/cadescom/cadescom_class/cpsigner).
+- **Что показала проверка.** ETSI требует `/M` и запрещает CMS
+  `signing-time`. В текущем коде Рутокен использует `addSignTime: true`, а
+  CryptoPro вызывает `SignHash` без явной настройки атрибутов. Документация
+  Рутокена связывает `addSignTime: true` с CAdES-BES; для CryptoPro
+  документированного переключателя на отсутствие атрибута не найдено.
+- **Вывод.** `/M` можно исправить и проверить на synthetic PDF отдельно.
+  Отключение CMS-атрибута без реального capability/verification gate для обоих
+  провайдеров не выпускать. Соответствие PAdES baseline пока не заявлять.
+
 ## 2026-09-28 — PIN policy и алгоритм ключа Рутокена
 
 - **Гипотеза.** Плагин даёт единый минимальный PIN и надёжный алгоритм ключа

@@ -283,6 +283,7 @@ test('one through four incremental signatures preserve and validate every signat
     assert.equal(pyhankoResult.ok, true);
     assert.equal(pyhankoResult.signatures.length, signatureIndex);
     for (const status of pyhankoResult.signatures) {
+      assert.equal(status.hasPdfSigningTime, true);
       assert.equal(status.intact, true);
       assert.equal(status.valid, true);
       assert.equal(status.trusted, true);

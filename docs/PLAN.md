@@ -7,8 +7,8 @@
 - [x] P1-4: не объявлять сертификат Рутокен пригодным без доказательства
   наличия ключа; проверять после PIN до подписи. Реальный сиротский сертификат
   остаётся аппаратным gate.
-- [ ] P1-6: `/pdf-signing` без слэша — корректный redirect в production.
-- [ ] P1-3: PAdES baseline — подтвердить `/M` и CMS signing-time на тестовых
+- [x] P1-6: `/pdf-signing` без слэша — redirect 308 в production.
+- [~] P1-3: PAdES baseline — добавить `/M` в PDF; подтвердить CMS signing-time на тестовых
   подписи обоих провайдеров, проверить возможность исключить signed attribute
   при создании CMS, затем отдельный crypto-safe срез с conformance gate.
 

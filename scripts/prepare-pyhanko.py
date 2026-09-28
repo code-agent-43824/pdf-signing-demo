@@ -675,6 +675,7 @@ def main():
         style = build_signature_style(config, metadata)
         sig_obj = pdf_byterange.SignatureObject(
             subfilter=metadata['subfilter'],
+            timestamp=datetime.now(timezone.utc),
             name=metadata['name'],
             reason=metadata['reason'],
             contact_info=metadata['contact_info'],

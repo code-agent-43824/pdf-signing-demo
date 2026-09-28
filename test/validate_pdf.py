@@ -34,6 +34,7 @@ def main():
             results.append(
                 {
                     'fieldName': signature.field_name,
+                    'hasPdfSigningTime': '/M' in signature.sig_object,
                     'intact': bool(status.intact),
                     'valid': bool(status.valid),
                     'trusted': bool(status.trusted),
