@@ -5,7 +5,7 @@
 новый real-provider gate остаётся обязательным.
 
 - **Production.** `https://mescheryakov.pro/pdf-signing/` работает на релизе
-  `7f8ed9d`. Публичный `health/ready` — 200, все проверки `true`; внешний
+  `9f6e23f`. Публичный `health/ready` — 200, все проверки `true`; внешний
   `health/metrics` — 404; UI и соседний сайт `https://mescheryakov.pro/` — 200.
 - **Node.** Пин в `.node-version` и Node на сервере — 22.23.3 (так
   напечатала проверка версии в деплое `9afe532`); пропущенные раньше
@@ -48,8 +48,9 @@
   baseline остаются открытыми до real-provider gate.
   P2-7: ложный зелёный индикатор расширения CryptoPro устранён локально;
   UI прошёл CI/deploy. P2-8: ранний лимит/магические байты и отдельная ошибка
-  защищённого PDF готовы локально, ждут CI/deploy; точный client preflight
-  шифрования открыт. P2-9 ещё не выполнен.
+  защищённого PDF прошли CI/deploy; точный client preflight
+  шифрования открыт. P2-9: нейтральная отмена и локальная ошибка JSON готовы
+  локально, ожидают CI/deploy.
 - **CAdES-BES (`docs/CADES_BES_PLAN.md`).** Этап 0 не закрыт: вердикт spike —
   `PARTIAL`, прогона с реальными провайдерами на компьютере владельца в
   репозитории нет. `self-test.sh` spike проходит без `xxd`.

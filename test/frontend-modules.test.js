@@ -186,6 +186,29 @@ test('Rutoken PIN dialog preserves letters and requires deliberate retry for a s
   assert.equal(input.value, '123');
   confirm.listeners.click();
   assert.equal(await shortPin, '123');
+
+  const cancelledPin = dialogs.openPin();
+  input.value = 'secret';
+  elements.get('#cancelRutokenPin').listeners.click();
+  await assert.rejects(cancelledPin, (error) => error.code === 'USER_CANCELLED');
+  assert.equal(input.value, '');
+
+  for (const id of [
+    '#confirmationDocumentName',
+    '#confirmationDocumentDigest',
+    '#confirmationCertificateName',
+    '#confirmationCertificateFingerprint',
+    '#confirmSigning',
+    '#cancelSigning',
+  ])
+    elements.set(id, node());
+  const cancelledSigning = dialogs.openSigningConfirmation({
+    documentName: 'test.pdf',
+    documentDigest: 'digest',
+    certificate: { label: 'Test' },
+  });
+  elements.get('#cancelSigning').listeners.click();
+  await assert.rejects(cancelledSigning, (error) => error.code === 'USER_CANCELLED');
 });
 
 test('CryptoPro adapter builds detached CAdES-BES from the prepared digest', async () => {

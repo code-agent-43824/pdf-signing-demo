@@ -706,7 +706,7 @@ async function ensureRutokenLogin(deviceId) {
       );
       break;
     } catch (error) {
-      if (error?.message === 'Ввод PIN-кода отменён.') {
+      if (error?.code === 'USER_CANCELLED') {
         throw error;
       }
       if (rutokenAdapter.isAlreadyLoggedInError(error, plugin)) {
@@ -1336,6 +1336,12 @@ function switchStampTab(root, nextTab) {
   visualPanel.classList.remove('hidden');
 }
 
+function setStampSettingsError(root, message = '') {
+  const error = root.querySelector('#stampSettingsError');
+  error.textContent = message;
+  error.classList.toggle('hidden', !message);
+}
+
 function wireStampSettingsForm(root) {
   const refreshPreview = () => {
     try {
@@ -1415,8 +1421,12 @@ function wireStampSettingsForm(root) {
   root.querySelector('#stampTabVisual').addEventListener('click', () => {
     try {
       switchStampTab(root, 'visual');
-    } catch (error) {
-      setStatus(`Ошибка JSON: ${error.message}`);
+      setStampSettingsError(root);
+    } catch {
+      setStampSettingsError(
+        root,
+        'Не удалось прочитать JSON. Проверьте синтаксис и структуру настроек.',
+      );
     }
   });
 
@@ -1424,7 +1434,11 @@ function wireStampSettingsForm(root) {
     state.stampConfig = readVisualForm(root);
     updateStampPlacementUi();
     switchStampTab(root, 'json');
+    setStampSettingsError(root);
   });
+  root
+    .querySelector('#stampConfigEditor')
+    .addEventListener('input', () => setStampSettingsError(root));
 }
 
 function openStampSettingsDialog() {
@@ -1450,13 +1464,13 @@ function openStampSettingsDialog() {
 
     cancel.addEventListener('click', () => {
       close();
-      reject(new Error('Настройка штампа отменена.'));
+      reject(Object.assign(new Error('Настройка штампа отменена.'), { code: 'USER_CANCELLED' }));
     });
 
     backdrop.addEventListener('click', (event) => {
       if (event.target === backdrop) {
         close();
-        reject(new Error('Настройка штампа отменена.'));
+        reject(Object.assign(new Error('Настройка штампа отменена.'), { code: 'USER_CANCELLED' }));
       }
     });
 
@@ -1470,6 +1484,7 @@ function openStampSettingsDialog() {
       populateVisualForm(root, state.stampConfig);
       root.querySelector('#stampConfigEditor').value =
         `${JSON.stringify(state.stampConfig, null, 2)}\n`;
+      setStampSettingsError(root);
       updateStampPlacementUi();
       setStatus(
         'Персональные настройки штампа сброшены. Сейчас используются серверные значения по умолчанию.',
@@ -1489,11 +1504,15 @@ function openStampSettingsDialog() {
           preferSelected: false,
         });
         updateStampPlacementUi();
+        setStampSettingsError(root);
         close();
         resolve();
-      } catch (error) {
+      } catch {
         save.disabled = false;
-        setStatus(`Ошибка настройки штампа: ${error.message}`);
+        setStampSettingsError(
+          root,
+          'Не удалось сохранить настройки. Проверьте JSON и значения полей.',
+        );
       }
     });
 
@@ -1602,7 +1621,9 @@ document.getElementById('chooseCertificateButton').addEventListener('click', asy
     updatePrimaryActionState();
     setStatus(`Сертификат выбран: ${selectedCertificate.label}. Теперь можно запускать подпись.`);
   } catch (error) {
-    if (!String(error.message || '').includes('отменён')) {
+    if (error?.code === 'USER_CANCELLED') {
+      setStatus('Выбор сертификата отменён.');
+    } else {
       setStatus(`Ошибка выбора сертификата: ${error.message}`);
     }
   } finally {
@@ -1616,11 +1637,15 @@ document.getElementById('signButton').addEventListener('click', async () => {
   try {
     await prepareAndSign();
   } catch (error) {
-    const details =
-      state.activeCryptoStack === 'rutoken'
-        ? rutokenAdapter.getErrorMessage(error, state.cryptoProviders.rutoken.client)
-        : cryptoProAdapter.getErrorMessage(state.cryptoProviders.cryptopro.client, error);
-    setStatus(`Ошибка: ${details}`);
+    if (error?.code === 'USER_CANCELLED') {
+      setStatus('Подписание отменено. Файл не изменён.');
+    } else {
+      const details =
+        state.activeCryptoStack === 'rutoken'
+          ? rutokenAdapter.getErrorMessage(error, state.cryptoProviders.rutoken.client)
+          : cryptoProAdapter.getErrorMessage(state.cryptoProviders.cryptopro.client, error);
+      setStatus(`Ошибка: ${details}`);
+    }
   } finally {
     updatePrimaryActionState();
   }
@@ -1640,7 +1665,9 @@ document.getElementById('stampSettingsButton').addEventListener('click', async (
       'Персональные настройки штампа сохранены в этом браузере. Следующая подготовка PDF возьмёт новые параметры.',
     );
   } catch (error) {
-    if (!String(error.message || '').includes('отменена')) {
+    if (error?.code === 'USER_CANCELLED') {
+      setStatus('Окно настройки штампа закрыто.');
+    } else {
       setStatus(`Ошибка: ${error.message}`);
     }
   } finally {

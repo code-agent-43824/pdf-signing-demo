@@ -20,7 +20,9 @@
 
     function rejectAndClose(reject, message) {
       close();
-      reject(new Error(message));
+      const error = new Error(message);
+      error.code = 'USER_CANCELLED';
+      reject(error);
     }
 
     function openPin({ title = 'Введите PIN-код токена.', errorMessage = '' } = {}) {
