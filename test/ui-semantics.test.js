@@ -5,6 +5,15 @@ const { test } = require('node:test');
 
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 
+test('PDF preview has no decorative controls or fictitious page and zoom values', () => {
+  const html = fs.readFileSync(path.join(PROJECT_ROOT, 'public', 'index.html'), 'utf8');
+  const viewer = html.match(/<div class="viewer-shell">([\s\S]*?)<\/section>/)?.[1] || '';
+  assert.match(viewer, /id="viewerFileName"/);
+  assert.match(viewer, /id="sourcePdf"/);
+  assert.match(viewer, /id="signedPdf"/);
+  assert.doesNotMatch(viewer, /<button|viewer-tool|viewer-burger|1 \/ 1|100%|PDF preview/);
+});
+
 test('UI separates integrity, trust and qualified status without false success claim', () => {
   const html = fs.readFileSync(path.join(PROJECT_ROOT, 'public', 'index.html'), 'utf8');
   const app = fs.readFileSync(path.join(PROJECT_ROOT, 'public', 'app.js'), 'utf8');

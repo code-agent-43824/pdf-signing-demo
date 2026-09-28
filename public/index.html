@@ -122,22 +122,8 @@
           </div>
 
           <div class="viewer-shell">
-            <div class="viewer-toolbar viewer-toolbar-top">
-              <div class="viewer-toolbar-group">
-                <span class="viewer-burger">☰</span>
-                <span id="viewerFileName" class="viewer-file-name">Документ не загружен</span>
-              </div>
-              <div class="viewer-toolbar-group viewer-toolbar-center">
-                <button class="viewer-tool" type="button">−</button>
-                <span class="viewer-toolbar-pill">1 / 1</span>
-                <button class="viewer-tool" type="button">+</button>
-                <span class="viewer-toolbar-pill">100%</span>
-              </div>
-              <div class="viewer-toolbar-group viewer-toolbar-right">
-                <span class="viewer-tool viewer-tool-icon">⤓</span>
-                <span class="viewer-tool viewer-tool-icon">⎙</span>
-                <span class="viewer-tool viewer-tool-icon">⋯</span>
-              </div>
+            <div class="viewer-file-bar">
+              <span id="viewerFileName" class="viewer-file-name">Документ не загружен</span>
             </div>
 
             <div class="viewer-stage">
@@ -155,11 +141,6 @@
               <iframe id="signedPdf" title="Подписанный PDF" class="pdf-frame preview-frame hidden"></iframe>
             </div>
 
-            <div class="viewer-toolbar viewer-toolbar-bottom">
-              <div class="viewer-toolbar-group viewer-toolbar-center">
-                <span class="viewer-toolbar-pill">PDF preview</span>
-              </div>
-            </div>
           </div>
         </section>
       </section>
@@ -173,7 +154,7 @@
           </div>
         </div>
         <div class="verification-actions">
-          <a id="downloadLink" class="download hidden verification-download" download="signed-formular.pdf">Скачать подписанный PDF</a>
+          <a id="downloadLink" class="download hidden verification-download">Скачать подписанный PDF</a>
           <button id="resultInfoToggle" class="secondary verification-info-toggle" type="button" aria-expanded="false" aria-controls="verificationDetails">Информация о подписанном файле</button>
         </div>
         <div id="verificationDetails" class="verification-details hidden">
