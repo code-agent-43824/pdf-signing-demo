@@ -338,6 +338,8 @@ function updateSelectedCertificateUi() {
       countNode.textContent = 'Сначала дождитесь готовности криптокомпонентов.';
     } else if (!certificateCount) {
       countNode.textContent = 'Нет доступных сертификатов для подписи.';
+    } else if (state.activeCryptoStack === 'rutoken') {
+      countNode.textContent = `Сертификатов: ${certificateCount}. Наличие закрытого ключа проверяется после ввода PIN.`;
     } else {
       countNode.textContent = `Доступно сертификатов для подписи: ${certificateCount}.`;
     }
@@ -699,13 +701,13 @@ async function ensureRutokenLogin(deviceId) {
         () => plugin.login(deviceId, pin),
         { mode: 'rutoken' },
       );
-      return;
+      break;
     } catch (error) {
       if (error?.message === 'Ввод PIN-кода отменён.') {
         throw error;
       }
       if (rutokenAdapter.isAlreadyLoggedInError(error, plugin)) {
-        return;
+        break;
       }
       loginError = error;
     } finally {
@@ -721,6 +723,11 @@ async function ensureRutokenLogin(deviceId) {
       : '';
     errorMessage = `Не удалось авторизоваться: ${message}.${retriesSuffix}`;
   }
+  await withOperationalCryptoBusyOverlay(
+    'Проверяю закрытый ключ на Рутокене…',
+    () => rutokenAdapter.assertPrivateKeyAvailable(plugin, state.selectedCertificate),
+    { mode: 'rutoken' },
+  );
 }
 
 async function sha256HexFromBase64(base64) {

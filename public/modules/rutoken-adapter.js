@@ -226,7 +226,7 @@
             serialNumber: parsed?.serialNumber || certId,
             validFromDate: validFromDate.toISOString(),
             validToDate: validToDate.toISOString(),
-            hasPrivateKey: true,
+            hasPrivateKey: null,
             keyUsageAllowed: true,
             algorithm:
               parsed?.publicKeyAlgorithm || parsed?.signatureAlgorithm || 'Rutoken certificate',
@@ -286,6 +286,35 @@
       /* no retry metadata */
     }
     return null;
+  }
+
+  async function assertPrivateKeyAvailable(plugin, certificate) {
+    if (
+      typeof plugin.getKeyByCertificate !== 'function'
+      || typeof plugin.enumerateKeys !== 'function'
+    ) {
+      throw new Error('Плагин не позволяет проверить наличие закрытого ключа.');
+    }
+    let keyId;
+    try {
+      keyId = await plugin.getKeyByCertificate(certificate.deviceId, certificate.certId);
+    } catch (error) {
+      if (
+        getErrorCode(error) === Number(plugin.errorCodes?.KEY_NOT_FOUND ?? 20)
+        || getErrorMessage(error, plugin).includes('KEY_NOT_FOUND')
+      ) {
+        throw new Error('Для сертификата не найден закрытый ключ на Рутокене.');
+      }
+      throw error;
+    }
+    const keys = await plugin.enumerateKeys(certificate.deviceId, '');
+    if (
+      !keyId
+      || !Array.isArray(keys)
+      || !keys.some((candidate) => String(candidate).toLowerCase() === String(keyId).toLowerCase())
+    ) {
+      throw new Error('Для сертификата не найден закрытый ключ на Рутокене.');
+    }
   }
 
   // Neither rutoken-plugin.min.js nor the extension bounds its answers: an
@@ -468,6 +497,7 @@
 
   root.PdfSigningRutoken = Object.freeze({
     assertSupportedAlgorithm,
+    assertPrivateKeyAvailable,
     createEnvironment,
     enumerateCertificates,
     getDeviceLabels,

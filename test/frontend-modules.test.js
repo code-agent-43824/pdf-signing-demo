@@ -462,6 +462,47 @@ test('Rutoken signing reads public-key OID, never the subject name', async () =>
   assert.ok(login.indexOf('assertSupportedAlgorithm') < login.indexOf('openPin'));
 });
 
+test('Rutoken requires a matching private key after login, before signing', async () => {
+  const { PdfSigningRutoken: adapter } = loadBrowserModules([
+    'certificates.js',
+    'rutoken-adapter.js',
+  ]);
+  const certificate = { deviceId: 7, certId: 'cert-1' };
+  const calls = [];
+  const plugin = {
+    errorCodes: { KEY_NOT_FOUND: 20 },
+    async getKeyByCertificate(deviceId, certId) {
+      calls.push(['lookup', deviceId, certId]);
+      return 'AABB';
+    },
+    async enumerateKeys(deviceId, marker) {
+      calls.push(['keys', deviceId, marker]);
+      return ['aabb'];
+    },
+  };
+  await adapter.assertPrivateKeyAvailable(plugin, certificate);
+  assert.deepEqual(calls, [
+    ['lookup', 7, 'cert-1'],
+    ['keys', 7, ''],
+  ]);
+  plugin.enumerateKeys = async () => [];
+  await assert.rejects(
+    adapter.assertPrivateKeyAvailable(plugin, certificate),
+    /не найден закрытый ключ/,
+  );
+  plugin.getKeyByCertificate = async () => {
+    throw new Error('20');
+  };
+  await assert.rejects(
+    adapter.assertPrivateKeyAvailable(plugin, certificate),
+    /не найден закрытый ключ/,
+  );
+  await assert.rejects(
+    adapter.assertPrivateKeyAvailable({}, certificate),
+    /не позволяет проверить/,
+  );
+});
+
 test('Rutoken environment owns discovery, refresh events and debounced token monitoring', async () => {
   const window = loadBrowserModules(['certificates.js', 'rutoken-adapter.js']);
   const diagnostics = new Map();
