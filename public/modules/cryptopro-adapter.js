@@ -190,7 +190,6 @@
     function isOperational(provider) {
       return (
         Boolean(provider?.client)
-        && provider.diagnostics?.extension?.state === 'ready'
         && provider.diagnostics?.plugin?.state === 'ready'
         && provider.diagnostics?.csp?.state === 'ready'
       );
@@ -210,7 +209,7 @@
         await untilAborted(loadScript(), signal);
         const plugin = root.cadesplugin;
         if (!plugin) throw new Error('Скрипт cadesplugin_api.js не загрузился');
-        diagnostic('extension', 'ready', 'доступно');
+        diagnostic('extension', 'pending', 'отдельно не подтверждено');
 
         await untilAborted(plugin, signal);
         diagnostic('plugin', 'ready', 'доступен');
@@ -234,7 +233,7 @@
         if (signal?.aborted) throw error;
         diagnostic('plugin', 'error', 'недоступен');
         diagnostic('csp', 'error', 'недоступен');
-        if (!root.cadesplugin) diagnostic('extension', 'error', 'не найдено');
+        diagnostic('extension', 'pending', 'отдельно не подтверждено');
         throw error;
       }
     }

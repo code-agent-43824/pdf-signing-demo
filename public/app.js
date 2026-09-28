@@ -335,7 +335,10 @@ function updateSelectedCertificateUi() {
 
   if (countNode) {
     if (!state.pluginReady) {
-      countNode.textContent = 'Сначала дождитесь готовности криптокомпонентов.';
+      countNode.textContent =
+        state.activeCryptoStack === 'cryptopro'
+          ? 'CryptoPro недоступен: установите или включите расширение и плагин либо выберите Рутокен.'
+          : 'Рутокен недоступен: проверьте расширение, плагин и подключение токена.';
     } else if (!certificateCount) {
       countNode.textContent = 'Нет доступных сертификатов для подписи.';
     } else if (state.activeCryptoStack === 'rutoken') {

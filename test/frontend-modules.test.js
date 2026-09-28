@@ -267,7 +267,10 @@ test('CryptoPro environment owns plugin discovery, diagnostics and certificate r
   assert.equal(snapshot.ready, true);
   assert.equal(snapshot.client, plugin);
   assert.deepEqual(Array.from(snapshot.certificates), []);
-  assert.deepEqual(diagnostics.get('extension'), { state: 'ready', text: 'доступно' });
+  assert.deepEqual(diagnostics.get('extension'), {
+    state: 'pending',
+    text: 'отдельно не подтверждено',
+  });
   assert.deepEqual(diagnostics.get('plugin'), { state: 'ready', text: 'доступен' });
   assert.deepEqual(diagnostics.get('csp'), { state: 'ready', text: '5.0' });
   assert.equal(
@@ -277,6 +280,25 @@ test('CryptoPro environment owns plugin discovery, diagnostics and certificate r
     }),
     true,
   );
+});
+
+test('CryptoPro loader alone never proves the extension is installed', async () => {
+  const window = loadBrowserModules(['certificates.js', 'cryptopro-adapter.js']);
+  const diagnostics = new Map();
+  const environment = window.PdfSigningCryptoPro.createEnvironment({
+    async loadScript() {
+      window.cadesplugin = Promise.reject(new Error('CryptoPro extension missing'));
+    },
+    setDiagnostic(key, state, text) {
+      diagnostics.set(key, { state, text });
+    },
+  });
+  await assert.rejects(environment.initialize(), /extension missing/);
+  assert.deepEqual(diagnostics.get('extension'), {
+    state: 'pending',
+    text: 'отдельно не подтверждено',
+  });
+  assert.equal(diagnostics.get('plugin').state, 'error');
 });
 
 test('aborted CryptoPro initialization stops waiting and silences the vendor overlay', async () => {

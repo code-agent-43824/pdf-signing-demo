@@ -264,6 +264,13 @@ h1, h2, h3 { margin: 0; }
   border: 1px solid #b9d5e6;
   cursor: pointer;
 }
+.secondary:disabled {
+  background: #edf1f5;
+  border-color: #d3dbe4;
+  color: #718096;
+  cursor: not-allowed;
+  opacity: 0.75;
+}
 .download {
   display: inline-block;
   text-decoration: none;
