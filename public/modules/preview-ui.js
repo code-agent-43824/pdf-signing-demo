@@ -46,7 +46,77 @@
     return resultExpiresAt;
   }
 
-  function createPreviewUi(document) {
+  function createPreviewUi(
+    document,
+    {
+      onExpired = () => {},
+      onDownloadError = () => {},
+      now = Date.now,
+      schedule = root.setTimeout.bind(root),
+      cancelSchedule = root.clearTimeout.bind(root),
+      fetchResult = root.fetch.bind(root),
+    } = {},
+  ) {
+    let currentResult = null;
+    let expiryTimer = null;
+
+    function clearExpiryTimer() {
+      if (expiryTimer !== null) cancelSchedule(expiryTimer);
+      expiryTimer = null;
+    }
+
+    function expireResult() {
+      if (!currentResult) return;
+      currentResult = null;
+      clearExpiryTimer();
+      document.getElementById('signedPdf').removeAttribute('src');
+      const downloadLink = document.getElementById('downloadLink');
+      downloadLink.classList.add('hidden');
+      downloadLink.removeAttribute('href');
+      document.getElementById('signedState').textContent =
+        'Срок хранения подписанного файла истёк. Подпишите документ заново.';
+      setMode('signed-empty');
+      document.getElementById('previewTitle').textContent = 'Результат недоступен';
+      onExpired();
+    }
+
+    function checkExpiry() {
+      if (currentResult && now() >= currentResult.expiresAt.getTime()) expireResult();
+    }
+
+    root.addEventListener?.('focus', checkExpiry);
+    root.addEventListener?.('pageshow', checkExpiry);
+    document.addEventListener?.('visibilitychange', () => {
+      if (!document.hidden) checkExpiry();
+    });
+
+    document.getElementById('downloadLink').addEventListener('click', async (event) => {
+      event.preventDefault();
+      checkExpiry();
+      if (!currentResult) return;
+      const result = currentResult;
+      try {
+        const response = await fetchResult(result.downloadUrl, { cache: 'no-store' });
+        if (currentResult !== result) return;
+        if (response.status === 404 || response.status === 410) {
+          expireResult();
+          return;
+        }
+        if (!response.ok) throw new Error('Не удалось скачать подписанный файл.');
+        const blobUrl = root.URL.createObjectURL(await response.blob());
+        if (currentResult !== result) {
+          root.URL.revokeObjectURL(blobUrl);
+          return;
+        }
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = result.downloadName;
+        link.click();
+        schedule(() => root.URL.revokeObjectURL(blobUrl), 60_000);
+      } catch {
+        onDownloadError();
+      }
+    });
     function setMode(mode = 'empty') {
       document.getElementById('sourceEmpty').classList.toggle('hidden', mode !== 'empty');
       document.getElementById('sourcePdf').classList.toggle('hidden', mode !== 'source');
@@ -105,6 +175,8 @@
     }
 
     function resetSigned(hasSource) {
+      currentResult = null;
+      clearExpiryTimer();
       document.getElementById('signedPdf').removeAttribute('src');
       setMode(hasSource ? 'source' : 'empty');
       const downloadLink = document.getElementById('downloadLink');
@@ -116,6 +188,12 @@
     function showSigned(completeData, now = Date.now()) {
       renderVerification(completeData.verification);
       const resultExpiresAt = validateResult(completeData, now);
+      clearExpiryTimer();
+      currentResult = {
+        downloadUrl: completeData.downloadUrl,
+        downloadName: completeData.downloadName || 'signed-formular.pdf',
+        expiresAt: resultExpiresAt,
+      };
       document.getElementById('signedPdf').src = completeData.signedPdfUrl;
       setMode('signed');
       document.getElementById('viewerFileName').textContent = 'Подписанный документ';
@@ -123,6 +201,7 @@
       downloadLink.href = completeData.downloadUrl;
       downloadLink.download = completeData.downloadName || 'signed-formular.pdf';
       downloadLink.classList.remove('hidden');
+      expiryTimer = schedule(checkExpiry, Math.max(0, resultExpiresAt.getTime() - now));
       return resultExpiresAt;
     }
 

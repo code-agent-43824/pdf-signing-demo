@@ -110,7 +110,10 @@ const dialogManager = window.PdfSigningDialogs.createDialogManager(document, {
   formatCertificateDate,
   getCertificateKey,
 });
-const previewUi = window.PdfSigningPreview.createPreviewUi(document);
+const previewUi = window.PdfSigningPreview.createPreviewUi(document, {
+  onExpired: () => setStatus('Срок хранения подписанного файла истёк. Подпишите документ заново.'),
+  onDownloadError: () => setStatus('Не удалось скачать подписанный файл. Повторите попытку.'),
+});
 const placementController = window.PdfSigningPlacement.createPlacementController({
   document,
   ensureShape: ensureStampConfigShape,

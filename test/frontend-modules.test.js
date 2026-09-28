@@ -645,7 +645,8 @@ test('signing state machine rejects duplicate and impossible workflow transition
 });
 
 test('preview UI validates result capabilities and independent verification statuses', () => {
-  const { PdfSigningPreview: preview } = loadBrowserModule('preview-ui.js');
+  const window = loadBrowserModule('preview-ui.js');
+  const { PdfSigningPreview: preview } = window;
   const verification = {
     schemaVersion: 1,
     integrity: {
@@ -697,6 +698,114 @@ test('preview UI validates result capabilities and independent verification stat
       ),
     /некорректную ссылку/,
   );
+});
+
+test('signed result expires in an open tab and a 404 download removes stale links', async () => {
+  const window = loadBrowserModule('preview-ui.js');
+  const elements = new Map();
+  const node = () => ({
+    textContent: '',
+    src: '',
+    href: '',
+    listeners: {},
+    attributes: {},
+    classList: {
+      values: new Set(),
+      add(value) {
+        this.values.add(value);
+      },
+      remove(value) {
+        this.values.delete(value);
+      },
+      toggle(value, state) {
+        if (state) this.values.add(value);
+        else this.values.delete(value);
+      },
+    },
+    addEventListener(name, callback) {
+      this.listeners[name] = callback;
+    },
+    removeAttribute(name) {
+      delete this[name];
+    },
+    setAttribute(name, value) {
+      this.attributes[name] = value;
+    },
+    getAttribute(name) {
+      return this.attributes[name];
+    },
+  });
+  const document = {
+    getElementById(id) {
+      if (!elements.has(id)) elements.set(id, node());
+      return elements.get(id);
+    },
+    addEventListener() {},
+    createElement() {
+      return { click() {} };
+    },
+  };
+  window.setTimeout = (callback) => {
+    window.timer = callback;
+    return 1;
+  };
+  window.clearTimeout = () => {};
+  window.addEventListener = () => {};
+  window.URL = {
+    createObjectURL() {
+      return 'blob:test';
+    },
+    revokeObjectURL() {},
+  };
+  window.fetch = async () => ({ status: 404 });
+  let clock = Date.parse('2026-08-25T21:59:00Z');
+  let expiredCount = 0;
+  const ui = window.PdfSigningPreview.createPreviewUi(document, {
+    now: () => clock,
+    onExpired: () => {
+      expiredCount += 1;
+    },
+  });
+  const token = 'A'.repeat(43);
+  const result = {
+    signedPdfUrl: `./api/results/${token}`,
+    downloadUrl: `./api/results/${token}`,
+    resultExpiresAt: '2026-08-25T22:00:00.000Z',
+    verification: {
+      schemaVersion: 1,
+      integrity: {
+        status: 'valid',
+        code: 'CMS_INTEGRITY_VALID',
+        signerCertificateMatched: true,
+        signaturesVerified: 1,
+      },
+      trust: {
+        status: 'not_checked',
+        code: 'CERTIFICATE_TRUST_NOT_CHECKED',
+        checks: {
+          chain: 'not_checked',
+          validity: 'not_checked',
+          revocation: 'not_checked',
+          keyUsage: 'not_checked',
+        },
+      },
+      qualified: { status: 'not_checked', code: 'QUALIFIED_STATUS_NOT_CHECKED' },
+    },
+  };
+  ui.showSigned(result, clock);
+  assert.equal(elements.get('downloadLink').href, result.downloadUrl);
+  clock = Date.parse(result.resultExpiresAt);
+  window.timer();
+  assert.equal(expiredCount, 1);
+  assert.equal(elements.get('downloadLink').href, undefined);
+  assert.equal(elements.get('signedPdf').src, undefined);
+  assert.match(elements.get('signedState').textContent, /истёк/);
+
+  clock -= 60_000;
+  ui.showSigned(result, clock);
+  await elements.get('downloadLink').listeners.click({ preventDefault() {} });
+  assert.equal(expiredCount, 2);
+  assert.equal(elements.get('downloadLink').href, undefined);
 });
 
 test('placement controller maps presets and updates config without hidden DOM state', () => {
