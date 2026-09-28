@@ -84,6 +84,78 @@ test('certificate helpers preserve date, key-usage and DN boundaries', () => {
   assert.equal(certificates.getCertificateIssuerLabel('OU=УЦ, O=Организация'), 'Организация');
 });
 
+test('Rutoken PIN dialog preserves letters and requires deliberate retry for a short PIN', async () => {
+  const window = loadBrowserModule('dialogs.js');
+  const elements = new Map();
+  const node = () => ({
+    value: '',
+    textContent: '',
+    dataset: {},
+    listeners: {},
+    classList: { add() {}, remove() {} },
+    addEventListener(name, callback) {
+      this.listeners[name] = callback;
+    },
+    focus() {},
+    remove() {
+      this.removed = true;
+    },
+    querySelectorAll() {
+      return [elements.get('#rutokenPinInput')];
+    },
+  });
+  for (const id of [
+    '.dialog-backdrop',
+    '#rutokenPinPrompt',
+    '#rutokenPinInput',
+    '#rutokenPinError',
+    '#confirmRutokenPin',
+    '#cancelRutokenPin',
+  ])
+    elements.set(id, node());
+  const fragment = {
+    querySelector(selector) {
+      return elements.get(selector);
+    },
+    querySelectorAll() {
+      return [];
+    },
+  };
+  const document = {
+    getElementById() {
+      return {
+        content: {
+          cloneNode() {
+            return fragment;
+          },
+        },
+      };
+    },
+    body: { appendChild() {} },
+  };
+  window.requestAnimationFrame = (callback) => callback();
+  const dialogs = window.PdfSigningDialogs.createDialogManager(document, {});
+  const input = elements.get('#rutokenPinInput');
+  const confirm = elements.get('#confirmRutokenPin');
+
+  const fullPin = dialogs.openPin();
+  input.value = 'Demo2026pin';
+  input.listeners.input();
+  assert.equal(input.value, 'Demo2026pin');
+  confirm.listeners.click();
+  assert.equal(await fullPin, 'Demo2026pin');
+  assert.equal(input.value, '');
+
+  const shortPin = dialogs.openPin();
+  input.value = '123';
+  input.listeners.input();
+  confirm.listeners.click();
+  assert.equal(elements.get('#rutokenPinError').textContent.includes('короче 6'), true);
+  assert.equal(input.value, '123');
+  confirm.listeners.click();
+  assert.equal(await shortPin, '123');
+});
+
 test('CryptoPro adapter builds detached CAdES-BES from the prepared digest', async () => {
   const { PdfSigningCryptoPro: adapter } = loadBrowserModules([
     'certificates.js',

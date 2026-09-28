@@ -41,11 +41,20 @@
           error.textContent = errorMessage;
           error.classList.remove('hidden');
         }
+        let shortPinConfirmed = false;
         const submit = () => {
-          let pin = String(input.value || '').replace(/\D+/g, '');
+          let pin = String(input.value || '');
           if (!pin) {
             error.textContent = 'PIN-код пустой.';
             error.classList.remove('hidden');
+            input.focus();
+            return;
+          }
+          if (pin.length < 6 && !shortPinConfirmed) {
+            error.textContent =
+              'PIN короче 6 символов. Проверьте его и нажмите «Продолжить» ещё раз: неверный PIN расходует попытку на токене.';
+            error.classList.remove('hidden');
+            shortPinConfirmed = true;
             input.focus();
             return;
           }
@@ -56,6 +65,7 @@
         };
         fragment.querySelectorAll('.pin-key').forEach((button) => {
           button.addEventListener('click', () => {
+            shortPinConfirmed = false;
             if (button.dataset.key) input.value = `${input.value}${button.dataset.key}`;
             if (button.dataset.action === 'clear') input.value = '';
             if (button.dataset.action === 'backspace') input.value = input.value.slice(0, -1);
@@ -64,7 +74,7 @@
           });
         });
         input.addEventListener('input', () => {
-          input.value = input.value.replace(/\D+/g, '');
+          shortPinConfirmed = false;
           error.classList.add('hidden');
         });
         input.addEventListener('keydown', (event) => {
