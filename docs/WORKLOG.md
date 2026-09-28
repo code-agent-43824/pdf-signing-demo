@@ -14,7 +14,9 @@ baseline пока не доказано: CMS `signing-time` на реальны�
 проверялся после изменения, Рутокен требует отдельного capability gate, а
 для CryptoPro выключатель не найден в документированном API.
 
-**Дальше.** CI/deploy и real-provider CMS gate обоих провайдеров.
+**Дальше.** CI/deploy `36475412252` прошёл: 87/87, synthetic canary
+`intact/valid/trusted/ENTIRE_FILE`; real-provider CMS gate обоих провайдеров
+остаётся.
 
 ## 2026-09-28 — P1-6, URL без слэша
 
