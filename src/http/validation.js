@@ -588,6 +588,17 @@ async function validatePdfBuffer(pdf) {
       updateMetadata: false,
     });
   } catch (error) {
+    // pdf-lib's transpiled EncryptedPDFError inherits Error but does not
+    // preserve instanceof in the pinned build; match its stable own message.
+    if (
+      String(error?.message || '').startsWith('Input document to `PDFDocument.load` is encrypted.')
+    ) {
+      throw new HttpError(
+        400,
+        'ENCRYPTED_PDF',
+        'PDF защищён паролем или ограничениями. Подписание защищённых PDF пока не поддерживается.',
+      );
+    }
     throw new HttpError(400, 'INVALID_PDF', 'Передан некорректный PDF-документ.', {
       parserError: error.message,
     });

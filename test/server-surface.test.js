@@ -498,6 +498,21 @@ test('prepare enforces strict base64, decoded size, magic bytes and page limits'
   );
 });
 
+test('owner-password PDF is reported as encrypted, not malformed', async () => {
+  const encryptedPath = path.join(tempDir, 'owner-protected.pdf');
+  execFileSync('python3', [
+    '-c',
+    'from pypdf import PdfReader, PdfWriter; import sys; w=PdfWriter(); w.append_pages_from_reader(PdfReader(sys.argv[1])); w.encrypt(user_password="", owner_password="test-only", algorithm="AES-256"); w.write(sys.argv[2])',
+    path.join(PROJECT_ROOT, 'test/fixtures/pdf/simple.pdf'),
+    encryptedPath,
+  ]);
+  const response = await postJson('api/sign/prepare', {
+    pdfBase64: fs.readFileSync(encryptedPath).toString('base64'),
+    signer: validSigner(),
+  });
+  await assertSafeError(response, 400, 'ENCRYPTED_PDF', 'prepare');
+});
+
 test('prepare rejects stamp page references outside the uploaded document', async () => {
   const configResponse = await fetch(new URL('api/stamp-config', baseUrl));
   const { config } = await configResponse.json();

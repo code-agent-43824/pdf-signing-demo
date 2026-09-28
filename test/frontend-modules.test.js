@@ -67,6 +67,19 @@ test('frontend API client preserves endpoints, JSON requests and safe errors', a
   await assert.rejects(failing.loadFonts(), /safe failure/);
 });
 
+test('PDF upload rejects oversized and non-PDF bytes before signing', async () => {
+  const { PdfSigningPdfUpload: upload } = loadBrowserModule('pdf-upload.js');
+  const file = (bytes, size = bytes.length) => ({
+    size,
+    slice: (_start, end) => ({
+      arrayBuffer: async () => Uint8Array.from(bytes.subarray(0, end)).buffer,
+    }),
+  });
+  await upload.validate(file(Buffer.from('%PDF-1.7')));
+  await assert.rejects(upload.validate(file(Buffer.from('%PDF-'), 10 * 1024 * 1024 + 1)), /10 МиБ/);
+  await assert.rejects(upload.validate(file(Buffer.from('not a pdf'))), /не PDF-файл/);
+});
+
 test('certificate helpers preserve date, key-usage and DN boundaries', () => {
   const { PdfSigningCertificates: certificates } = loadBrowserModule('certificates.js');
   const now = Date.parse('2026-08-24T09:00:00Z');

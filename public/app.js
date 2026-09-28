@@ -1542,13 +1542,8 @@ document.getElementById('pdfUpload').addEventListener('change', async (event) =>
     event.target.value = '';
     return;
   }
-  if (file.type !== 'application/pdf') {
-    setStatus('Ошибка: нужен именно PDF-файл.');
-    event.target.value = '';
-    return;
-  }
-
   try {
+    await window.PdfSigningPdfUpload.validate(file);
     revokeUploadedPdfObjectUrl();
     state.uploadedPdfBase64 = await fileToBase64(file);
     state.uploadedPdfName = file.name;
@@ -1560,6 +1555,7 @@ document.getElementById('pdfUpload').addEventListener('change', async (event) =>
     setStatus('PDF загружен. Теперь можно выбрать сертификат и подписать документ.');
   } catch (error) {
     setStatus(`Ошибка загрузки PDF: ${error.message}`);
+    event.target.value = '';
   }
 });
 

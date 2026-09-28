@@ -63,7 +63,7 @@
             <div class="step-index">1</div>
             <div class="step-body">
               <h3>Исходный документ</h3>
-              <p class="muted">PDF выбирается вручную для каждой новой подписи.</p>
+              <p class="muted">PDF выбирается вручную для каждой новой подписи. Максимум 10 МиБ.</p>
               <label id="uploadCard" class="file-card file-upload-card is-empty step-upload-button">
                 <input id="pdfUpload" type="file" accept="application/pdf" hidden />
                 <div class="file-upload-copy">
@@ -643,6 +643,7 @@
     </template>
 
     <script src="./modules/api-client.js"></script>
+    <script src="./modules/pdf-upload.js"></script>
     <script src="./modules/certificates.js"></script>
     <script src="./modules/cryptopro-adapter.js"></script>
     <script src="./modules/rutoken-adapter.js"></script>
