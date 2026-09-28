@@ -680,6 +680,7 @@ async function ensureRutokenLogin(deviceId) {
   if (!plugin) {
     throw new Error('Рутокен плагин не готов.');
   }
+  rutokenAdapter.assertSupportedAlgorithm(state.selectedCertificate);
 
   let errorMessage = '';
   while (true) {

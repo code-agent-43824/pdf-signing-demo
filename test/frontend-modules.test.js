@@ -1,7 +1,9 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const vm = require('node:vm');
+const { execFileSync } = require('node:child_process');
 const { test } = require('node:test');
 
 const MODULE_DIR = path.resolve(__dirname, '..', 'public', 'modules');
@@ -17,6 +19,23 @@ function loadBrowserModules(names) {
 
 function loadBrowserModule(name) {
   return loadBrowserModules([name]);
+}
+
+function certificateWithPublicKeyOid(oidHex) {
+  const der = (tag, content) => {
+    const length = content.length;
+    return Buffer.concat([Buffer.from([tag, length]), content]);
+  };
+  const empty = der(0x30, Buffer.alloc(0));
+  const spki = der(
+    0x30,
+    Buffer.concat([der(0x30, der(0x06, Buffer.from(oidHex, 'hex'))), der(0x03, Buffer.from([0]))]),
+  );
+  const tbs = der(
+    0x30,
+    Buffer.concat([der(0x02, Buffer.from([1])), empty, empty, empty, empty, spki]),
+  );
+  return der(0x30, Buffer.concat([tbs, empty, der(0x03, Buffer.from([0]))])).toString('base64');
 }
 
 test('frontend API client preserves endpoints, JSON requests and safe errors', async () => {
@@ -311,10 +330,10 @@ test('aborted CryptoPro initialization stops waiting and silences the vendor ove
 });
 
 test('Rutoken adapter keeps signing detached and maps provider login errors', async () => {
-  const { PdfSigningRutoken: adapter } = loadBrowserModules([
-    'certificates.js',
-    'rutoken-adapter.js',
-  ]);
+  const window = loadBrowserModules(['certificates.js', 'rutoken-adapter.js']);
+  window.atob = (value) => Buffer.from(value, 'base64').toString('binary');
+  const { PdfSigningRutoken: adapter } = window;
+  const rsaCertificate = certificateWithPublicKeyOid('2a864886f70d010101');
   const calls = [];
   const plugin = {
     DATA_FORMAT_BASE64: 'base64',
@@ -331,7 +350,8 @@ test('Rutoken adapter keeps signing detached and maps provider login errors', as
     {
       deviceId: 'device-1',
       certId: 'cert-1',
-      algorithm: 'RSA SHA-256',
+      certificateBase64: rsaCertificate,
+      algorithm: 'ГОСТ',
       label: 'Тест',
     },
     'digest-base64',
@@ -350,6 +370,96 @@ test('Rutoken adapter keeps signing detached and maps provider login errors', as
   );
   assert.equal(adapter.isAlreadyLoggedInError(new Error('93'), plugin), true);
   assert.equal(adapter.getErrorMessage(new Error('93'), plugin), 'ALREADY_LOGGED_IN (93)');
+});
+
+test('Rutoken signing reads public-key OID, never the subject name', async () => {
+  const window = loadBrowserModules(['certificates.js', 'rutoken-adapter.js']);
+  window.atob = (value) => Buffer.from(value, 'base64').toString('binary');
+  const adapter = window.PdfSigningRutoken;
+  const calls = [];
+  const plugin = {
+    DATA_FORMAT_BASE64: 'base64',
+    HASH_TYPE_SHA256: 'sha256',
+    async sign(...args) {
+      calls.push(args);
+      return 'YQ==';
+    },
+  };
+  const rsa = {
+    deviceId: 1,
+    certId: 'rsa',
+    label: 'Тестов Тест ivanov',
+    certificateBase64: certificateWithPublicKeyOid('2a864886f70d010101'),
+  };
+  const gost = {
+    deviceId: 1,
+    certId: 'gost',
+    label: 'rsa в имени',
+    certificateBase64: certificateWithPublicKeyOid('2a85030701010101'),
+  };
+  assert.equal(adapter.assertSupportedAlgorithm(rsa), 'rsa');
+  assert.equal(adapter.assertSupportedAlgorithm(gost), 'gost2012-256');
+  assert.equal(
+    adapter.assertSupportedAlgorithm({
+      certificateBase64: certificateWithPublicKeyOid('2a85030701010102'),
+    }),
+    'gost2012-512',
+  );
+  assert.throws(
+    () => adapter.assertSupportedAlgorithm({ certificateBase64: 'aW52YWxpZA==' }),
+    /Некорректный DER/,
+  );
+  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'pdf-signing-rutoken-oid-'));
+  try {
+    const key = path.join(temporary, 'key.pem');
+    const cert = path.join(temporary, 'cert.der');
+    execFileSync(
+      'openssl',
+      [
+        'req',
+        '-x509',
+        '-newkey',
+        'rsa:2048',
+        '-nodes',
+        '-subj',
+        '/CN=Ordinary Name',
+        '-keyout',
+        key,
+        '-out',
+        cert,
+        '-outform',
+        'DER',
+        '-days',
+        '1',
+      ],
+      { stdio: 'ignore' },
+    );
+    assert.equal(
+      adapter.assertSupportedAlgorithm({
+        certificateBase64: fs.readFileSync(cert).toString('base64'),
+      }),
+      'rsa',
+    );
+  } finally {
+    fs.rmSync(temporary, { recursive: true, force: true });
+  }
+  await adapter.sign(plugin, rsa, 'digest');
+  await adapter.sign(plugin, gost, 'digest');
+  assert.equal(calls[0][4].rsaHashAlgorithm, 'sha256');
+  assert.equal('rsaHashAlgorithm' in calls[1][4], false);
+  const unsupported = {
+    ...gost,
+    certificateBase64: certificateWithPublicKeyOid('2a8503070101017f'),
+  };
+  assert.throws(() => adapter.assertSupportedAlgorithm(unsupported), /не поддерживается/);
+  await assert.rejects(adapter.sign(plugin, unsupported, 'digest'), /не поддерживается/);
+  assert.equal(calls.length, 2);
+
+  const app = fs.readFileSync(path.resolve(__dirname, '..', 'public', 'app.js'), 'utf8');
+  const login = app.match(
+    /async function ensureRutokenLogin\(deviceId\) \{[\s\S]*?dialogManager\.openPin/,
+  )?.[0];
+  assert.ok(login.indexOf('assertSupportedAlgorithm') < login.indexOf('openPin'));
 });
 
 test('Rutoken environment owns discovery, refresh events and debounced token monitoring', async () => {

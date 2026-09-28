@@ -71,21 +71,56 @@
     return null;
   }
 
-  function detectHashAlgorithmConstant(certificate, plugin) {
-    const name = `${certificate.algorithm || ''} ${certificate.label || ''}`.toLowerCase();
-    if (name.includes('2012') && name.includes('512')) return plugin.HASH_TYPE_GOST3411_12_512;
-    if (name.includes('2012') && name.includes('256')) return plugin.HASH_TYPE_GOST3411_12_256;
-    if (name.includes('sha-512') || name.includes('sha512')) return plugin.HASH_TYPE_SHA512;
-    if (name.includes('sha-384') || name.includes('sha384')) return plugin.HASH_TYPE_SHA384;
-    if (name.includes('sha-256') || name.includes('sha256') || name.includes('rsa'))
-      return plugin.HASH_TYPE_SHA256;
-    return plugin.HASH_TYPE_GOST3411_94;
+  function readDer(bytes, offset, limit) {
+    if (offset + 2 > limit) throw new Error('Некорректный DER сертификата.');
+    const tag = bytes[offset];
+    let length = bytes[offset + 1];
+    let start = offset + 2;
+    if (length & 0x80) {
+      const count = length & 0x7f;
+      if (!count || count > 4 || start + count > limit)
+        throw new Error('Некорректный DER сертификата.');
+      length = 0;
+      for (let index = 0; index < count; index += 1) length = length * 256 + bytes[start + index];
+      start += count;
+    }
+    const end = start + length;
+    if (end > limit) throw new Error('Некорректный DER сертификата.');
+    return { tag, start, end };
   }
 
-  function isRsaCertificate(certificate) {
-    return `${certificate.algorithm || ''} ${certificate.label || ''}`
-      .toLowerCase()
-      .includes('rsa');
+  function expectDer(bytes, offset, limit, tag) {
+    const item = readDer(bytes, offset, limit);
+    if (item.tag !== tag) throw new Error('Некорректный DER сертификата.');
+    return item;
+  }
+
+  function assertSupportedAlgorithm(certificate) {
+    let bytes;
+    try {
+      bytes = Uint8Array.from(
+        root.atob(normalizeBase64(certificate.certificateBase64)),
+        (character) => character.charCodeAt(0),
+      );
+    } catch {
+      throw new Error('Не удалось прочитать DER сертификата Рутокен.');
+    }
+    const outer = expectDer(bytes, 0, bytes.length, 0x30);
+    if (outer.end !== bytes.length) throw new Error('Некорректный DER сертификата.');
+    const tbs = expectDer(bytes, outer.start, outer.end, 0x30);
+    let offset = tbs.start;
+    if (bytes[offset] === 0xa0) offset = readDer(bytes, offset, tbs.end).end;
+    for (let index = 0; index < 5; index += 1) offset = readDer(bytes, offset, tbs.end).end;
+    const spki = expectDer(bytes, offset, tbs.end, 0x30);
+    const algorithm = expectDer(bytes, spki.start, spki.end, 0x30);
+    const oid = expectDer(bytes, algorithm.start, algorithm.end, 0x06);
+    const value = Array.from(bytes.subarray(oid.start, oid.end), (byte) =>
+      byte.toString(16).padStart(2, '0'),
+    ).join('');
+    if (value === '2a864886f70d010101') return 'rsa';
+    if (value === '2a85030701010101') return 'gost2012-256';
+    if (value === '2a85030701010102') return 'gost2012-512';
+    throw new Error('Алгоритм открытого ключа сертификата не поддерживается.');
   }
 
   function getErrorMessage(error, plugin) {
@@ -220,9 +255,13 @@
   }
 
   async function sign(plugin, certificate, contentToSignBase64) {
+    const algorithm = assertSupportedAlgorithm(certificate);
     const options = { detached: true, addSignTime: true, addEssCert: true };
-    if (isRsaCertificate(certificate))
-      options.rsaHashAlgorithm = detectHashAlgorithmConstant(certificate, plugin);
+    if (algorithm === 'rsa') {
+      if (plugin.HASH_TYPE_SHA256 === undefined)
+        throw new Error('Плагин не поддерживает RSA/SHA-256.');
+      options.rsaHashAlgorithm = plugin.HASH_TYPE_SHA256;
+    }
     const cmsSignature = await plugin.sign(
       certificate.deviceId,
       certificate.certId,
@@ -428,6 +467,7 @@
   }
 
   root.PdfSigningRutoken = Object.freeze({
+    assertSupportedAlgorithm,
     createEnvironment,
     enumerateCertificates,
     getDeviceLabels,
