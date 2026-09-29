@@ -10,7 +10,11 @@ mescheryakov.pro, www.mescheryakov.pro {
     }
 
     handle /pdf-signing {
-        redir /pdf-signing/ 308
+        @withQuery expression `{query} != ""`
+        route {
+            redir @withQuery /pdf-signing/?{query} 308
+            redir * /pdf-signing/ 308
+        }
     }
 
     handle {
