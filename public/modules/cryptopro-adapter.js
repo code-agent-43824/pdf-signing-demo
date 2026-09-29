@@ -107,7 +107,9 @@
   async function getCspVersion(plugin) {
     const about = await createObject(plugin, 'CAdESCOM.About');
     const version = await getProp(about, 'CSPVersion', 'CSPVersion');
-    return version ? String(version.toString?.() || version) : '';
+    if (!version) return '';
+    // The async API returns a Promise from every method, toString() included.
+    return String((await version.toString?.()) || version);
   }
 
   function detectHashAlgorithmConstant(certificate, plugin) {
@@ -217,7 +219,7 @@
         let cspText = 'доступен';
         try {
           const cspVersion = await untilAborted(getCspVersion(plugin), signal);
-          if (cspVersion) cspText = String(cspVersion.toString?.() || cspVersion);
+          if (cspVersion) cspText = cspVersion;
         } catch (error) {
           if (signal?.aborted) throw error;
           // Версия необязательна: доступность CSP подтверждается чтением сертификатов.

@@ -318,6 +318,39 @@ test('CryptoPro environment owns plugin discovery, diagnostics and certificate r
   );
 });
 
+test('CryptoPro CSP version is awaited through the async plugin API', async () => {
+  const window = loadBrowserModules(['certificates.js', 'cryptopro-adapter.js']);
+  const diagnostics = new Map();
+  // In the async CAdES API every method returns a Promise, the version
+  // object's toString() included.
+  const plugin = {
+    async CreateObjectAsync(name) {
+      if (name === 'CAdESCOM.About') {
+        return {
+          async CSPVersion() {
+            return { toString: async () => '5.0.13000' };
+          },
+        };
+      }
+      if (name === 'CAdESCOM.Store') {
+        return { Certificates: { Count: 0 }, async Open() {}, async Close() {} };
+      }
+      throw new Error(`Unexpected object: ${name}`);
+    },
+  };
+  window.cadesplugin = plugin;
+  const environment = window.PdfSigningCryptoPro.createEnvironment({
+    async loadScript() {},
+    setDiagnostic(key, state, text) {
+      diagnostics.set(key, { state, text });
+    },
+  });
+
+  await environment.initialize();
+
+  assert.deepEqual(diagnostics.get('csp'), { state: 'ready', text: '5.0.13000' });
+});
+
 test('CryptoPro loader alone never proves the extension is installed', async () => {
   const window = loadBrowserModules(['certificates.js', 'cryptopro-adapter.js']);
   const diagnostics = new Map();
