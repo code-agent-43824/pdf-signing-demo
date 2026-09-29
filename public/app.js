@@ -1521,6 +1521,12 @@ function openStampSettingsDialog() {
   });
 }
 
+function describeCryptoError(error) {
+  return state.activeCryptoStack === 'rutoken'
+    ? rutokenAdapter.getErrorMessage(error, state.cryptoProviders.rutoken.client)
+    : cryptoProAdapter.getErrorMessage(state.cryptoProviders.cryptopro.client, error);
+}
+
 async function signPreparedContent(selectedCertificate, contentToSignBase64) {
   return withOperationalCryptoBusyOverlay('CryptoPro подписывает данные…', async () => {
     return cryptoProAdapter.sign(
@@ -1640,11 +1646,7 @@ document.getElementById('signButton').addEventListener('click', async () => {
     if (error?.code === 'USER_CANCELLED') {
       setStatus('Подписание отменено. Файл не изменён.');
     } else {
-      const details =
-        state.activeCryptoStack === 'rutoken'
-          ? rutokenAdapter.getErrorMessage(error, state.cryptoProviders.rutoken.client)
-          : cryptoProAdapter.getErrorMessage(state.cryptoProviders.cryptopro.client, error);
-      setStatus(`Ошибка: ${details}`);
+      setStatus(`Ошибка: ${describeCryptoError(error)}`);
     }
   } finally {
     updatePrimaryActionState();
@@ -1684,7 +1686,48 @@ document.querySelectorAll('[data-stamp-position]').forEach((button) => {
   });
 });
 
+// The CAdES-BES provider spike (spikes/001-cades-bes-provider-capability/)
+// runs from this page only when asked for with ?spike=cades-bes.
+const CADES_BES_SPIKE_SCRIPTS = ['./spikes/cades-bes-runner.js', './spikes/cades-bes-panel.js'];
+
+function loadSpikeScript(src) {
+  return new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = src;
+    script.addEventListener('load', () => resolve(), { once: true });
+    script.addEventListener('error', () => reject(new Error(`Не удалось загрузить ${src}.`)), {
+      once: true,
+    });
+    document.head.appendChild(script);
+  });
+}
+
+async function startCadesBesSpikeOnRequest() {
+  if (new URLSearchParams(window.location.search).get('spike') !== 'cades-bes') return;
+  for (const src of CADES_BES_SPIKE_SCRIPTS) await loadSpikeScript(src);
+  const runner = window.PdfSigningCadesBesSpike.createRunner({
+    ensureRutokenLogin,
+    getContext: () => ({
+      certificate: state.selectedCertificate,
+      client: getActiveProviderState()?.client || null,
+      mode: state.activeCryptoStack,
+    }),
+    rutokenAlgorithm: (certificate) => rutokenAdapter.assertSupportedAlgorithm(certificate),
+    withBusy: (message, task) => withOperationalCryptoBusyOverlay(message, task),
+  });
+  window.PdfSigningCadesBesSpikePanel.mount(document, {
+    anchor: document.querySelector('.diagnostics-card'),
+    describeError: describeCryptoError,
+    getProviderLabel: () => getCryptoStackLabel(),
+    runner,
+  });
+}
+
 boot().catch((error) => {
   document.getElementById('docMeta').textContent = `Ошибка загрузки: ${error.message}`;
   setStatus(`Ошибка запуска страницы: ${error.message}`);
+});
+
+startCadesBesSpikeOnRequest().catch((error) => {
+  setStatus(`Панель проверки CAdES-BES не загрузилась: ${error.message}`);
 });

@@ -180,10 +180,11 @@ fail-closed контракт и проверка всех PDF signatures не о
 
 Этап 0 реализует spike в
 [`spikes/001-cades-bes-provider-capability/`](../spikes/001-cades-bes-provider-capability/README.md):
-общий бинарный fixture, точный browser runner и fail-closed анализатор
+общий бинарный fixture, точный browser runner с панелью запуска на странице
+(`public/spikes/`, только при `?spike=cades-bes`) и fail-closed анализатор
 четырёх CMS, который проверяется на эфемерных RSA attached/detached CMS
-(`self-test.sh`). Вердикт spike записан в его README, состояние этапов — в
-`docs/STATUS.md`.
+(`test/cades-bes-spike.test.js`, он же `self-test.sh`). Вердикт spike записан
+в его README, состояние этапов — в `docs/STATUS.md`.
 
 ### Этап 1 — verifier и API contracts
 

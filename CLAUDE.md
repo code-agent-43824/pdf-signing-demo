@@ -157,6 +157,10 @@ shape.
   `src/application.js`; update procedure in `docs/VENDOR_ASSETS.md`). Vendor
   scripts in `public/vendor/` are pinned by `SHA256SUMS` and by SHA-384 SRI in
   `CRYPTO_SCRIPTS` (`app.js`).
+- `public/spikes/` holds the CAdES-BES provider spike's runner and page
+  panel. `app.js` loads them only for `?spike=cades-bes`
+  (`startCadesBesSpikeOnRequest`); `test/cades-bes-spike.test.js` covers them
+  together with the spike's analyzer.
 
 ### Pitfalls
 
@@ -178,7 +182,8 @@ shape.
   invariants and its rollout history.
 - `docs/CADES_BES_PLAN.md` — the plan for a separate CAdES-BES
   attached/detached signing mode; its provider spike is in
-  `spikes/001-cades-bes-provider-capability/`.
+  `spikes/001-cades-bes-provider-capability/` (browser part in
+  `public/spikes/`).
 
 ## Invariants
 
@@ -222,7 +227,10 @@ shape.
   (`docs/REMEDIATION_PLAN.md` §5.2).
 - **Spike code stays out of the production adapters.** Provider calls are
   rewritten normally once the spike verdict is `VALIDATED`
-  (`spikes/001-cades-bes-provider-capability/README.md`).
+  (`spikes/001-cades-bes-provider-capability/README.md`). By the owner's
+  decision (2026-09-29) the spike runs from the production page behind
+  `?spike=cades-bes`, because a developer-console run proved too hard for a
+  manual check; the panel is removed after the verdict.
 - **`requirements.constraints.txt` pins the transitive closure,** so CI and
   production Pythons resolve the same versions (see its header).
 - **CI carries lint/format and secret-scanning gates.** By the owner's decision

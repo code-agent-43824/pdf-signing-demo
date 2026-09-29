@@ -85,17 +85,26 @@ def analyze_result(verifier, item, fixture):
     }
 
 
+def load_results(paths, fixture_sha256):
+    # One file per browser: the plugins may live in different browsers.
+    items = []
+    for path in paths:
+        bundle = json.loads(Path(path).read_text(encoding='utf-8'))
+        if bundle.get('version') != 1 or bundle.get('fixtureSha256') != fixture_sha256:
+            raise ValueError('fixture identity mismatch')
+        results = bundle.get('results')
+        if not isinstance(results, list):
+            raise ValueError('results must be an array')
+        items.extend(results)
+    return items
+
+
 def main():
-    if len(sys.argv) != 2:
-        raise SystemExit('usage: analyze.py <transient-provider-results.json>')
-    bundle = json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
+    if len(sys.argv) < 2:
+        raise SystemExit('usage: analyze.py <transient-provider-results.json>...')
     fixture = bytes.fromhex(FIXTURE_PATH.read_text(encoding='ascii').strip())
     fixture_sha256 = hashlib.sha256(fixture).hexdigest()
-    if bundle.get('version') != 1 or bundle.get('fixtureSha256') != fixture_sha256:
-        raise ValueError('fixture identity mismatch')
-    items = bundle.get('results')
-    if not isinstance(items, list):
-        raise ValueError('results must be an array')
+    items = load_results(sys.argv[1:], fixture_sha256)
     combinations = [(item.get('provider'), item.get('packaging')) for item in items]
     if len(combinations) != 4 or set(combinations) != EXPECTED_COMBINATIONS:
         raise ValueError('all four unique provider/packaging results are required')
