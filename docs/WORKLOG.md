@@ -42,6 +42,14 @@
   `INVALID_CERTIFICATE_DER`. Три мутации ловятся: `reason` не отдаётся,
   код не фильтруется, клиент не добавляет код в текст. README и `CLAUDE.md`
   описывают поле, решение владельца — в «Settled decisions» и JOURNAL.
+- Выкатка шага 2 (`c37ca2a`). CI/deploy `36559024110`: гейт Node на
+  сервере пройден, 97/97 тестов там же, canary
+  `valid/not_checked/not_checked`, pyHanko `intact/valid/trusted`, в логе
+  `deployed c37ca2a…`. Публичные `health/ready` — 200, `health/metrics` —
+  404, UI и соседний сайт — 200; отдаваемый `modules/api-client.js`
+  совпадает с коммитом. Живой запрос `prepare` с негодным сертификатом
+  (отклоняется до подготовки PDF, сессия не создаётся) вернул
+  `INVALID_SIGNER_CERTIFICATE` с `reason: INVALID_CERTIFICATE_DER`.
 
 ## 2026-09-29 — переход PDF Signing на Node 24, план
 
