@@ -26,4 +26,4 @@ jobs:
           DEPLOY_HOST: ${{ vars.PRODUCTION_HOST }}
           DEPLOY_USER: ${{ vars.PRODUCTION_USER }}
         run: |
-          ssh "${DEPLOY_USER}@${DEPLOY_HOST}" 'set -eu; caddy version; stat -c "%U:%G %a %n" /etc/caddy/Caddyfile; sed -n "/handle \/pdf-signing {/,/^    }/p" /etc/caddy/Caddyfile; if sudo -n true; then echo sudo-noninteractive-available; else echo sudo-noninteractive-unavailable; fi'
+          ssh "${DEPLOY_USER}@${DEPLOY_HOST}" 'set -eu; id; sed -n "1,60p" /etc/caddy/Caddyfile; find /etc/caddy -maxdepth 3 -type f -printf "%u:%g %m %p\n"; for f in /etc/caddy/sites/mescheryakov.pro /etc/caddy/sites-enabled/mescheryakov.pro /etc/caddy/mescheryakov.pro; do if test -f "$f"; then echo "SITE=$f"; test -w "$f" && echo site-writable || echo site-not-writable; sed -n "/handle \/pdf-signing {/,/^    }/p" "$f"; fi; done; curl -sS -o /dev/null -w "caddy-admin-http=%{http_code}\n" --max-time 2 http://127.0.0.1:2019/config/'
