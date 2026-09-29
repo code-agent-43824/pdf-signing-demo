@@ -1,0 +1,29 @@
+name: Inspect Caddy redirect
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: production
+    steps:
+      - name: Configure pinned production host
+        env:
+          SSH_KEY: ${{ secrets.PRODUCTION_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.PRODUCTION_KNOWN_HOSTS }}
+        run: |
+          install -d -m 0700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 0600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Inspect live Caddy block and privileges
+        env:
+          DEPLOY_HOST: ${{ vars.PRODUCTION_HOST }}
+          DEPLOY_USER: ${{ vars.PRODUCTION_USER }}
+        run: |
+          ssh "${DEPLOY_USER}@${DEPLOY_HOST}" 'set -eu; caddy version; stat -c "%U:%G %a %n" /etc/caddy/Caddyfile; sed -n "/handle \/pdf-signing {/,/^    }/p" /etc/caddy/Caddyfile; if sudo -n true; then echo sudo-noninteractive-available; else echo sudo-noninteractive-unavailable; fi'
