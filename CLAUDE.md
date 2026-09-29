@@ -187,6 +187,13 @@ shape.
 
 ## Settled decisions
 
+- **Encrypted-PDF classification stays after signing confirmation.** Owner
+  decision (2026-09-29): the browser rejects oversized and non-PDF input on
+  selection; the server classifies encryption after confirmation but before
+  token access or signing. Do not add an early upload or a client PDF parser
+  solely to move this warning earlier: early upload changes the document's
+  disclosure timing, while a client parser adds maintenance without changing
+  signature safety (`docs/PLAN.md`, P2-8).
 - **`trust` and `qualified` stay `not_checked`.** The product boundary is
   integrity: chain, validity, revocation, key usage and a qualified-signature
   policy are not checked, so reporting more would be a false success
