@@ -4,10 +4,11 @@
 браузерах проверено 2026-09-24; после этого фронтенд менялся, поэтому
 новый real-provider gate остаётся обязательным.
 
-- **Production.** Релиз `f99bfe1` развёрнут CI/deploy `36525660785`: 95/95
+- **Production.** Релиз `d4c1ff5` развёрнут CI/deploy `36546183734`: 95/95
   тестов на сервере, canary `valid/not_checked/not_checked`, pyHanko
-  `intact/valid/trusted`. Публичный `health/ready` — 200, внешний
-  `health/metrics` — 404, UI и соседний сайт — 200. 28.09 около 21:52 UTC с Watson
+  `intact/valid/trusted`. Локальный `health/ready` — 200, внешний
+  `health/metrics` — 404, UI и соседний сайт — 200; после redeploy редирект
+  без слэша сохранил query и код 308. 28.09 около 21:52 UTC с Watson
   наблюдались перемежающиеся тайм-ауты *новых TCP-соединений* и на 443, и на
   SSH 22 при работающих Caddy и локальном readiness сервера. На сервере SYN
   приходит и SYN-ACK отправляется, но для неудачных попыток ACK от Watson не
