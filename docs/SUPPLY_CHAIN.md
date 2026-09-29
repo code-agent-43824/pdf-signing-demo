@@ -19,17 +19,20 @@
 `scripts/check-node-security-releases.js` падает, если вышел security-релиз
 Node той же major-версии новее пина.
 
-Node на сервере ставится вручную (`NODE_BIN` в
-`scripts/deploy-production.sh`); это ручная работа на общем хосте, её делает
-владелец или Watson (`AGENTS.md`, §5–6). Поэтому версия поднимается в два
-шага:
+Node для PDF Signing ставится вручную в `/opt/nodejs/` и доступен через
+отдельный `/home/openclaw/runtime/pdf-signing-node`; общий
+`/home/openclaw/runtime/node` обслуживает также соседний проект и не
+переключается при обновлении PDF Signing. Ручную работу на общем хосте
+выполняет Watson (`AGENTS.md`, §5–6). Порядок:
 
-1. На сервер ставится новый Node той же major-версии. Деплой примет его и при
-   старом пине.
-2. Одним коммитом меняются `.node-version`, `engines` в `package.json`, корень
-   `package-lock.json` (`npm install --package-lock-only`) и пин в
-   `test/supply-chain.test.js`. CI проверяет релиз на новом Node, деплой —
-   что сервер его уже получил.
+1. Установить официальный Node рядом с действующим, проверить SHA-256 по
+   `SHASUMS256.txt`, сохранить прежнюю версию для отката и отдельно проверить
+   новую. Для следующего обновления переключить только проектный симлинк.
+2. Одним коммитом согласовать `.node-version`, `engines` в `package.json`,
+   корень `package-lock.json` (`npm install --package-lock-only`) и пин в
+   `test/supply-chain.test.js`. Если меняется путь runtime, согласовать также
+   `ExecStart` unit и default `NODE_BIN` в deploy script. CI проверяет релиз
+   на новой версии, deploy сверяет её до любых изменений production.
 
 В обратном порядке деплой остановится на проверке версии, не тронув
 production.

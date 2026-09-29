@@ -29,7 +29,7 @@ Environment=SIGNING_RESULT_TTL_MS=900000
 Environment=SIGNING_MAX_RESULTS=32
 Environment=SIGNING_RESULT_DISK_BYTES=134217728
 Environment=STORAGE_CLEANUP_INTERVAL_MS=30000
-ExecStart=/home/openclaw/runtime/node/bin/node src/server.js
+ExecStart=/home/openclaw/runtime/pdf-signing-node/bin/node src/server.js
 Restart=always
 RestartSec=3
 KillMode=control-group

@@ -27,7 +27,7 @@ test('runtime dependency trees are minimal and fully locked', () => {
   const packageJson = readJson('package.json');
   assert.deepEqual(Object.keys(packageJson.dependencies).sort(), ['ajv', 'express', 'pdf-lib']);
   const nodePin = fs.readFileSync(path.join(root, '.node-version'), 'utf8').trim();
-  assert.equal(nodePin, '22.23.3');
+  assert.equal(nodePin, '24.21.0');
   // scripts/check-node-runtime.js enforces this range on the server at deploy.
   assert.equal(packageJson.engines.node, `>=${nodePin} <${Number(nodePin.split('.')[0]) + 1}`);
 
@@ -46,6 +46,14 @@ test('runtime dependency trees are minimal and fully locked', () => {
   for (const direct of ['asn1crypto', 'gostcrypto', 'pillow', 'pyhanko', 'pypdf', 'reportlab']) {
     assert.ok(pythonPackages.has(direct), `${direct} must be locked`);
   }
+});
+
+test('PDF Signing uses its own production Node path, separate from shared services', () => {
+  const runtime = '/home/openclaw/runtime/pdf-signing-node/bin/node';
+  const unit = fs.readFileSync(path.join(root, 'deploy', 'pdf-signing-demo.service'), 'utf8');
+  const deploy = fs.readFileSync(path.join(root, 'scripts', 'deploy-production.sh'), 'utf8');
+  assert.ok(unit.includes(`ExecStart=${runtime} src/server.js`));
+  assert.ok(deploy.includes(`node_bin="${'${NODE_BIN:-'}${runtime}}"`));
 });
 
 test('lint tools are exact dev pins that stay out of the runtime trees', () => {

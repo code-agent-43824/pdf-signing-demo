@@ -37,6 +37,9 @@ test('Node runtime gate accepts only the pinned major, not older than the pin', 
   assert.equal(satisfiesPin('22.23.3', '22.22.9'), false);
   assert.equal(satisfiesPin('22.22.2', '24.0.0'), false);
   assert.equal(satisfiesPin('22.22.2', '21.99.99'), false);
+  assert.equal(satisfiesPin('24.21.0', '24.21.0'), true);
+  assert.equal(satisfiesPin('24.21.0', '24.20.9'), false);
+  assert.equal(satisfiesPin('24.21.0', '22.23.3'), false);
 
   assert.deepEqual(parseNodeVersion('v22.23.3\n'), [22, 23, 3]);
   for (const malformed of ['', '22', '22.23', '22.23.3-rc.1', 'v22.x.1', 'lts']) {
