@@ -73,6 +73,18 @@
   настоящий диалог PIN дают 4 из 4, файл `cades-bes-spike.json` — версия 1,
   хеш fixture совпадает, провайдеры получили ровно fixture; нарушений CSP
   нет.
+- Выкатка шага 3 (`46c1956`). CI/deploy `36560747031`: гейт Node на сервере
+  пройден, 101/101 тестов там же (включая сквозной тест spike на
+  production-Python), canary `valid/not_checked/not_checked`, pyHanko
+  `intact/valid/trusted`, в логе `deployed 46c1956…`. Публичные
+  `health/ready` — 200, `health/metrics` — 404, UI (и с `?spike=cades-bes`)
+  и соседний сайт — 200. Отдаваемые `app.js`, `index.html` и оба файла
+  `spikes/` совпадают с коммитом; заголовок CSP страницы и скриптов spike на
+  production тот же, что на локальном сервере, где панель прошла Chromium.
+  Открыть production в Chromium отсюда нельзя: браузер не доверяет CA
+  прокси среды, а отключать проверку TLS нельзя.
+- Дальше: владелец проходит панель с реальными плагинами и присылает файл;
+  повтор подписи PDF Рутокеном покажет код причины `CMS_INTEGRITY_FAILED`.
 
 ## 2026-09-29 — переход PDF Signing на Node 24, план
 
