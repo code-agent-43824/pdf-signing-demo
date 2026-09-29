@@ -3,12 +3,22 @@ const { OperationControlError } = require('../runtime/operation-queue');
 const { WorkerProcessError } = require('../runtime/process-runner');
 const { StorageLimitError } = require('../storage/lifecycle');
 
+// Verifier failure codes are a fixed vocabulary (scripts/verify-cms.py). By
+// the owner's decision (docs/JOURNAL.md, 2026-09-29) the code reaches the
+// client as `reason`; a value that is not a plain code stays in the log.
+const PUBLIC_REASON_PATTERN = /^[A-Z][A-Z0-9_]{1,63}$/;
+
+function toPublicReason(code, fallback) {
+  return typeof code === 'string' && PUBLIC_REASON_PATTERN.test(code) ? code : fallback;
+}
+
 function createCmsIntegrityError(error) {
   return new HttpError(
     400,
     'CMS_INTEGRITY_FAILED',
     'CMS-подпись не прошла обязательную проверку целостности.',
     { verifierCode: error.code || 'CMS_VERIFIER_FAILED' },
+    toPublicReason(error.code, 'CMS_VERIFIER_FAILED'),
   );
 }
 
@@ -18,6 +28,7 @@ function createCertificateError(error) {
     'INVALID_SIGNER_CERTIFICATE',
     'Не удалось проверить выбранный сертификат.',
     { verifierCode: error.code || 'CERTIFICATE_INSPECTION_FAILED' },
+    toPublicReason(error.code, 'CERTIFICATE_INSPECTION_FAILED'),
   );
 }
 
@@ -97,6 +108,7 @@ function sendSafeError(req, res, error, stage = null) {
   const status = known ? error.status : 500;
   const code = known ? error.code : 'INTERNAL_ERROR';
   const message = known ? error.publicMessage : 'Сервис временно не может выполнить операцию.';
+  const reason = known ? toPublicReason(error.reason, null) : null;
   res.locals.errorCode = code;
   logRequestError(req, res, error, stage, code);
 
@@ -104,6 +116,7 @@ function sendSafeError(req, res, error, stage = null) {
     ok: false,
     ...(stage ? { stage } : {}),
     code,
+    ...(reason ? { reason } : {}),
     message,
     requestId: res.locals.requestId,
   });

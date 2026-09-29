@@ -14,13 +14,14 @@ const FONT_ID_PATTERN = '^font-[0-9a-f]{16}$';
 const COLOR_PATTERN = '^#[0-9A-Fa-f]{6}$';
 
 class HttpError extends Error {
-  constructor(status, code, publicMessage, details = null) {
+  constructor(status, code, publicMessage, details = null, reason = null) {
     super(publicMessage);
     this.name = 'HttpError';
     this.status = status;
     this.code = code;
     this.publicMessage = publicMessage;
     this.details = details;
+    this.reason = reason;
   }
 }
 

@@ -4,7 +4,13 @@
       const response = await fetchImpl(url, options);
       const data = await response.json();
       if (!response.ok || !data.ok) {
-        throw new Error(data.message || fallbackMessage);
+        const message = data.message || fallbackMessage;
+        // `reason` is the verifier code of a failed CMS or certificate check.
+        const error = new Error(data.reason ? `${message} Код причины: ${data.reason}.` : message);
+        error.code = data.code;
+        error.reason = data.reason;
+        error.requestId = data.requestId;
+        throw error;
       }
       return data;
     }

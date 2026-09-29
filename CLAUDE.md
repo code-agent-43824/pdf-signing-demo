@@ -124,9 +124,11 @@ shape.
   group is killed on timeout or abort. Data pass through private temp
   directories (0700/0600). `verify-cms.py` prints its JSON result to stdout and
   `{"ok": false, "code": ...}` to stderr on failure.
-- Errors: throw `HttpError(status, code, publicMessage, details)`.
+- Errors: throw `HttpError(status, code, publicMessage, details, reason)`.
   `createOperationError` maps queue, worker and storage errors to public codes;
-  `sendSafeError` answers `{ok: false, code, message, requestId}`. Paths,
+  `sendSafeError` answers `{ok: false, code, message, requestId}`, plus
+  `reason` (the verifier code, plain `[A-Z0-9_]` only) for failed CMS and
+  certificate checks; `api-client.js` appends it to the error text. Paths,
   exceptions, PDF, CMS, PIN, tokens, DNs and fingerprints never reach
   responses, logs or metrics; a result path is logged as
   `/api/results/:capability`.
@@ -187,6 +189,11 @@ shape.
 
 ## Settled decisions
 
+- **Failed CMS and certificate checks expose the verifier code.** Owner
+  decision (2026-09-29): the `reason` field and the page show it, so a
+  real-provider failure can be diagnosed from a screenshot without the
+  service journal. Only the plain code format leaves the server; `details`
+  stay in the log (`docs/JOURNAL.md`).
 - **Encrypted-PDF classification stays after signing confirmation.** Owner
   decision (2026-09-29): the browser rejects oversized and non-PDF input on
   selection; the server classifies encryption after confirmation but before

@@ -591,7 +591,7 @@ test('complete verifies CMS integrity, certificate binding and retry semantics',
   const wrongContent = Buffer.from(content);
   wrongContent[0] ^= 0x01;
   const wrongDigestCms = createTestCms(wrongContent, 'wrong-digest');
-  await assertSafeError(
+  const wrongDigest = await assertSafeError(
     await postJson('api/sign/complete', {
       sessionId: prepared.sessionId,
       cmsSignatureBase64: wrongDigestCms.toString('base64'),
@@ -600,12 +600,13 @@ test('complete verifies CMS integrity, certificate binding and retry semantics',
     'CMS_INTEGRITY_FAILED',
     'complete',
   );
+  assert.equal(wrongDigest.reason, 'CONTENT_DIGEST_MISMATCH');
 
   const wrongCertificateCms = createTestCms(content, 'wrong-certificate', {
     certPath: otherCertPath,
     keyPath: otherKeyPath,
   });
-  await assertSafeError(
+  const wrongCertificate = await assertSafeError(
     await postJson('api/sign/complete', {
       sessionId: prepared.sessionId,
       cmsSignatureBase64: wrongCertificateCms.toString('base64'),
@@ -614,6 +615,7 @@ test('complete verifies CMS integrity, certificate binding and retry semantics',
     'CMS_INTEGRITY_FAILED',
     'complete',
   );
+  assert.equal(wrongCertificate.reason, 'UNEXPECTED_SIGNER_CERTIFICATE');
 
   const validCms = createTestCms(content, 'valid-complete');
   const wrappedValidCmsBase64 = validCms
@@ -737,7 +739,7 @@ test('prepare rejects malformed certificate DER before PDF preparation', async (
   const pdfBase64 = fs
     .readFileSync(path.join(PROJECT_ROOT, 'test', 'fixtures', 'pdf', 'simple.pdf'))
     .toString('base64');
-  await assertSafeError(
+  const notCertificate = await assertSafeError(
     await postJson('api/sign/prepare', {
       pdfBase64,
       signer: {
@@ -748,6 +750,7 @@ test('prepare rejects malformed certificate DER before PDF preparation', async (
     'INVALID_SIGNER_CERTIFICATE',
     'prepare',
   );
+  assert.equal(notCertificate.reason, 'INVALID_CERTIFICATE_DER');
 });
 
 test('complete has a strict schema and safe session errors', async () => {

@@ -64,7 +64,29 @@ test('frontend API client preserves endpoints, JSON requests and safe errors', a
     ok: false,
     json: async () => ({ ok: false, message: 'safe failure' }),
   }));
-  await assert.rejects(failing.loadFonts(), /safe failure/);
+  await assert.rejects(failing.loadFonts(), /^Error: safe failure$/);
+
+  const rejected = PdfSigningApi.createApiClient(async () => ({
+    ok: false,
+    json: async () => ({
+      ok: false,
+      code: 'CMS_INTEGRITY_FAILED',
+      reason: 'CONTENT_DIGEST_MISMATCH',
+      message: 'CMS-подпись не прошла обязательную проверку целостности.',
+      requestId: 'request-id',
+    }),
+  }));
+  await assert.rejects(rejected.complete({}), (error) => {
+    assert.equal(
+      error.message,
+      'CMS-подпись не прошла обязательную проверку целостности. '
+        + 'Код причины: CONTENT_DIGEST_MISMATCH.',
+    );
+    assert.equal(error.code, 'CMS_INTEGRITY_FAILED');
+    assert.equal(error.reason, 'CONTENT_DIGEST_MISMATCH');
+    assert.equal(error.requestId, 'request-id');
+    return true;
+  });
 });
 
 test('PDF upload rejects oversized and non-PDF bytes before signing', async () => {

@@ -235,7 +235,10 @@ JSON Schema (`src/http/validation.js`): неизвестные поля и зн�
 
 Ошибки API не содержат путей и внутренних исключений. Ответ включает
 стабильный `code`, безопасный `message` и `requestId`; тот же request ID
-возвращается в заголовке `X-Request-Id` и попадает в серверный лог.
+возвращается в заголовке `X-Request-Id` и попадает в серверный лог. Отказы
+`CMS_INTEGRITY_FAILED` и `INVALID_SIGNER_CERTIFICATE` дополнительно несут
+`reason` — код верификатора (например, `CONTENT_DIGEST_MISMATCH`); страница
+показывает его в тексте ошибки.
 
 ## Проверка CMS
 
@@ -292,8 +295,8 @@ POST-запросы требуют `Content-Type: application/json`. Основ�
 - `GET /pdf-signing/health/live|ready` — liveness и readiness.
 
 Неизвестные поля отклоняются. Ошибки имеют стабильный `code`, безопасный
-`message` и `requestId`; внутренние пути, PDF, CMS и персональные данные в
-ответы не попадают.
+`message` и `requestId`, отказы проверки CMS и сертификата — ещё `reason`;
+внутренние пути, PDF, CMS и персональные данные в ответы не попадают.
 
 ## Деплой
 

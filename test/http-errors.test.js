@@ -44,6 +44,50 @@ test('certificate and CMS errors retain only bounded verifier metadata', () => {
   assert.equal(cms.status, 400);
   assert.equal(cms.code, 'CMS_INTEGRITY_FAILED');
   assert.deepEqual(cms.details, { verifierCode: 'BAD_CMS' });
+
+  // The verifier code is public only in its plain form (docs/JOURNAL.md,
+  // 2026-09-29); anything else falls back to the generic code.
+  assert.equal(certificate.reason, 'BAD_CERT');
+  assert.equal(cms.reason, 'BAD_CMS');
+  for (const unsafe of ['/tmp/secret', 'bad cms', 'Lowercase', '', null, 'X'.repeat(65)]) {
+    assert.equal(createCmsIntegrityError({ code: unsafe }).reason, 'CMS_VERIFIER_FAILED');
+    assert.equal(createCertificateError({ code: unsafe }).reason, 'CERTIFICATE_INSPECTION_FAILED');
+  }
+});
+
+test('safe error responses carry a plain verifier reason but never details', () => {
+  const responses = [];
+  const res = {
+    locals: { requestId: 'request-id' },
+    status() {
+      return this;
+    },
+    json(value) {
+      responses.push(value);
+      return value;
+    },
+  };
+  const req = { method: 'POST', path: '/api/sign/complete', originalUrl: '/api/sign/complete' };
+  const originalConsoleError = console.error;
+  console.error = () => {};
+  try {
+    sendSafeError(req, res, createCmsIntegrityError({ code: 'CONTENT_DIGEST_MISMATCH' }));
+    sendSafeError(req, res, new HttpError(400, 'SAFE_CODE', 'Safe', null, 'not a code'));
+    sendSafeError(req, res, new Error('internal /tmp/path'));
+  } finally {
+    console.error = originalConsoleError;
+  }
+
+  assert.deepEqual(responses[0], {
+    ok: false,
+    code: 'CMS_INTEGRITY_FAILED',
+    reason: 'CONTENT_DIGEST_MISMATCH',
+    message: 'CMS-подпись не прошла обязательную проверку целостности.',
+    requestId: 'request-id',
+  });
+  assert.equal(Object.hasOwn(responses[1], 'reason'), false);
+  assert.equal(Object.hasOwn(responses[2], 'reason'), false);
+  assert.equal(JSON.stringify(responses).includes('details'), false);
 });
 
 test('safe error responses hide internal details and redact capability paths in logs', () => {
