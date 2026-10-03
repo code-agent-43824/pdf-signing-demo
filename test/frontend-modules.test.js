@@ -200,6 +200,26 @@ test('Rutoken PIN dialog preserves letters and requires deliberate retry for a s
   assert.equal(await fullPin, 'Demo2026pin');
   assert.equal(input.value, '');
 
+  // Enter in the PIN field submits like «Продолжить». The result is read
+  // after one microtask, so a broken handler fails here instead of hanging.
+  let enteredPin = null;
+  dialogs.openPin().then((pin) => {
+    enteredPin = pin;
+  });
+  input.value = 'Enter2026pin';
+  input.listeners.input();
+  let enterDefaultPrevented = false;
+  input.listeners.keydown({
+    key: 'Enter',
+    preventDefault() {
+      enterDefaultPrevented = true;
+    },
+  });
+  await Promise.resolve();
+  assert.equal(enteredPin, 'Enter2026pin');
+  assert.equal(enterDefaultPrevented, true);
+  assert.equal(input.value, '');
+
   const shortPin = dialogs.openPin();
   input.value = '123';
   input.listeners.input();
