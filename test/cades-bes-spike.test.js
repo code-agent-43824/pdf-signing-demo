@@ -134,13 +134,15 @@ function createProviders(calls, { failRutokenSign = null } = {}) {
   return { cryptoPro, rutoken };
 }
 
-function analyze(...bundles) {
-  const paths = bundles.map((bundle) => {
+// Strings are analyzer flags, objects are bundles written to files.
+function analyze(...args) {
+  const argv = args.map((arg) => {
+    if (typeof arg === 'string') return arg;
     const file = nextPath('bundle.json');
-    fs.writeFileSync(file, JSON.stringify(bundle));
+    fs.writeFileSync(file, JSON.stringify(arg));
     return file;
   });
-  return spawnSync('python3', [path.join(SPIKE_DIR, 'analyze.py'), ...paths], {
+  return spawnSync('python3', [path.join(SPIKE_DIR, 'analyze.py'), ...argv], {
     encoding: 'utf8',
   });
 }
@@ -221,6 +223,19 @@ test('CAdES-BES spike signs the exact fixture with both plugins and the analyzer
     ]),
     ALL_RESULTS.map((key) => [key, key.endsWith(':attached'), 'valid', true]),
   );
+  assert.deepEqual(report.missing, []);
+  for (const item of report.results) {
+    assert.deepEqual(item.signedAttributeOids, [
+      '1.2.840.113549.1.9.3',
+      '1.2.840.113549.1.9.5',
+      '1.2.840.113549.1.9.4',
+      '1.2.840.113549.1.9.16.2.47',
+    ]);
+    assert.equal(item.digestAlgorithmParameters, 'null');
+    assert.deepEqual(item.certificateKeys, [
+      { algorithm: '1.2.840.113549.1.1.1', parameters: 'null' },
+    ]);
+  }
 
   // Plugins in two browsers give two files; together they are one result.
   const only = (provider) => ({
@@ -243,6 +258,56 @@ test('CAdES-BES spike signs the exact fixture with both plugins and the analyzer
     cryptoProResults[0].cmsBase64,
   ];
   assert.match(analyze(swapped).stderr, /packaging does not match/);
+
+  // One provider alone: a partial verdict that still fails closed.
+  const partial = analyze('--partial', only('rutoken'));
+  assert.equal(partial.status, 0, partial.stderr);
+  const partialReport = JSON.parse(partial.stdout);
+  assert.equal(partialReport.verdict, 'PARTIAL');
+  assert.deepEqual(partialReport.missing, ['cryptopro:attached', 'cryptopro:detached']);
+  assert.deepEqual(
+    partialReport.results.map((item) => [item.packaging, item.cryptographicIntegrity]),
+    [
+      ['attached', 'valid'],
+      ['detached', 'valid'],
+    ],
+  );
+  assert.equal(JSON.parse(analyze('--partial', bundle).stdout).verdict, 'VALIDATED');
+  assert.match(analyze('--partial', only('rutoken'), only('rutoken')).stderr, /must be unique/);
+  assert.match(analyze('--partial', { ...bundle, results: [] }).stderr, /must be unique/);
+  assert.match(analyze('--partial', swapped).stderr, /packaging does not match/);
+  assert.match(analyze('--partial').stderr, /usage: analyze\.py \[--partial\]/);
+
+  // GOST keys carry a parameter set and a digest OID; asn1crypto cannot read
+  // them, so the analyzer parses the raw encoding.
+  const described = spawnSync(
+    'python3',
+    [
+      '-c',
+      [
+        'import importlib.util, json, sys',
+        "spec = importlib.util.spec_from_file_location('analyze', sys.argv[1])",
+        'analyze = importlib.util.module_from_spec(spec)',
+        'spec.loader.exec_module(analyze)',
+        'print(json.dumps([analyze.describe_parameters(bytes.fromhex(v)) for v in sys.argv[2:]]))',
+      ].join('\n'),
+      path.join(SPIKE_DIR, 'analyze.py'),
+      '',
+      '0500',
+      '301506092a8503070102010101' + '06082a85030701010202',
+      '06082a85030701010202',
+      '0401ff',
+    ],
+    { encoding: 'utf8' },
+  );
+  assert.equal(described.status, 0, described.stderr);
+  assert.deepEqual(JSON.parse(described.stdout), [
+    'absent',
+    'null',
+    ['1.2.643.7.1.2.1.1.1', '1.2.643.7.1.1.2.2'],
+    ['1.2.643.7.1.1.2.2'],
+    'present',
+  ]);
 });
 
 test('CAdES-BES spike fails closed before a provider call and always logs Rutoken out', async () => {

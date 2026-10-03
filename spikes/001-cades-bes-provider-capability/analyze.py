@@ -6,7 +6,7 @@ import json
 import sys
 from pathlib import Path
 
-from asn1crypto import cms
+from asn1crypto import cms, core
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -18,6 +18,36 @@ EXPECTED_COMBINATIONS = {
     ('rutoken', 'detached'),
 }
 SIGNING_CERTIFICATE_V2_OID = '1.2.840.113549.1.9.16.2.47'
+NULL_DER = b'\x05\x00'
+
+
+class AnySequence(core.SequenceOf):
+    _child_spec = core.Any
+
+
+def describe_parameters(encoded):
+    if not encoded:
+        return 'absent'
+    if encoded == NULL_DER:
+        return 'null'
+    try:
+        if encoded[0] == 0x06:
+            return [core.ObjectIdentifier.load(encoded).dotted]
+        return [
+            core.ObjectIdentifier.load(item.dump()).dotted for item in AnySequence.load(encoded)
+        ]
+    except (TypeError, ValueError):
+        return 'present'
+
+
+def certificate_key(certificate):
+    # asn1crypto has no public-key spec for GOST, so the SPKI is read raw.
+    spki = AnySequence.load(certificate['tbs_certificate']['subject_public_key_info'].dump())
+    algorithm = AnySequence.load(spki[0].dump())
+    return {
+        'algorithm': core.ObjectIdentifier.load(algorithm[0].dump()).dotted,
+        'parameters': describe_parameters(algorithm[1].dump() if len(algorithm) > 1 else b''),
+    }
 
 
 def load_verifier():
@@ -63,9 +93,8 @@ def analyze_result(verifier, item, fixture):
 
     verify_der = detached_copy(content_info) if expected_attached else cms_der
     verification = verifier.verify_cms(verify_der, fixture)
-    signer_infos = signed_data['signer_infos']
-    signed_attrs = signer_infos[0]['signed_attrs']
-    attribute_oids = [attribute['type'].dotted for attribute in signed_attrs]
+    signer_info = signed_data['signer_infos'][0]
+    attribute_oids = [attribute['type'].dotted for attribute in signer_info['signed_attrs']]
     certificates = [
         item.chosen for item in signed_data['certificates'] if item.name == 'certificate'
     ]
@@ -79,8 +108,16 @@ def analyze_result(verifier, item, fixture):
         'embeddedContentMatched': embedded == fixture if embedded is not None else None,
         'certificateCount': len(certificates),
         'signingCertificateV2': attribute_oids.count(SIGNING_CERTIFICATE_V2_OID) == 1,
+        'signedAttributeOids': attribute_oids,
         'digestAlgorithm': verification['digestAlgorithm'],
+        'digestAlgorithmParameters': describe_parameters(
+            signer_info['digest_algorithm']['parameters'].dump()
+        ),
         'signatureAlgorithm': verification['signatureAlgorithm'],
+        'signatureAlgorithmParameters': describe_parameters(
+            signer_info['signature_algorithm']['parameters'].dump()
+        ),
+        'certificateKeys': [certificate_key(certificate) for certificate in certificates],
         'cryptographicIntegrity': 'valid',
     }
 
@@ -100,20 +137,33 @@ def load_results(paths, fixture_sha256):
 
 
 def main():
-    if len(sys.argv) < 2:
-        raise SystemExit('usage: analyze.py <transient-provider-results.json>...')
+    # --partial analyses a subset, such as one provider whose plugin lives on
+    # another machine; its verdict is never VALIDATED.
+    partial = '--partial' in sys.argv[1:]
+    paths = [argument for argument in sys.argv[1:] if argument != '--partial']
+    if not paths:
+        raise SystemExit('usage: analyze.py [--partial] <transient-provider-results.json>...')
     fixture = bytes.fromhex(FIXTURE_PATH.read_text(encoding='ascii').strip())
     fixture_sha256 = hashlib.sha256(fixture).hexdigest()
-    items = load_results(sys.argv[1:], fixture_sha256)
+    items = load_results(paths, fixture_sha256)
     combinations = [(item.get('provider'), item.get('packaging')) for item in items]
-    if len(combinations) != 4 or set(combinations) != EXPECTED_COMBINATIONS:
+    if partial:
+        if (
+            not combinations
+            or len(set(combinations)) != len(combinations)
+            or not set(combinations) <= EXPECTED_COMBINATIONS
+        ):
+            raise ValueError('partial results must be unique known provider/packaging pairs')
+    elif len(combinations) != 4 or set(combinations) != EXPECTED_COMBINATIONS:
         raise ValueError('all four unique provider/packaging results are required')
 
     verifier = load_verifier()
+    missing = EXPECTED_COMBINATIONS - set(combinations)
     report = {
-        'verdict': 'VALIDATED',
+        'verdict': 'PARTIAL' if missing else 'VALIDATED',
         'fixtureBytes': len(fixture),
         'fixtureSha256': fixture_sha256,
+        'missing': sorted(f'{provider}:{packaging}' for provider, packaging in missing),
         'results': [analyze_result(verifier, item, fixture) for item in items],
     }
     if not all(item['signingCertificateV2'] for item in report['results']):
