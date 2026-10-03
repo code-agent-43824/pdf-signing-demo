@@ -136,6 +136,18 @@ test('certificate helpers preserve date, key-usage and DN boundaries', () => {
     'Иванов, Иван',
   );
   assert.equal(certificates.getCertificateIssuerLabel('OU=УЦ, O=Организация'), 'Организация');
+
+  const skipped = certificates.createSkippedCounter();
+  assert.equal(certificates.describeSkippedCertificates(skipped.counts), '');
+  assert.equal(certificates.describeSkippedCertificates(undefined), '');
+  skipped.onSkipped('keyUsage');
+  skipped.onSkipped('validity');
+  skipped.onSkipped('validity');
+  assert.deepEqual({ ...skipped.counts }, { keyUsage: 1, validity: 2 });
+  assert.equal(
+    certificates.describeSkippedCertificates(skipped.counts),
+    'Не показаны: срок действия истёк или не начался\u00a0—\u00a02, не предназначен для подписи\u00a0—\u00a01.',
+  );
 });
 
 test('Rutoken PIN dialog preserves letters and requires deliberate retry for a short PIN', async () => {
@@ -312,6 +324,82 @@ test('CryptoPro adapter builds detached CAdES-BES from the prepared digest', asy
   assert.equal(calls[4][3], 7);
 });
 
+test('CryptoPro offers only usable store certificates and counts the hidden ones', async () => {
+  const window = loadBrowserModules(['certificates.js', 'cryptopro-adapter.js']);
+  const day = 24 * 60 * 60 * 1000;
+  const certificate = (name, overrides = {}) => ({
+    SubjectName: `CN=${name}`,
+    IssuerName: 'CN=Test CA',
+    Thumbprint: `${name}-thumbprint`,
+    SerialNumber: `${name}-serial`,
+    ValidFromDate: new Date(Date.now() - day).toISOString(),
+    ValidToDate: new Date(Date.now() + day).toISOString(),
+    HasPrivateKey: true,
+    KeyUsage: { IsPresent: true, IsDigitalSignatureEnabled: true, IsNonRepudiationEnabled: false },
+    async PublicKey() {
+      return { Algorithm: { FriendlyName: 'ГОСТ Р 34.10-2012 256' } };
+    },
+    ...overrides,
+  });
+  const unreadable = certificate('unreadable');
+  Object.defineProperty(unreadable, 'HasPrivateKey', {
+    get() {
+      throw new Error('store error');
+    },
+  });
+  const store = [
+    certificate('usable'),
+    certificate('expired', { ValidToDate: new Date(Date.now() - day).toISOString() }),
+    certificate('future', { ValidFromDate: new Date(Date.now() + day).toISOString() }),
+    certificate('keyless', { HasPrivateKey: false }),
+    certificate('encipher', {
+      KeyUsage: {
+        IsPresent: true,
+        IsDigitalSignatureEnabled: false,
+        IsNonRepudiationEnabled: false,
+      },
+    }),
+    unreadable,
+  ];
+  const plugin = {
+    async CreateObjectAsync(name) {
+      assert.equal(name, 'CAdESCOM.Store');
+      return {
+        Certificates: {
+          Count: store.length,
+          async Item(index) {
+            return store[index - 1];
+          },
+        },
+        async Open() {},
+        async Close() {},
+      };
+    },
+  };
+
+  const skipped = window.PdfSigningCertificates.createSkippedCounter();
+  const offered = await window.PdfSigningCryptoPro.enumerateCertificates(plugin, skipped);
+  assert.deepEqual(
+    Array.from(offered, (item) => item.label),
+    ['usable'],
+  );
+  assert.deepEqual(
+    { ...skipped.counts },
+    { validity: 2, privateKey: 1, keyUsage: 1, unreadable: 1 },
+  );
+  assert.equal(
+    window.PdfSigningCertificates.describeSkippedCertificates(skipped.counts),
+    'Не показаны: срок действия истёк или не начался\u00a0—\u00a02, не предназначен для подписи\u00a0—\u00a01, нет закрытого ключа\u00a0—\u00a01, не удалось прочитать\u00a0—\u00a01.',
+  );
+  assert.deepEqual(
+    Array.from(
+      await window.PdfSigningCryptoPro.enumerateCertificates(plugin),
+      (item) => item.label,
+    ),
+    ['usable'],
+  );
+});
+
 test('CryptoPro environment owns plugin discovery, diagnostics and certificate refresh', async () => {
   const window = loadBrowserModules(['certificates.js', 'cryptopro-adapter.js']);
   const diagnostics = new Map();
@@ -319,8 +407,22 @@ test('CryptoPro environment owns plugin discovery, diagnostics and certificate r
     async CreateObjectAsync(name) {
       if (name === 'CAdESCOM.About') return { CSPVersion: '5.0' };
       if (name === 'CAdESCOM.Store') {
+        // One store certificate that cannot be read: counted, not offered.
         return {
-          Certificates: { Count: 0 },
+          Certificates: {
+            Count: 1,
+            async Item() {
+              return {
+                SubjectName: 'CN=unreadable',
+                IssuerName: 'CN=Test CA',
+                Thumbprint: 'unreadable-thumbprint',
+                SerialNumber: 'unreadable-serial',
+                get ValidFromDate() {
+                  throw new Error('store error');
+                },
+              };
+            },
+          },
           async Open() {},
           async Close() {},
         };
@@ -345,6 +447,7 @@ test('CryptoPro environment owns plugin discovery, diagnostics and certificate r
   assert.equal(snapshot.ready, true);
   assert.equal(snapshot.client, plugin);
   assert.deepEqual(Array.from(snapshot.certificates), []);
+  assert.deepEqual({ ...snapshot.skippedCertificates }, { unreadable: 1 });
   assert.deepEqual(diagnostics.get('extension'), {
     state: 'pending',
     text: 'отдельно не подтверждено',
@@ -636,6 +739,65 @@ test('Rutoken requires a matching private key after login, before signing', asyn
   );
 });
 
+test('Rutoken offers USER certificates and counts the hidden ones', async () => {
+  const window = loadBrowserModules(['certificates.js', 'rutoken-adapter.js']);
+  // The plugin reports validity dates in seconds.
+  const day = 24 * 60 * 60;
+  const now = Math.floor(Date.now() / 1000);
+  const parsed = {
+    usable: {
+      subject: { commonName: 'usable' },
+      notBefore: now - day,
+      notAfter: now + day,
+      keyUsages: ['digitalSignature'],
+    },
+    expired: { subject: { commonName: 'expired' }, notBefore: now - 2 * day, notAfter: now - day },
+    undated: { subject: { commonName: 'undated' } },
+    encipher: {
+      subject: { commonName: 'encipher' },
+      notBefore: now - day,
+      notAfter: now + day,
+      keyUsages: ['keyEncipherment'],
+    },
+  };
+  const categories = [];
+  const plugin = {
+    ENUMERATE_DEVICES_LIST: 0,
+    CERT_CATEGORY_UNSPEC: 0,
+    CERT_CATEGORY_USER: 1,
+    TOKEN_INFO_LABEL: 2,
+    async enumerateDevices() {
+      return [5];
+    },
+    async getDeviceInfo() {
+      return 'Token 5';
+    },
+    async enumerateCertificates(_deviceId, category) {
+      categories.push(category);
+      return Object.keys(parsed);
+    },
+    async getCertificate(_deviceId, certId) {
+      return certId;
+    },
+    async parseCertificateFromString(pem) {
+      return parsed[pem];
+    },
+  };
+
+  const skipped = window.PdfSigningCertificates.createSkippedCounter();
+  const offered = await window.PdfSigningRutoken.enumerateCertificates(plugin, skipped);
+  assert.deepEqual(
+    Array.from(offered, (item) => item.label),
+    ['usable'],
+  );
+  assert.deepEqual(categories, [plugin.CERT_CATEGORY_USER]);
+  assert.deepEqual({ ...skipped.counts }, { validity: 1, unreadable: 1, keyUsage: 1 });
+  assert.deepEqual(
+    Array.from(await window.PdfSigningRutoken.enumerateCertificates(plugin), (item) => item.label),
+    ['usable'],
+  );
+});
+
 test('Rutoken environment owns discovery, refresh events and debounced token monitoring', async () => {
   const window = loadBrowserModules(['certificates.js', 'rutoken-adapter.js']);
   const diagnostics = new Map();
@@ -653,8 +815,15 @@ test('Rutoken environment owns discovery, refresh events and debounced token mon
     async enumerateDevices() {
       return devices;
     },
+    // One USER certificate without validity dates: counted, not offered.
     async enumerateCertificates() {
-      return [];
+      return ['undated'];
+    },
+    async getCertificate(_deviceId, certId) {
+      return certId;
+    },
+    async parseCertificateFromString() {
+      return { subject: { commonName: 'undated' } };
     },
     async getDeviceInfo(deviceId) {
       return `Token ${deviceId}`;
@@ -706,6 +875,8 @@ test('Rutoken environment owns discovery, refresh events and debounced token mon
   assert.equal(snapshot.client, plugin);
   assert.deepEqual(Array.from(snapshot.deviceIds), [7]);
   assert.deepEqual(Array.from(snapshot.tokenLabels), ['Token 7']);
+  assert.deepEqual(Array.from(snapshot.certificates), []);
+  assert.deepEqual({ ...snapshot.skippedCertificates }, { unreadable: 1 });
   assert.deepEqual(diagnostics.get('extension'), { state: 'ready', text: 'доступно' });
   assert.deepEqual(diagnostics.get('plugin'), { state: 'ready', text: 'доступен' });
   assert.deepEqual(diagnostics.get('token'), { state: 'ready', text: 'Token 7' });

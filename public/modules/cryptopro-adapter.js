@@ -47,7 +47,19 @@
     };
   }
 
-  async function enumerateCertificates(plugin) {
+  function getSkipReason(capability) {
+    if (
+      !certificates.isCertificateDateWindowValid(capability.validFromDate, capability.validToDate)
+    )
+      return 'validity';
+    if (!capability.hasPrivateKey) return 'privateKey';
+    if (!capability.keyUsageAllowed) return 'keyUsage';
+    return null;
+  }
+
+  // onSkipped(reason) hears about every store certificate that is not
+  // offered: 'unreadable', 'validity', 'privateKey' or 'keyUsage'.
+  async function enumerateCertificates(plugin, { onSkipped = () => {} } = {}) {
     const store = await createObject(plugin, 'CAdESCOM.Store');
     await store.Open(
       plugin.CADESCOM_CURRENT_USER_STORE,
@@ -68,17 +80,14 @@
         try {
           capability = await inspectSigningCapability(certificate);
         } catch (_error) {
+          onSkipped('unreadable');
           continue;
         }
-        if (
-          !certificates.isCertificateDateWindowValid(
-            capability.validFromDate,
-            capability.validToDate,
-          )
-          || !capability.hasPrivateKey
-          || !capability.keyUsageAllowed
-        )
+        const skipReason = getSkipReason(capability);
+        if (skipReason) {
+          onSkipped(skipReason);
           continue;
+        }
         const publicKey = await certificate.PublicKey();
         const algorithm = await publicKey.Algorithm;
         const friendlyName = await getProp(algorithm, 'FriendlyName', 'FriendlyName');
@@ -226,10 +235,12 @@
         }
         diagnostic('csp', 'ready', cspText);
 
+        const skipped = certificates.createSkippedCounter();
         return {
           ready: true,
           client: plugin,
-          certificates: await untilAborted(enumerateCertificates(plugin), signal),
+          certificates: await untilAborted(enumerateCertificates(plugin, skipped), signal),
+          skippedCertificates: skipped.counts,
         };
       } catch (error) {
         if (signal?.aborted) throw error;

@@ -129,6 +129,21 @@ test('certificate usability and Rutoken PIN lifecycle are fail-closed', () => {
   assert.doesNotMatch(app, /state\.[A-Za-z0-9_]*pin/i);
 });
 
+test('certificate hint tells filtered certificates from missing ones', () => {
+  const app = fs.readFileSync(path.join(PROJECT_ROOT, 'public', 'app.js'), 'utf8');
+  assert.match(
+    app,
+    /const skipped = describeSkippedCertificates\(getActiveProviderState\(\)\?\.skippedCertificates\);/,
+  );
+  assert.match(
+    app,
+    /countNode\.textContent = state\.pluginReady && skipped \? `\$\{hint\} \$\{skipped\}` : hint;/,
+  );
+  assert.match(app, /Сайт видит только сертификаты категории «пользовательский» \(USER\)/);
+  assert.match(app, /Сайт видит только сертификаты из хранилища «Личное»/);
+  assert.match(app, /provider\.skippedCertificates = snapshot\?\.skippedCertificates \|\| \{\};/);
+});
+
 test('signing UI is guarded by the explicit client workflow', () => {
   const html = fs.readFileSync(path.join(PROJECT_ROOT, 'public', 'index.html'), 'utf8');
   const app = fs.readFileSync(path.join(PROJECT_ROOT, 'public', 'app.js'), 'utf8');

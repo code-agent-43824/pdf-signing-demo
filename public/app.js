@@ -10,6 +10,7 @@ const state = {
       ready: false,
       checked: false,
       certificates: [],
+      skippedCertificates: {},
       client: null,
       diagnostics: {
         extension: { state: 'pending', text: 'Проверка…' },
@@ -21,6 +22,7 @@ const state = {
       ready: false,
       checked: false,
       certificates: [],
+      skippedCertificates: {},
       client: null,
       diagnostics: {
         extension: { state: 'pending', text: 'Проверка…' },
@@ -100,7 +102,7 @@ const TEMPLATE_TOKEN_OPTIONS = [
   { value: '{signer.serial_number}', label: 'Serial number' },
 ];
 const apiClient = window.PdfSigningApi.createApiClient();
-const { formatCertificateDate } = window.PdfSigningCertificates;
+const { describeSkippedCertificates, formatCertificateDate } = window.PdfSigningCertificates;
 const stampConfigStore = window.PdfSigningStampConfig.createStampConfigStore(
   window.localStorage,
   STAMP_CONFIG_STORAGE_KEY,
@@ -281,6 +283,7 @@ function applyRutokenSnapshot(snapshot, { silentStatus = false } = {}) {
   provider.ready = Boolean(snapshot?.ready);
   provider.client = snapshot?.client || null;
   provider.certificates = certificates;
+  provider.skippedCertificates = snapshot?.skippedCertificates || {};
 
   if (state.activeCryptoStack !== 'rutoken') return;
   syncActiveProviderState();
@@ -315,6 +318,7 @@ function handleRutokenTokenEvent(event) {
     return;
   }
   state.cryptoProviders.rutoken.certificates = [];
+  state.cryptoProviders.rutoken.skippedCertificates = {};
   syncActiveProviderState();
   setStatus('Рутокен извлечён.');
 }
@@ -334,18 +338,25 @@ function updateSelectedCertificateUi() {
   }
 
   if (countNode) {
+    // A filtered-out certificate must not look like a missing one.
+    const skipped = describeSkippedCertificates(getActiveProviderState()?.skippedCertificates);
+    let hint;
     if (!state.pluginReady) {
-      countNode.textContent =
+      hint =
         state.activeCryptoStack === 'cryptopro'
           ? 'CryptoPro недоступен: установите или включите расширение и плагин либо выберите Рутокен.'
           : 'Рутокен недоступен: проверьте расширение, плагин и подключение токена.';
     } else if (!certificateCount) {
-      countNode.textContent = 'Нет доступных сертификатов для подписи.';
+      hint =
+        state.activeCryptoStack === 'rutoken'
+          ? 'Нет сертификатов для подписи. Сайт видит только сертификаты категории «пользовательский» (USER) на подключённых токенах.'
+          : 'Нет сертификатов для подписи. Сайт видит только сертификаты из хранилища «Личное» текущего пользователя.';
     } else if (state.activeCryptoStack === 'rutoken') {
-      countNode.textContent = `Сертификатов: ${certificateCount}. Наличие закрытого ключа проверяется после ввода PIN.`;
+      hint = `Сертификатов: ${certificateCount}. Наличие закрытого ключа проверяется после ввода PIN.`;
     } else {
-      countNode.textContent = `Доступно сертификатов для подписи: ${certificateCount}.`;
+      hint = `Доступно сертификатов для подписи: ${certificateCount}.`;
     }
+    countNode.textContent = state.pluginReady && skipped ? `${hint} ${skipped}` : hint;
   }
 
   if (button) {
@@ -606,6 +617,7 @@ async function initCryptoPro() {
     if (initialization.signal.aborted) return;
     provider.ready = false;
     provider.certificates = [];
+    provider.skippedCertificates = {};
     provider.client = null;
     if (state.activeCryptoStack === 'cryptopro') {
       syncActiveProviderState();
@@ -625,6 +637,7 @@ async function initRutoken() {
   } catch (error) {
     provider.ready = false;
     provider.certificates = [];
+    provider.skippedCertificates = {};
     provider.client = null;
     if (state.activeCryptoStack === 'rutoken') {
       syncActiveProviderState();

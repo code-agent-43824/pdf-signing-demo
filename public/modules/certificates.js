@@ -79,8 +79,37 @@
     }).format(parsed);
   }
 
+  const SKIPPED_REASON_LABELS = [
+    ['validity', 'срок действия истёк или не начался'],
+    ['keyUsage', 'не предназначен для подписи'],
+    ['privateKey', 'нет закрытого ключа'],
+    ['unreadable', 'не удалось прочитать'],
+  ];
+
+  // Adapters report every certificate they do not offer, so the page can
+  // explain a list shorter than the store or the token.
+  function createSkippedCounter() {
+    const counts = {};
+    return {
+      counts,
+      onSkipped(reason) {
+        counts[reason] = (counts[reason] || 0) + 1;
+      },
+    };
+  }
+
+  function describeSkippedCertificates(counts) {
+    // No-break spaces keep «— 2» on the line of its reason.
+    const parts = SKIPPED_REASON_LABELS.filter(([reason]) => counts?.[reason] > 0).map(
+      ([reason, label]) => `${label}\u00a0—\u00a0${counts[reason]}`,
+    );
+    return parts.length ? `Не показаны: ${parts.join(', ')}.` : '';
+  }
+
   root.PdfSigningCertificates = Object.freeze({
     collectKeyUsageTokens,
+    createSkippedCounter,
+    describeSkippedCertificates,
     formatCertificateDate,
     getCertificateCommonName,
     getCertificateIssuerLabel,

@@ -157,7 +157,9 @@
     );
   }
 
-  async function enumerateCertificates(plugin) {
+  // onSkipped(reason) hears about every USER certificate that is not offered:
+  // 'unreadable' (no validity dates), 'validity' or 'keyUsage'.
+  async function enumerateCertificates(plugin, { onSkipped = () => {} } = {}) {
     const deviceIds = await plugin.enumerateDevices({ mode: plugin.ENUMERATE_DEVICES_LIST });
     const result = [];
     for (const deviceId of deviceIds || []) {
@@ -182,15 +184,19 @@
           const validToDate = parseDate(
             parsed?.notAfter || parsed?.validTo || parsed?.validNotAfter,
           );
+          if (!validFromDate || !validToDate) {
+            onSkipped('unreadable');
+            continue;
+          }
           if (
-            !validFromDate
-            || !validToDate
-            || !certificates.isCertificateDateWindowValid(
+            !certificates.isCertificateDateWindowValid(
               validFromDate.toISOString(),
               validToDate.toISOString(),
             )
-          )
+          ) {
+            onSkipped('validity');
             continue;
+          }
           const keyUsageSource = parsed?.keyUsages ?? parsed?.keyUsage;
           const normalizedKeyUsages = certificates
             .collectKeyUsageTokens(keyUsageSource)
@@ -209,7 +215,10 @@
                 || usage.includes('contentcommitment')
                 || usage.includes('цифроваяподпись'),
             );
-          if (!keyUsageAllowed) continue;
+          if (!keyUsageAllowed) {
+            onSkipped('keyUsage');
+            continue;
+          }
           const subjectNameRaw = normalizeDn(parsed?.subject) || certId;
           const issuerNameRaw = normalizeDn(parsed?.issuer);
           const commonName = getCommonName(parsed?.subject) || subjectNameRaw;
@@ -370,16 +379,24 @@
       if (!client) {
         diagnostic('plugin', 'error', 'недоступен');
         diagnostic('token', 'error', 'не найден');
-        return { ready: false, client: null, certificates: [], deviceIds: [], tokenLabels: [] };
+        return {
+          ready: false,
+          client: null,
+          certificates: [],
+          skippedCertificates: {},
+          deviceIds: [],
+          tokenLabels: [],
+        };
       }
 
       try {
         const deviceIds = await client.enumerateDevices({ mode: client.ENUMERATE_DEVICES_LIST });
-        const certificates = await enumerateCertificates(client);
+        const skipped = certificates.createSkippedCounter();
+        const tokenCertificates = await enumerateCertificates(client, skipped);
         const tokenLabels = Array.from(
           new Set([
             ...(await getDeviceLabels(client, deviceIds)),
-            ...certificates.map((certificate) => certificate.tokenLabel).filter(Boolean),
+            ...tokenCertificates.map((certificate) => certificate.tokenLabel).filter(Boolean),
           ]),
         );
         if (deviceIds?.length) {
@@ -387,7 +404,14 @@
         } else {
           diagnostic('token', 'error', 'не вставлен');
         }
-        return { ready: true, client, certificates, deviceIds, tokenLabels };
+        return {
+          ready: true,
+          client,
+          certificates: tokenCertificates,
+          skippedCertificates: skipped.counts,
+          deviceIds,
+          tokenLabels,
+        };
       } catch (error) {
         diagnostic('token', 'error', 'ошибка чтения');
         throw error;
