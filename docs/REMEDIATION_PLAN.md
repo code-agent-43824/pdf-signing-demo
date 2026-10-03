@@ -730,7 +730,8 @@ anti-clickjacking реализованы и развёрнуты в production**
   `IsDigitalSignatureEnabled` и `IsNonRepudiationEnabled`;
 - Rutoken показывает только `CERT_CATEGORY_USER`, которая связана с
   закрытым ключом, и дополнительно проверяет обе границы срока и
-  `keyUsage` из parsed certificate;
+  `keyUsage` из parsed certificate (с 2026-10-03 по решению владельца — ещё
+  и сертификаты без категории, с пометкой; `docs/JOURNAL.md`);
 - перед `prepare` появился обязательный confirm с именем PDF, SHA-256
   исходного документа, именем сертификата и fingerprint; данные
   вставляются через `textContent`;

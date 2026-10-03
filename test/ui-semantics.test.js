@@ -114,11 +114,15 @@ test('certificate usability and Rutoken PIN lifecycle are fail-closed', () => {
   assert.match(cryptoProAdapter, /HasPrivateKey/);
   assert.match(cryptoProAdapter, /IsDigitalSignatureEnabled/);
   assert.match(cryptoProAdapter, /IsNonRepudiationEnabled/);
-  assert.match(rutokenAdapter, /const categories = \[plugin\.CERT_CATEGORY_USER\]/);
-  assert.doesNotMatch(
-    rutokenAdapter.match(/async function enumerateCertificates[\s\S]*?return result;/)?.[0] || '',
-    /CERT_CATEGORY_UNSPEC/,
+  // USER certificates, then uncategorized ones (owner decision 2026-10-03);
+  // no other category is listed.
+  const enumeration =
+    rutokenAdapter.match(/async function enumerateCertificates[\s\S]*?return result;/)?.[0] || '';
+  assert.match(
+    enumeration,
+    /\[plugin\.CERT_CATEGORY_USER, 'user'\],\s*\[plugin\.CERT_CATEGORY_UNSPEC, 'unspec'\],\s*\]/,
   );
+  assert.doesNotMatch(enumeration, /CERT_CATEGORY_(?!USER\b|UNSPEC\b)/);
   assert.match(html, /id="rutokenPinInput"[^>]*data-sensitive-input/);
   assert.match(
     dialogs,
@@ -139,7 +143,10 @@ test('certificate hint tells filtered certificates from missing ones', () => {
     app,
     /countNode\.textContent = state\.pluginReady && skipped \? `\$\{hint\} \$\{skipped\}` : hint;/,
   );
-  assert.match(app, /Сайт видит только сертификаты категории «пользовательский» \(USER\)/);
+  assert.match(
+    app,
+    /Сайт видит сертификаты категории «пользовательский» \(USER\) и без категории \(UNSPEC\)/,
+  );
   assert.match(app, /Сайт видит только сертификаты из хранилища «Личное»/);
   assert.match(app, /provider\.skippedCertificates = snapshot\?\.skippedCertificates \|\| \{\};/);
 });

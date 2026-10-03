@@ -157,8 +157,11 @@
     );
   }
 
-  // onSkipped(reason) hears about every USER certificate that is not offered:
-  // 'unreadable' (no validity dates), 'validity' or 'keyUsage'.
+  // USER certificates first, then those stored without a category (owner
+  // decision 2026-10-03, docs/JOURNAL.md); the key of either is checked after
+  // PIN, before signing. onSkipped(reason) hears about every listed
+  // certificate that is not offered: 'unreadable' (no validity dates),
+  // 'validity' or 'keyUsage'.
   async function enumerateCertificates(plugin, { onSkipped = () => {} } = {}) {
     const deviceIds = await plugin.enumerateDevices({ mode: plugin.ENUMERATE_DEVICES_LIST });
     const result = [];
@@ -169,15 +172,34 @@
       } catch (_error) {
         /* optional label */
       }
-      const categories = [plugin.CERT_CATEGORY_USER].filter((value) => value !== undefined);
+      const categories = [
+        [plugin.CERT_CATEGORY_USER, 'user'],
+        [plugin.CERT_CATEGORY_UNSPEC, 'unspec'],
+      ].filter(([value]) => value !== undefined);
       const seenCertIds = new Set();
-      for (const category of categories) {
-        const certIds = await plugin.enumerateCertificates(deviceId, category);
+      for (const [category, categoryName] of categories) {
+        // The uncategorized pass is best-effort: a plugin error there must not
+        // hide the USER certificates.
+        const optional = categoryName !== 'user';
+        let certIds = [];
+        try {
+          certIds = await plugin.enumerateCertificates(deviceId, category);
+        } catch (error) {
+          if (!optional) throw error;
+        }
         for (const certId of certIds || []) {
           if (seenCertIds.has(certId)) continue;
           seenCertIds.add(certId);
-          const pem = await plugin.getCertificate(deviceId, certId);
-          const parsed = await plugin.parseCertificateFromString(pem);
+          let pem;
+          let parsed;
+          try {
+            pem = await plugin.getCertificate(deviceId, certId);
+            parsed = await plugin.parseCertificateFromString(pem);
+          } catch (error) {
+            if (!optional) throw error;
+            onSkipped('unreadable');
+            continue;
+          }
           const validFromDate = parseDate(
             parsed?.notBefore || parsed?.validFrom || parsed?.validNotBefore,
           );
@@ -240,6 +262,7 @@
             algorithm:
               parsed?.publicKeyAlgorithm || parsed?.signatureAlgorithm || 'Rutoken certificate',
             certificateBase64: normalizeBase64(pem),
+            category: categoryName,
             certId,
             deviceId,
             tokenLabel,

@@ -132,7 +132,11 @@
         <button type="button" class="certificate-card${isSelected ? ' is-selected' : ''}"
           data-index="${index}" role="option" aria-selected="${isSelected ? 'true' : 'false'}">
           <dl class="certificate-meta">
-            <dt>Common Name</dt><dd>${escapeHtml(certificate.commonName || certificate.label || '—')}</dd>
+            <dt>Common Name</dt><dd>${escapeHtml(certificate.commonName || certificate.label || '—')}${
+              certificate.category === 'unspec'
+                ? '<small class="muted certificate-note">Категория на токене не указана (UNSPEC)</small>'
+                : ''
+            }</dd>
             <dt>Issuer</dt><dd>${escapeHtml(certificate.issuerLabel || certificate.issuerName || '—')}</dd>
             <dt>Срок действия</dt><dd>${escapeHtml(formatCertificateDate(certificate.validToDate))}</dd>
           </dl>

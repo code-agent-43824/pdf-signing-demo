@@ -739,30 +739,33 @@ test('Rutoken requires a matching private key after login, before signing', asyn
   );
 });
 
-test('Rutoken offers USER certificates and counts the hidden ones', async () => {
+test('Rutoken offers USER, then uncategorized certificates and counts the hidden ones', async () => {
   const window = loadBrowserModules(['certificates.js', 'rutoken-adapter.js']);
   // The plugin reports validity dates in seconds.
   const day = 24 * 60 * 60;
   const now = Math.floor(Date.now() / 1000);
+  const valid = { notBefore: now - day, notAfter: now + day };
   const parsed = {
-    usable: {
-      subject: { commonName: 'usable' },
-      notBefore: now - day,
-      notAfter: now + day,
-      keyUsages: ['digitalSignature'],
-    },
+    usable: { subject: { commonName: 'usable' }, ...valid, keyUsages: ['digitalSignature'] },
     expired: { subject: { commonName: 'expired' }, notBefore: now - 2 * day, notAfter: now - day },
     undated: { subject: { commonName: 'undated' } },
-    encipher: {
-      subject: { commonName: 'encipher' },
-      notBefore: now - day,
-      notAfter: now + day,
-      keyUsages: ['keyEncipherment'],
+    encipher: { subject: { commonName: 'encipher' }, ...valid, keyUsages: ['keyEncipherment'] },
+    both: { subject: { commonName: 'both' }, ...valid },
+    loose: { subject: { commonName: 'loose' }, ...valid },
+    'loose-expired': {
+      subject: { commonName: 'loose-expired' },
+      notBefore: now - 2 * day,
+      notAfter: now - day,
     },
+  };
+  // 'both' is reported in both categories and must be listed once, as USER.
+  const byCategory = {
+    1: ['usable', 'expired', 'undated', 'encipher', 'both'],
+    0: ['loose', 'both', 'loose-expired'],
   };
   const categories = [];
   const plugin = {
-    ENUMERATE_DEVICES_LIST: 0,
+    ENUMERATE_DEVICES_LIST: 'list',
     CERT_CATEGORY_UNSPEC: 0,
     CERT_CATEGORY_USER: 1,
     TOKEN_INFO_LABEL: 2,
@@ -774,7 +777,7 @@ test('Rutoken offers USER certificates and counts the hidden ones', async () => 
     },
     async enumerateCertificates(_deviceId, category) {
       categories.push(category);
-      return Object.keys(parsed);
+      return byCategory[category];
     },
     async getCertificate(_deviceId, certId) {
       return certId;
@@ -787,15 +790,74 @@ test('Rutoken offers USER certificates and counts the hidden ones', async () => 
   const skipped = window.PdfSigningCertificates.createSkippedCounter();
   const offered = await window.PdfSigningRutoken.enumerateCertificates(plugin, skipped);
   assert.deepEqual(
-    Array.from(offered, (item) => item.label),
-    ['usable'],
+    Array.from(offered, (item) => [item.label, item.category]),
+    [
+      ['usable', 'user'],
+      ['both', 'user'],
+      ['loose', 'unspec'],
+    ],
   );
-  assert.deepEqual(categories, [plugin.CERT_CATEGORY_USER]);
-  assert.deepEqual({ ...skipped.counts }, { validity: 1, unreadable: 1, keyUsage: 1 });
+  assert.deepEqual(categories, [plugin.CERT_CATEGORY_USER, plugin.CERT_CATEGORY_UNSPEC]);
+  assert.deepEqual({ ...skipped.counts }, { validity: 2, unreadable: 1, keyUsage: 1 });
   assert.deepEqual(
     Array.from(await window.PdfSigningRutoken.enumerateCertificates(plugin), (item) => item.label),
-    ['usable'],
+    ['usable', 'both', 'loose'],
   );
+
+  // The uncategorized pass is best-effort: its errors never hide USER
+  // certificates, and an unreadable uncategorized certificate is counted.
+  const failingPass = {
+    ...plugin,
+    async enumerateCertificates(_deviceId, category) {
+      if (category === plugin.CERT_CATEGORY_UNSPEC) throw new Error('unsupported category');
+      return byCategory[category];
+    },
+  };
+  assert.deepEqual(
+    Array.from(
+      await window.PdfSigningRutoken.enumerateCertificates(failingPass),
+      (item) => item.label,
+    ),
+    ['usable', 'both'],
+  );
+  const unreadableLoose = window.PdfSigningCertificates.createSkippedCounter();
+  const failingCertificate = {
+    ...plugin,
+    async getCertificate(_deviceId, certId) {
+      if (certId === 'loose') throw new Error('read failed');
+      return certId;
+    },
+  };
+  assert.deepEqual(
+    Array.from(
+      await window.PdfSigningRutoken.enumerateCertificates(failingCertificate, unreadableLoose),
+      (item) => item.label,
+    ),
+    ['usable', 'both'],
+  );
+  assert.deepEqual({ ...unreadableLoose.counts }, { validity: 2, unreadable: 2, keyUsage: 1 });
+  // USER errors still fail the listing, as before.
+  await assert.rejects(
+    window.PdfSigningRutoken.enumerateCertificates({
+      ...plugin,
+      async getCertificate() {
+        throw new Error('user read failed');
+      },
+    }),
+    /user read failed/,
+  );
+
+  // A plugin without the UNSPEC constant is asked for USER certificates only.
+  categories.length = 0;
+  const { CERT_CATEGORY_UNSPEC: _unspec, ...userOnlyPlugin } = plugin;
+  assert.deepEqual(
+    Array.from(
+      await window.PdfSigningRutoken.enumerateCertificates(userOnlyPlugin),
+      (item) => item.label,
+    ),
+    ['usable', 'both'],
+  );
+  assert.deepEqual(categories, [plugin.CERT_CATEGORY_USER]);
 });
 
 test('Rutoken environment owns discovery, refresh events and debounced token monitoring', async () => {
@@ -1353,4 +1415,46 @@ test('dialog manager fails closed before touching DOM when no certificate exists
     },
   );
   await assert.rejects(manager.openCertificate([]), /Не найдено доступных сертификатов/);
+});
+
+test('certificate dialog marks uncategorized Rutoken certificates and escapes names', async () => {
+  const { PdfSigningDialogs } = loadBrowserModule('dialogs.js');
+  const nodes = {
+    '.dialog-backdrop': { addEventListener() {}, remove() {} },
+    '#certificateList': {
+      innerHTML: '',
+      querySelectorAll: () => [],
+    },
+    '#confirmCertificate': {
+      addEventListener(_name, callback) {
+        this.click = callback;
+      },
+    },
+    '#cancelCertificate': { addEventListener() {} },
+  };
+  const document = {
+    getElementById: () => ({
+      content: { cloneNode: () => ({ querySelector: (selector) => nodes[selector] }) },
+    }),
+    body: { appendChild() {} },
+  };
+  const manager = PdfSigningDialogs.createDialogManager(document, {
+    formatCertificateDate: String,
+    getCertificateKey: (certificate) => certificate?.certId || '',
+  });
+  const certificates = [
+    { certId: 'a', commonName: 'Token <user>', category: 'user', validToDate: 'soon' },
+    { certId: 'b', commonName: 'Loose', category: 'unspec', validToDate: 'soon' },
+  ];
+  const picked = manager.openCertificate(certificates);
+  const cards = nodes['#certificateList'].innerHTML.split('</button>');
+  assert.equal(cards.length, 3);
+  assert.match(cards[0], /Token &lt;user&gt;/);
+  assert.doesNotMatch(cards[0], /UNSPEC/);
+  assert.match(
+    cards[1],
+    /Loose<small class="muted certificate-note">Категория на токене не указана \(UNSPEC\)<\/small>/,
+  );
+  nodes['#confirmCertificate'].click();
+  assert.equal(await picked, certificates[0]);
 });

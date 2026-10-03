@@ -199,6 +199,12 @@ shape.
   real-provider failure can be diagnosed from a screenshot without the
   service journal. Only the plain code format leaves the server; `details`
   stay in the log (`docs/JOURNAL.md`).
+- **Rutoken also lists certificates without a category.** Owner decision
+  (2026-10-03): after `CERT_CATEGORY_USER`, `enumerateCertificates` lists
+  `CERT_CATEGORY_UNSPEC` certificates, marked in the selection dialog, so a
+  certificate written to the token without a category is not invisible. The
+  same validity and key-usage filters apply, and the key is checked after
+  PIN, before signing (`docs/JOURNAL.md`).
 - **Encrypted-PDF classification stays after signing confirmation.** Owner
   decision (2026-09-29): the browser rejects oversized and non-PDF input on
   selection; the server classifies encryption after confirmation but before

@@ -1246,6 +1246,11 @@ h1, h2, h3 { margin: 0; }
   margin: 0;
   word-break: break-word;
 }
+.certificate-note {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+}
 .pin-input {
   font-size: 24px;
   line-height: 1.2;
