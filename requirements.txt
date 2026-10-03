@@ -552,9 +552,9 @@ pyhanko-certvalidator==0.30.2 \
     # via
     #   -c requirements.constraints.txt
     #   pyhanko
-pypdf==6.16.2 \
-    --hash=sha256:595647f6191de6f402cfde1d0c455d6cbccbd509aac32b34783009c032de5d6e \
-    --hash=sha256:c8b09a59399062fb45a1b8156c18a787a10a3dae03ac9674397a226712c94604
+pypdf==6.19.0 \
+    --hash=sha256:7e5d6e730e7dae87d560a2cee218b852f6498c8be61966f3cd02ead971e48d14 \
+    --hash=sha256:bbc43aca292369ccc6cbc8a921991ecf2538a3587ab5a116eff06c321d647155
     # via -r requirements.in
 pyyaml==6.0.3 \
     --hash=sha256:00c4bdeba853cc34e7dd471f16b4114f4162dc03e6b7afcc2128711f0eca823c \
@@ -656,9 +656,9 @@ uritools==6.1.0 \
     # via
     #   -c requirements.constraints.txt
     #   pyhanko-certvalidator
-urllib3==2.7.0 \
-    --hash=sha256:231e0ec3b63ceb14667c67be60f2f2c40a518cb38b03af60abc813da26505f4c \
-    --hash=sha256:9fb4c81ebbb1ce9531cce37674bbc6f1360472bc18ca9a553ede278ef7276897
+urllib3==2.8.0 \
+    --hash=sha256:0cf3cae568d36aa9576b28dfb35f11328f1cb974ca7647d9475ebb86c75ac6e3 \
+    --hash=sha256:63bf2ead4c879426ebf22ef2a781eeb4aa3b4ae798a0435506f8687fd5bb9b63
     # via
     #   -c requirements.constraints.txt
     #   requests
