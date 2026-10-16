@@ -30,6 +30,12 @@
   (2.0.8, новый integrity, метаданные funding); новых пакетов нет. SBOM
   пересоздан npm 10.9.8, `npm audit --omit=dev` — 0, `npm run verify`
   зелёный (105/105).
+- Выкатка (`e64863d`). CI/deploy `38864699443`: все гейты зелёные; на сервере
+  гейт Node пройден, 105/105 тестов, `npm audit` — 0, `pip check` чист,
+  canary `valid/not_checked/not_checked`, pyHanko `intact/valid/trusted`,
+  в логе `deployed e64863d…`. Снаружи `health/ready` — 200,
+  `health/metrics` — 404, UI и соседний сайт — 200; 2 из 15 запросов
+  вернули `000` (нет соединения), повторы проходят.
 
 ## 2026-10-03 — сертификаты Рутокена без категории
 
