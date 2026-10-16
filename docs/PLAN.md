@@ -12,11 +12,13 @@
   форка SoftHSM, сеть окружения.
 - [ ] Прогон сценария: C1–C6 (CryptoPro, в том числе spike), R1–R8
   (Рутокен с fake Rutoken, Chrome и Firefox).
-- [ ] CI красный с 16.10: `npm audit` — критическая GHSA-jqcg-44mw-7w3h в
+- [x] CI красный с 16.10: `npm audit` — критическая GHSA-jqcg-44mw-7w3h в
   `proxy-addr` 2.0.7 (через `express`; подмена IP через IPv4-mapped IPv6 в
   доверенной подсети). Приложение доверяет loopback-прокси и считает лимиты
   и владельца сессии по `req.ip`, так что это касается и production.
   Поднять `proxy-addr` до 2.0.8 в lock, пересоздать SBOM, выкатить.
+  Локально `npm audit` чист, `verify` зелёный; выкатка — в
+  `docs/WORKLOG.md`.
 
 ## Проверка реальным Рутокеном (2026-10-03)
 

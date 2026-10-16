@@ -26,6 +26,10 @@
   `express`), тесты 105/105 зелёные. План: `npm update proxy-addr
   --package-lock-only` закреплённым npm 10.9.8 до 2.0.8 в пределах диапазона
   `express`, SBOM пересоздать, `npm run verify`, выкатить и проверить.
+- Сделано: в `package-lock.json` изменилась только запись `proxy-addr`
+  (2.0.8, новый integrity, метаданные funding); новых пакетов нет. SBOM
+  пересоздан npm 10.9.8, `npm audit --omit=dev` — 0, `npm run verify`
+  зелёный (105/105).
 
 ## 2026-10-03 — сертификаты Рутокена без категории
 
