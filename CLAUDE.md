@@ -180,6 +180,9 @@ shape.
 
 - `docs/REMEDIATION_PLAN.md` — the July 2026 audit remediation plan, its
   invariants and its rollout history.
+- `docs/CLOUD_PROVIDER_CHECK.md` — the procedure for checking the site with
+  real CryptoPro and Rutoken browser stacks in a cloud container (CryptoPro
+  test CA, a SoftHSM-based fake Rutoken) and what such a run does not prove.
 - `docs/CADES_BES_PLAN.md` — the plan for a separate CAdES-BES
   attached/detached signing mode; its provider spike is in
   `spikes/001-cades-bes-provider-capability/` (browser part in
